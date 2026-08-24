@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --color-paper: #F6F4EE;
+  --color-paper-dim: #EBE8DE;
+  --color-ink: #22221E;
+  --color-ink-soft: #56554C;
+  --color-line: #D8D4C6;
+
+  --color-ok: #2F6F4F;
+  --color-ok-soft: #E3EEE4;
+  --color-warn: #B4761F;
+  --color-warn-soft: #F4E9D6;
+  --color-alert: #A83C34;
+  --color-alert-soft: #F3E0DD;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+}
+
+h1, h2, h3, .display {
+  font-family: var(--font-display);
+}
+
+::selection {
+  background: var(--color-ok);
+  color: var(--color-paper);
+}
