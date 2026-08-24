@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Navigate, Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   ChecklistTemplate,
@@ -35,7 +35,7 @@ export function ChecklistExecucao() {
     setLoading(true)
     const hoje = format(new Date(), 'yyyy-MM-dd')
 
-    const { data: tpl } = await supabase
+    const { data: tpl } = await db
       .from('checklist_templates')
       .select('*')
       .eq('id', templateId)
@@ -46,14 +46,14 @@ export function ChecklistExecucao() {
     }
     setTemplate(tpl)
 
-    const { data: its } = await supabase
+    const { data: its } = await db
       .from('checklist_items')
       .select('*')
       .eq('template_id', templateId)
       .order('ordem')
     setItems(its ?? [])
 
-    let { data: exec } = await supabase
+    let { data: exec } = await db
       .from('checklist_execucoes')
       .select('*')
       .eq('template_id', templateId)
@@ -62,7 +62,7 @@ export function ChecklistExecucao() {
 
     // cria a execução do dia se ainda não existir e o usuário pode editar
     if (!exec && podeEditar() && podeAcessarArea(tpl.area_id) && profile) {
-      const { data: novo } = await supabase
+      const { data: novo } = await db
         .from('checklist_execucoes')
         .insert({
           template_id: tpl.id,
@@ -78,7 +78,7 @@ export function ChecklistExecucao() {
     setExecucao(exec ?? null)
 
     if (exec) {
-      const { data: resps } = await supabase
+      const { data: resps } = await db
         .from('checklist_respostas')
         .select('*')
         .eq('execucao_id', exec.id)
@@ -86,7 +86,7 @@ export function ChecklistExecucao() {
       for (const r of resps ?? []) map[r.item_id] = r
       setRespostas(map)
 
-      const { data: apr } = await supabase
+      const { data: apr } = await db
         .from('aprovacoes')
         .select('*')
         .eq('execucao_id', exec.id)
@@ -94,7 +94,7 @@ export function ChecklistExecucao() {
       setAprovacao(apr ?? null)
     }
 
-    const { data: profs } = await supabase.from('profiles').select('*')
+    const { data: profs } = await db.from('profiles').select('*')
     setProfiles(profs ?? [])
 
     setLoading(false)
@@ -110,7 +110,7 @@ export function ChecklistExecucao() {
   async function salvarResposta(item: ChecklistItem, valor: string) {
     if (!execucao) return
     setSaving(true)
-    const { data } = await supabase
+    const { data } = await db
       .from('checklist_respostas')
       .upsert(
         { execucao_id: execucao.id, item_id: item.id, valor, updated_at: new Date().toISOString() },
@@ -124,7 +124,7 @@ export function ChecklistExecucao() {
 
   async function concluirChecklist() {
     if (!execucao) return
-    await supabase
+    await db
       .from('checklist_execucoes')
       .update({ status: 'concluido', horario_fim: new Date().toISOString() })
       .eq('id', execucao.id)
@@ -133,7 +133,7 @@ export function ChecklistExecucao() {
 
   async function aprovar() {
     if (!execucao || !profile) return
-    const { data } = await supabase
+    const { data } = await db
       .from('aprovacoes')
       .insert({
         execucao_id: execucao.id,

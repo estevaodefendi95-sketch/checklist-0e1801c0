@@ -2,8 +2,17 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import {
+  Area,
+  ChecklistExecucao,
+  ChecklistTemplate,
+  ChecklistItem,
+  ChecklistResposta,
+  Aprovacao,
+  Profile,
+} from '../lib/types'
 
 export function Relatorio() {
   const { podeAcessarArea } = useAuth()
@@ -17,13 +26,18 @@ export function Relatorio() {
 
     const [{ data: execucoes }, { data: areas }, { data: templates }, { data: profiles }] =
       await Promise.all([
-        supabase.from('checklist_execucoes').select('*').eq('data', data),
-        supabase.from('areas').select('*'),
-        supabase.from('checklist_templates').select('*'),
-        supabase.from('profiles').select('*'),
+        db.from('checklist_execucoes').select('*').eq('data', data),
+        db.from('areas').select('*'),
+        db.from('checklist_templates').select('*'),
+        db.from('profiles').select('*'),
       ])
 
-    const execVisiveis = (execucoes ?? []).filter((e) => podeAcessarArea(e.area_id))
+    const execucoesTyped = (execucoes ?? []) as ChecklistExecucao[]
+    const areasTyped = (areas ?? []) as Area[]
+    const templatesTyped = (templates ?? []) as ChecklistTemplate[]
+    const profilesTyped = (profiles ?? []) as Profile[]
+
+    const execVisiveis = execucoesTyped.filter((e) => podeAcessarArea(e.area_id))
 
     if (execVisiveis.length === 0) {
       setErro('Nenhum checklist encontrado para essa data nas áreas que você acessa.')
@@ -31,18 +45,22 @@ export function Relatorio() {
       return
     }
 
-    const areaMap = Object.fromEntries((areas ?? []).map((a) => [a.id, a]))
-    const templateMap = Object.fromEntries((templates ?? []).map((t) => [t.id, t]))
-    const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]))
+    const areaMap = Object.fromEntries(areasTyped.map((a) => [a.id, a]))
+    const templateMap = Object.fromEntries(templatesTyped.map((t) => [t.id, t]))
+    const profileMap = Object.fromEntries(profilesTyped.map((p) => [p.id, p]))
 
     const execIds = execVisiveis.map((e) => e.id)
     const [{ data: respostas }, { data: itens }, { data: aprovacoes }] = await Promise.all([
-      supabase.from('checklist_respostas').select('*').in('execucao_id', execIds),
-      supabase.from('checklist_items').select('*'),
-      supabase.from('aprovacoes').select('*').in('execucao_id', execIds),
+      db.from('checklist_respostas').select('*').in('execucao_id', execIds),
+      db.from('checklist_items').select('*'),
+      db.from('aprovacoes').select('*').in('execucao_id', execIds),
     ])
 
-    const itemMap = Object.fromEntries((itens ?? []).map((i) => [i.id, i]))
+    const respostasTyped = (respostas ?? []) as ChecklistResposta[]
+    const itensTyped = (itens ?? []) as ChecklistItem[]
+    const aprovacoesTyped = (aprovacoes ?? []) as Aprovacao[]
+
+    const itemMap = Object.fromEntries(itensTyped.map((i) => [i.id, i]))
 
     const doc = new jsPDF()
     doc.setFontSize(14)
@@ -53,7 +71,7 @@ export function Relatorio() {
       const area = areaMap[exec.area_id]
       const template = templateMap[exec.template_id]
       const preenchidoPor = profileMap[exec.preenchido_por]
-      const aprovacao = (aprovacoes ?? []).find((a) => a.execucao_id === exec.id)
+      const aprovacao = aprovacoesTyped.find((a) => a.execucao_id === exec.id)
       const aprovador = aprovacao ? profileMap[aprovacao.aprovado_por] : null
 
       if (y > 260) {
@@ -77,7 +95,7 @@ export function Relatorio() {
         )
       }
 
-      const respostasExec = (respostas ?? []).filter((r) => r.execucao_id === exec.id)
+      const respostasExec = respostasTyped.filter((r) => r.execucao_id === exec.id)
       const rows = respostasExec.map((r) => [
         itemMap[r.item_id]?.nome_campo ?? '—',
         r.valor ?? '—',

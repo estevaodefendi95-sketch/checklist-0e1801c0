@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Area, ChecklistExecucao, ChecklistTemplate, Profile } from '../lib/types'
 
@@ -21,16 +21,21 @@ export function Historico() {
   async function load() {
     setLoading(true)
     const [{ data: exec }, { data: ars }, { data: tpls }, { data: profs }] = await Promise.all([
-      supabase.from('checklist_execucoes').select('*').eq('data', data),
-      supabase.from('areas').select('*'),
-      supabase.from('checklist_templates').select('*'),
-      supabase.from('profiles').select('*'),
+      db.from('checklist_execucoes').select('*').eq('data', data),
+      db.from('areas').select('*'),
+      db.from('checklist_templates').select('*'),
+      db.from('profiles').select('*'),
     ])
 
-    setAreas(Object.fromEntries((ars ?? []).map((a) => [a.id, a])))
-    setTemplates(Object.fromEntries((tpls ?? []).map((t) => [t.id, t])))
-    setProfiles(Object.fromEntries((profs ?? []).map((p) => [p.id, p])))
-    setExecucoes((exec ?? []).filter((e) => podeAcessarArea(e.area_id)))
+    const execTyped = (exec ?? []) as ChecklistExecucao[]
+    const arsTyped = (ars ?? []) as Area[]
+    const tplsTyped = (tpls ?? []) as ChecklistTemplate[]
+    const profsTyped = (profs ?? []) as Profile[]
+
+    setAreas(Object.fromEntries(arsTyped.map((a) => [a.id, a])))
+    setTemplates(Object.fromEntries(tplsTyped.map((t) => [t.id, t])))
+    setProfiles(Object.fromEntries(profsTyped.map((p) => [p.id, p])))
+    setExecucoes(execTyped.filter((e) => podeAcessarArea(e.area_id)))
     setLoading(false)
   }
 

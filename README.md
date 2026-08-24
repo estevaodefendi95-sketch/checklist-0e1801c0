@@ -4,20 +4,31 @@ App de checklist diário de abertura/fechamento com controle de estoque mínimo,
 login por perfil (admin / editor / visualizador), restrição por área e
 geração de relatório em PDF filtrado por dia.
 
+## ⚠️ Sobre o schema isolado
+
+Esse app usa o projeto Supabase **"Conta azul"**, que já hospeda outro sistema
+(financeiro/ERP) no schema `public`. Pra não conflitar, todas as tabelas do
+checklist vivem num schema próprio chamado **`checklist`**. O front já está
+configurado pra falar com esse schema (`src/lib/supabase.ts`, client `db`).
+
+**Passo obrigatório no painel do Supabase:** vá em **Project Settings → Data
+API → Exposed schemas** e adicione `checklist` na lista (por padrão só
+`public` fica exposto pela API REST). Sem isso, o app não consegue ler/gravar
+nada, mesmo com o schema e as tabelas já criados.
+
 ## 1. Configurar o Supabase
 
-1. Abra o **SQL Editor** do seu projeto Supabase (o `nortyx` reativado pela nuvem do Lovable).
-2. Cole e rode o conteúdo de `supabase/schema.sql` inteiro. Isso cria as tabelas,
-   os tipos, o RLS (permissões por área e por perfil) e o gatilho que cria um
-   `profile` automaticamente para cada novo usuário.
-3. Em **Authentication → Providers**, confirme que "Email" está habilitado.
-4. Em **Authentication → Users**, crie o primeiro usuário (você) manualmente
-   com e-mail e senha — ou habilite "Enable email confirmations" e convide por lá.
-5. No **SQL Editor**, promova esse primeiro usuário a admin:
+O schema já foi aplicado neste projeto (`checklist.*` — tabelas, RLS e
+trigger de novo usuário). Se precisar recriar do zero em outro projeto, rode
+`supabase/schema.sql` inteiro no SQL Editor.
+
+1. Confirme em **Authentication → Providers** que "Email" está habilitado.
+2. Crie o primeiro usuário (você) em **Authentication → Users**.
+3. No **SQL Editor**, promova esse usuário a admin:
    ```sql
-   update profiles set role = 'admin' where id = 'UUID_DO_SEU_USUARIO';
+   update checklist.profiles set role = 'admin' where id = 'UUID_DO_SEU_USUARIO';
    ```
-   (o UUID aparece na tabela `auth.users` ou em Authentication → Users)
+   (o UUID aparece em Authentication → Users)
 
 ## 2. Configurar o projeto localmente
 
@@ -26,8 +37,8 @@ npm install
 cp .env.example .env
 ```
 
-Edite `.env` com a URL e a `anon key` do seu projeto (em
-**Project Settings → API** no painel do Supabase):
+Edite `.env` com a URL e a `anon key` do projeto **Conta azul** (em
+**Project Settings → API**):
 
 ```
 VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
@@ -56,26 +67,20 @@ npm run dev
 - Em `/relatorio`, escolha uma data e gere o PDF com todos os checklists
   daquele dia, itens, respostas e aprovação.
 
-## 4. Deploy
+## 4. Deploy (Lovable)
 
-### GitHub
-```bash
-git init
-git add .
-git commit -m "checklist inicial"
-git remote add origin <seu-repo>
-git push -u origin main
-```
+Este repositório já está conectado a um projeto Lovable. Basta configurar
+as env vars em **Project Settings → Environment Variables**:
 
-### Vercel
-Importe o repositório na Vercel e adicione as variáveis de ambiente
-`VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` em **Settings → Environment
-Variables**. O comando de build já é o padrão (`npm run build`, saída em
-`dist`).
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+e clicar em **Update preview**.
 
 ## Estrutura
 
-- `supabase/schema.sql` — schema completo: tabelas, RLS, trigger de novo usuário
+- `supabase/schema.sql` — schema completo (`checklist.*`): tabelas, RLS, trigger de novo usuário
+- `src/lib/supabase.ts` — client Supabase + client `db` apontando pro schema `checklist`
 - `src/context/AuthContext.tsx` — sessão, perfil, checagem de área/permissão
 - `src/pages/Dashboard.tsx` — tela inicial com status do dia por área
 - `src/pages/ChecklistExecucao.tsx` — preenchimento e aprovação

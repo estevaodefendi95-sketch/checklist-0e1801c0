@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { Area, Profile, UserRole } from '../lib/types'
 
 export function AdminUsuarios() {
@@ -12,15 +12,15 @@ export function AdminUsuarios() {
 
   async function load() {
     const [{ data: profs }, { data: ars }] = await Promise.all([
-      supabase.from('profiles').select('*').order('nome'),
-      supabase.from('areas').select('*').order('nome'),
+      db.from('profiles').select('*').order('nome'),
+      db.from('areas').select('*').order('nome'),
     ])
     setProfiles(profs ?? [])
     setAreas(ars ?? [])
   }
 
   async function atualizarRole(id: string, role: UserRole) {
-    await supabase.from('profiles').update({ role }).eq('id', id)
+    await db.from('profiles').update({ role }).eq('id', id)
     setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, role } : p)))
   }
 
@@ -31,7 +31,7 @@ export function AdminUsuarios() {
       ? profile.areas_permitidas.filter((a) => a !== areaId)
       : [...profile.areas_permitidas, areaId]
 
-    await supabase.from('profiles').update({ areas_permitidas: novasAreas }).eq('id', id)
+    await db.from('profiles').update({ areas_permitidas: novasAreas }).eq('id', id)
     setProfiles((prev) =>
       prev.map((p) => (p.id === id ? { ...p, areas_permitidas: novasAreas } : p))
     )

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Area, ChecklistExecucao, ChecklistTemplate } from '../lib/types'
 import { format } from 'date-fns'
@@ -24,23 +24,27 @@ export function Dashboard() {
     setLoading(true)
     const hoje = format(new Date(), 'yyyy-MM-dd')
 
-    const { data: areas } = await supabase.from('areas').select('*').order('nome')
-    const { data: templates } = await supabase
+    const { data: areas } = await db.from('areas').select('*').order('nome')
+    const { data: templates } = await db
       .from('checklist_templates')
       .select('*')
       .eq('ativo', true)
-    const { data: execucoes } = await supabase
+    const { data: execucoes } = await db
       .from('checklist_execucoes')
       .select('*')
       .eq('data', hoje)
 
-    const visiveis = (areas ?? []).filter((a) => podeAcessarArea(a.id))
+    const areasTyped = (areas ?? []) as Area[]
+    const templatesTyped = (templates ?? []) as ChecklistTemplate[]
+    const execucoesTyped = (execucoes ?? []) as ChecklistExecucao[]
+
+    const visiveis = areasTyped.filter((a) => podeAcessarArea(a.id))
 
     setCards(
       visiveis.map((area) => ({
         area,
-        templates: (templates ?? []).filter((t) => t.area_id === area.id),
-        execucoesHoje: (execucoes ?? []).filter((e) => e.area_id === area.id),
+        templates: templatesTyped.filter((t) => t.area_id === area.id),
+        execucoesHoje: execucoesTyped.filter((e) => e.area_id === area.id),
       }))
     )
     setLoading(false)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { Area, ChecklistItem, ChecklistTemplate, CampoTipo, ChecklistTipo } from '../lib/types'
 
 const camposLabel: Record<CampoTipo, string> = {
@@ -28,9 +28,9 @@ export function AdminTemplates() {
 
   async function load() {
     const [{ data: ars }, { data: tpls }, { data: its }] = await Promise.all([
-      supabase.from('areas').select('*').order('nome'),
-      supabase.from('checklist_templates').select('*').order('created_at'),
-      supabase.from('checklist_items').select('*').order('ordem'),
+      db.from('areas').select('*').order('nome'),
+      db.from('checklist_templates').select('*').order('created_at'),
+      db.from('checklist_items').select('*').order('ordem'),
     ])
     setAreas(ars ?? [])
     setTemplates(tpls ?? [])
@@ -40,7 +40,7 @@ export function AdminTemplates() {
 
   async function criarTemplate() {
     if (!novoNome || !novaArea) return
-    const { data } = await supabase
+    const { data } = await db
       .from('checklist_templates')
       .insert({ nome: novoNome, area_id: novaArea, tipo: novoTipo })
       .select()
@@ -52,7 +52,7 @@ export function AdminTemplates() {
   }
 
   async function excluirTemplate(id: string) {
-    await supabase.from('checklist_templates').delete().eq('id', id)
+    await db.from('checklist_templates').delete().eq('id', id)
     setTemplates((prev) => prev.filter((t) => t.id !== id))
     if (templateSelecionado === id) setTemplateSelecionado(null)
   }
@@ -60,7 +60,7 @@ export function AdminTemplates() {
   async function criarItem() {
     if (!novoItemNome || !templateSelecionado) return
     const ordem = items.filter((i) => i.template_id === templateSelecionado).length
-    const { data } = await supabase
+    const { data } = await db
       .from('checklist_items')
       .insert({
         template_id: templateSelecionado,
@@ -77,7 +77,7 @@ export function AdminTemplates() {
   }
 
   async function excluirItem(id: string) {
-    await supabase.from('checklist_items').delete().eq('id', id)
+    await db.from('checklist_items').delete().eq('id', id)
     setItems((prev) => prev.filter((i) => i.id !== id))
   }
 

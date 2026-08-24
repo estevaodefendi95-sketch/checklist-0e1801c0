@@ -10,3 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Todas as tabelas do checklist vivem no schema "checklist" (isolado das
+// tabelas do sistema financeiro que já existe nesse mesmo projeto Supabase)
+export const db = supabase.schema('checklist')
