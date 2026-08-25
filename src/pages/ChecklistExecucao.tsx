@@ -288,7 +288,7 @@ function ItemCampo({
             <button
               key={opt}
               disabled={somenteLeitura}
-              onClick={() => onSalvar(opt)}
+              onClick={() => onSalvar(resposta?.valor === opt ? '' : opt)}
               className={`rounded border px-3 py-1.5 ${
                 resposta?.valor === opt
                   ? 'border-ok bg-ok-soft text-ok'
