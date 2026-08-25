@@ -71,7 +71,7 @@ create table checklist.checklist_execucoes (
 create table checklist.checklist_respostas (
   id uuid primary key default gen_random_uuid(),
   execucao_id uuid not null references checklist.checklist_execucoes(id) on delete cascade,
-  item_id uuid not null references checklist.checklist_items(id),
+  item_id uuid not null references checklist.checklist_items(id) on delete cascade,
   valor text,
   observacao text,
   atualizado_por uuid references checklist.profiles(id),
