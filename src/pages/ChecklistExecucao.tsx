@@ -160,9 +160,16 @@ export function ChecklistExecucao() {
         ← voltar
       </Link>
       <h1 className="display text-xl font-medium capitalize">{template.tipo}</h1>
-      <p className="mb-1 text-sm text-ink-soft">
-        {format(new Date(), 'dd/MM/yyyy')} · início{' '}
-        {execucao ? format(new Date(execucao.horario_inicio), 'HH:mm') : '—'}
+      <p className="mb-1 text-xs text-ink-soft/70">
+        {format(new Date(), 'dd/MM/yyyy')}
+        {execucao && (
+          <>
+            {' · '}
+            {profiles.find((p) => p.id === execucao.preenchido_por)?.nome ?? '—'}
+            {' às '}
+            {format(new Date(execucao.horario_inicio), 'HH:mm')}
+          </>
+        )}
       </p>
       {execucao?.status === 'concluido' && (
         <p className="mb-4 inline-block rounded bg-ok-soft px-2 py-0.5 text-xs text-ok">
