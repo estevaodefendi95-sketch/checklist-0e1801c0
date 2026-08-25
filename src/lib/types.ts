@@ -49,6 +49,8 @@ export interface ChecklistResposta {
   item_id: string
   valor: string | null
   observacao: string | null
+  atualizado_por?: string | null
+  updated_at?: string
 }
 
 export interface Aprovacao {

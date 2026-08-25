@@ -75,6 +75,7 @@ create table checklist.checklist_respostas (
   item_id uuid not null references checklist.checklist_items(id),
   valor text,
   observacao text,
+  atualizado_por uuid references checklist.profiles(id),
   updated_at timestamptz not null default now(),
   unique (execucao_id, item_id)
 );

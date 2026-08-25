@@ -113,7 +113,13 @@ export function ChecklistExecucao() {
     const { data } = await db
       .from('checklist_respostas')
       .upsert(
-        { execucao_id: execucao.id, item_id: item.id, valor, updated_at: new Date().toISOString() },
+        {
+          execucao_id: execucao.id,
+          item_id: item.id,
+          valor,
+          updated_at: new Date().toISOString(),
+          atualizado_por: profile?.id,
+        },
         { onConflict: 'execucao_id,item_id' }
       )
       .select()
@@ -185,6 +191,9 @@ export function ChecklistExecucao() {
             resposta={respostas[item.id]}
             somenteLeitura={somenteLeitura}
             onSalvar={(valor) => salvarResposta(item, valor)}
+            nomeAutor={
+              profiles.find((p) => p.id === respostas[item.id]?.atualizado_por)?.nome
+            }
           />
         ))}
         {items.length === 0 && (
@@ -235,11 +244,13 @@ function ItemCampo({
   resposta,
   somenteLeitura,
   onSalvar,
+  nomeAutor,
 }: {
   item: ChecklistItem
   resposta?: ChecklistResposta
   somenteLeitura: boolean
   onSalvar: (valor: string) => void
+  nomeAutor?: string
 }) {
   const [texto, setTexto] = useState(resposta?.valor ?? '')
 
@@ -249,10 +260,17 @@ function ItemCampo({
 
   return (
     <div className="flex items-center justify-between gap-4 p-3">
-      <span className="text-sm">
-        {item.nome_campo}
-        {item.obrigatorio && <span className="text-alert"> *</span>}
-      </span>
+      <div>
+        <span className="text-sm">
+          {item.nome_campo}
+          {item.obrigatorio && <span className="text-alert"> *</span>}
+        </span>
+        {nomeAutor && resposta?.updated_at && (
+          <p className="text-[11px] text-ink-soft/60">
+            {nomeAutor} às {format(new Date(resposta.updated_at), 'HH:mm')}
+          </p>
+        )}
+      </div>
 
       {item.tipo_campo === 'checkbox' && (
         <input
