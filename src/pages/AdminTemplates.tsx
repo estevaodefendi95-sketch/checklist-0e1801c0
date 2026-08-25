@@ -154,11 +154,11 @@ export function AdminTemplates() {
             onChange={(e) => setNovoNome(e.target.value)}
             className="w-full rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
           />
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <select
               value={novaArea}
               onChange={(e) => setNovaArea(e.target.value)}
-              className="flex-1 rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+              className="rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink sm:flex-1"
             >
               {areas.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -171,7 +171,7 @@ export function AdminTemplates() {
               placeholder="tipo (ex: estoque)"
               value={novoTipo}
               onChange={(e) => setNovoTipo(e.target.value)}
-              className="w-40 rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+              className="rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink sm:w-40"
             />
             <datalist id="tipos-sugeridos">
               {tiposSugeridos.map((t) => (
@@ -192,11 +192,11 @@ export function AdminTemplates() {
             <button
               key={t.id}
               onClick={() => setTemplateSelecionado(t.id)}
-              className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-paper-dim/40 ${
+              className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-dim/40 ${
                 templateSelecionado === t.id ? 'bg-paper-dim/60' : ''
               }`}
             >
-              <span>
+              <span className="min-w-0 break-words">
                 {areas.find((a) => a.id === t.area_id)?.nome} · {t.nome}
                 <span className="ml-2 text-xs capitalize text-ink-soft">{t.tipo}</span>
               </span>
@@ -205,7 +205,7 @@ export function AdminTemplates() {
                   e.stopPropagation()
                   excluirTemplate(t.id)
                 }}
-                className="text-xs text-alert hover:underline"
+                className="shrink-0 text-xs text-alert hover:underline"
               >
                 excluir
               </span>

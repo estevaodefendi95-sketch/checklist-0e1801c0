@@ -122,7 +122,7 @@ export function AdminUsuarios() {
               {p.role === 'admin' ? (
                 <span className="text-xs text-ink-soft">acesso a todas as áreas</span>
               ) : (
-                <div className="flex gap-1">
+                <div className="flex flex-wrap gap-1">
                   {areas.map((a) => (
                     <button
                       key={a.id}

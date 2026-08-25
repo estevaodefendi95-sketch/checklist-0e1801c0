@@ -259,9 +259,9 @@ function ItemCampo({
   }, [resposta?.valor])
 
   return (
-    <div className="flex items-center justify-between gap-4 p-3">
-      <div>
-        <span className="text-sm">
+    <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="min-w-0">
+        <span className="text-sm break-words">
           {item.nome_campo}
           {item.obrigatorio && <span className="text-alert"> *</span>}
         </span>
@@ -278,18 +278,18 @@ function ItemCampo({
           checked={resposta?.valor === 'true'}
           disabled={somenteLeitura}
           onChange={(e) => onSalvar(e.target.checked ? 'true' : 'false')}
-          className="h-5 w-5 accent-ok"
+          className="h-6 w-6 shrink-0 accent-ok"
         />
       )}
 
       {item.tipo_campo === 'sim_nao' && (
-        <div className="flex gap-1 text-xs">
+        <div className="flex shrink-0 gap-2 text-sm">
           {['sim', 'não'].map((opt) => (
             <button
               key={opt}
               disabled={somenteLeitura}
               onClick={() => onSalvar(opt)}
-              className={`rounded border px-2 py-1 ${
+              className={`rounded border px-3 py-1.5 ${
                 resposta?.valor === opt
                   ? 'border-ok bg-ok-soft text-ok'
                   : 'border-line text-ink-soft'
@@ -307,7 +307,7 @@ function ItemCampo({
           disabled={somenteLeitura}
           defaultValue={resposta?.valor ?? ''}
           onBlur={(e) => onSalvar(e.target.value)}
-          className="w-20 rounded border border-line bg-paper px-2 py-1 text-right text-sm outline-none focus:border-ink"
+          className="w-full rounded border border-line bg-paper px-2 py-1.5 text-right text-sm outline-none focus:border-ink sm:w-20"
         />
       )}
 
@@ -318,7 +318,7 @@ function ItemCampo({
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           onBlur={() => onSalvar(texto)}
-          className="w-40 rounded border border-line bg-paper px-2 py-1 text-sm outline-none focus:border-ink"
+          className="w-full rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink sm:w-40"
         />
       )}
     </div>
