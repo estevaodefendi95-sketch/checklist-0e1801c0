@@ -57,8 +57,17 @@ export function AdminTemplates() {
   }
 
   async function excluirArea(id: string) {
-    await db.from('areas').delete().eq('id', id)
+    const ok = window.confirm(
+      'Excluir essa área também apaga os modelos e o histórico de checklists dela. Continuar?'
+    )
+    if (!ok) return
+    const { error } = await db.from('areas').delete().eq('id', id)
+    if (error) {
+      alert('Não foi possível excluir: ' + error.message)
+      return
+    }
     setAreas((prev) => prev.filter((a) => a.id !== id))
+    setTemplates((prev) => prev.filter((t) => t.area_id !== id))
   }
 
   async function criarTemplate() {
@@ -75,7 +84,15 @@ export function AdminTemplates() {
   }
 
   async function excluirTemplate(id: string) {
-    await db.from('checklist_templates').delete().eq('id', id)
+    const ok = window.confirm(
+      'Excluir esse modelo também apaga o histórico de checklists já preenchidos com ele. Continuar?'
+    )
+    if (!ok) return
+    const { error } = await db.from('checklist_templates').delete().eq('id', id)
+    if (error) {
+      alert('Não foi possível excluir: ' + error.message)
+      return
+    }
     setTemplates((prev) => prev.filter((t) => t.id !== id))
     if (templateSelecionado === id) setTemplateSelecionado(null)
   }
@@ -100,7 +117,11 @@ export function AdminTemplates() {
   }
 
   async function excluirItem(id: string) {
-    await db.from('checklist_items').delete().eq('id', id)
+    const { error } = await db.from('checklist_items').delete().eq('id', id)
+    if (error) {
+      alert('Não foi possível excluir: ' + error.message)
+      return
+    }
     setItems((prev) => prev.filter((i) => i.id !== id))
   }
 

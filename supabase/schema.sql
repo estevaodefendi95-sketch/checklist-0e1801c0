@@ -55,7 +55,7 @@ create table checklist.checklist_items (
 -- Execuções diárias — cada dia gera um registro novo, nunca sobrescreve
 create table checklist.checklist_execucoes (
   id uuid primary key default gen_random_uuid(),
-  template_id uuid not null references checklist.checklist_templates(id),
+  template_id uuid not null references checklist.checklist_templates(id) on delete cascade,
   area_id uuid not null references checklist.areas(id),
   tipo text not null,
   data date not null default current_date,
