@@ -14,6 +14,15 @@
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#1a1a1a" />
+    <script>
+      // aplica o tema salvo antes do primeiro paint, evita flash claro/escuro
+      try {
+        var t = localStorage.getItem('checklist-theme')
+        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {}
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

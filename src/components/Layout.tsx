@@ -1,6 +1,7 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { ReactNode, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { ThemeToggle } from './ThemeToggle'
 
 const roleLabel: Record<string, string> = {
   admin: 'Administrador',
@@ -63,6 +64,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 {profile ? roleLabel[profile.role] : ''}
               </div>
             </div>
+            <ThemeToggle />
             <button
               onClick={handleSignOut}
               className="rounded border border-line px-2 py-1 text-xs text-ink-soft hover:border-ink hover:text-ink"
@@ -72,17 +74,20 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
 
           {/* botão hamburguer mobile */}
-          <button
-            onClick={() => setMenuAberto((v) => !v)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-line sm:hidden"
-            aria-label="menu"
-          >
-            <div className="space-y-1">
-              <span className="block h-0.5 w-4 bg-ink" />
-              <span className="block h-0.5 w-4 bg-ink" />
-              <span className="block h-0.5 w-4 bg-ink" />
-            </div>
-          </button>
+          <div className="flex items-center gap-2 sm:hidden">
+            <ThemeToggle />
+            <button
+              onClick={() => setMenuAberto((v) => !v)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-line"
+              aria-label="menu"
+            >
+              <div className="space-y-1">
+                <span className="block h-0.5 w-4 bg-ink" />
+                <span className="block h-0.5 w-4 bg-ink" />
+                <span className="block h-0.5 w-4 bg-ink" />
+              </div>
+            </button>
+          </div>
         </div>
 
         {/* menu mobile */}

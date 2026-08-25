@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { ThemeToggle } from '../components/ThemeToggle'
 
 export function Login() {
   const { session, signIn } = useAuth()
@@ -21,7 +22,10 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-paper px-4">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
         <h1 className="display mb-1 text-2xl font-medium">checklist</h1>
         <p className="mb-8 text-sm text-ink-soft">

@@ -22,6 +22,25 @@ body {
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-mono);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* modo escuro — mesma identidade visual, tons invertidos */
+.dark {
+  --color-paper: #1B1A16;
+  --color-paper-dim: #242320;
+  --color-ink: #EDEAE0;
+  --color-ink-soft: #A6A399;
+  --color-line: #38362F;
+
+  --color-ok: #6FBF95;
+  --color-ok-soft: #1E2E24;
+  --color-warn: #E0AC5C;
+  --color-warn-soft: #332715;
+  --color-alert: #E2897F;
+  --color-alert-soft: #33211E;
+
+  color-scheme: dark;
 }
 
 h1, h2, h3, .display {
