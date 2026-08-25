@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { db } from '../lib/supabase'
-import { Area, ChecklistItem, ChecklistTemplate, CampoTipo, ChecklistTipo } from '../lib/types'
+import { Area, ChecklistItem, ChecklistTemplate, CampoTipo } from '../lib/types'
 
 const camposLabel: Record<CampoTipo, string> = {
   checkbox: 'marcar (sim/não simples)',
@@ -9,15 +9,19 @@ const camposLabel: Record<CampoTipo, string> = {
   texto: 'texto livre',
 }
 
+const tiposSugeridos = ['abertura', 'fechamento', 'estoque']
+
 export function AdminTemplates() {
   const [areas, setAreas] = useState<Area[]>([])
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([])
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [templateSelecionado, setTemplateSelecionado] = useState<string | null>(null)
 
+  const [novaAreaNome, setNovaAreaNome] = useState('')
+
   const [novoNome, setNovoNome] = useState('')
   const [novaArea, setNovaArea] = useState('')
-  const [novoTipo, setNovoTipo] = useState<ChecklistTipo>('abertura')
+  const [novoTipo, setNovoTipo] = useState('abertura')
 
   const [novoItemNome, setNovoItemNome] = useState('')
   const [novoItemTipo, setNovoItemTipo] = useState<CampoTipo>('checkbox')
@@ -38,11 +42,30 @@ export function AdminTemplates() {
     if (ars && ars.length > 0 && !novaArea) setNovaArea(ars[0].id)
   }
 
+  async function criarArea() {
+    if (!novaAreaNome.trim()) return
+    const { data } = await db
+      .from('areas')
+      .insert({ nome: novaAreaNome.trim() })
+      .select()
+      .single()
+    if (data) {
+      setAreas((prev) => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)))
+      setNovaAreaNome('')
+      if (!novaArea) setNovaArea(data.id)
+    }
+  }
+
+  async function excluirArea(id: string) {
+    await db.from('areas').delete().eq('id', id)
+    setAreas((prev) => prev.filter((a) => a.id !== id))
+  }
+
   async function criarTemplate() {
-    if (!novoNome || !novaArea) return
+    if (!novoNome || !novaArea || !novoTipo.trim()) return
     const { data } = await db
       .from('checklist_templates')
-      .insert({ nome: novoNome, area_id: novaArea, tipo: novoTipo })
+      .insert({ nome: novoNome, area_id: novaArea, tipo: novoTipo.trim().toLowerCase() })
       .select()
       .single()
     if (data) {
@@ -86,6 +109,42 @@ export function AdminTemplates() {
   return (
     <div className="grid gap-8 sm:grid-cols-2">
       <div>
+        <h1 className="display mb-4 text-xl font-medium">áreas</h1>
+
+        <div className="mb-4 flex gap-2 rounded border border-line bg-paper-dim/40 p-3">
+          <input
+            placeholder="nome da nova área (ex: estoque)"
+            value={novaAreaNome}
+            onChange={(e) => setNovaAreaNome(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && criarArea()}
+            className="flex-1 rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+          />
+          <button
+            onClick={criarArea}
+            className="rounded bg-ink px-3 py-1.5 text-sm font-medium text-paper"
+          >
+            criar
+          </button>
+        </div>
+
+        <div className="mb-8 flex flex-wrap gap-2">
+          {areas.map((a) => (
+            <span
+              key={a.id}
+              className="flex items-center gap-2 rounded border border-line bg-paper px-2 py-1 text-xs"
+            >
+              {a.nome}
+              <button
+                onClick={() => excluirArea(a.id)}
+                className="text-alert hover:underline"
+                title="excluir área"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+
         <h1 className="display mb-4 text-xl font-medium">modelos</h1>
 
         <div className="mb-4 space-y-2 rounded border border-line bg-paper-dim/40 p-3">
@@ -107,14 +166,18 @@ export function AdminTemplates() {
                 </option>
               ))}
             </select>
-            <select
+            <input
+              list="tipos-sugeridos"
+              placeholder="tipo (ex: estoque)"
               value={novoTipo}
-              onChange={(e) => setNovoTipo(e.target.value as ChecklistTipo)}
-              className="rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
-            >
-              <option value="abertura">abertura</option>
-              <option value="fechamento">fechamento</option>
-            </select>
+              onChange={(e) => setNovoTipo(e.target.value)}
+              className="w-40 rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+            />
+            <datalist id="tipos-sugeridos">
+              {tiposSugeridos.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
           </div>
           <button
             onClick={criarTemplate}

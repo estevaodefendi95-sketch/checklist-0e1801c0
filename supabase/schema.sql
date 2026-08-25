@@ -10,7 +10,6 @@ create schema if not exists checklist;
 
 -- Tipos
 create type checklist.user_role as enum ('admin', 'editor', 'visualizador');
-create type checklist.checklist_tipo as enum ('abertura', 'fechamento');
 create type checklist.campo_tipo as enum ('checkbox', 'quantidade', 'sim_nao', 'texto');
 
 -- Áreas fixas
@@ -35,7 +34,7 @@ create table checklist.profiles (
 create table checklist.checklist_templates (
   id uuid primary key default gen_random_uuid(),
   area_id uuid not null references checklist.areas(id) on delete cascade,
-  tipo checklist.checklist_tipo not null,
+  tipo text not null,
   nome text not null,
   ativo boolean not null default true,
   created_at timestamptz not null default now(),
@@ -58,7 +57,7 @@ create table checklist.checklist_execucoes (
   id uuid primary key default gen_random_uuid(),
   template_id uuid not null references checklist.checklist_templates(id),
   area_id uuid not null references checklist.areas(id),
-  tipo checklist.checklist_tipo not null,
+  tipo text not null,
   data date not null default current_date,
   preenchido_por uuid not null references checklist.profiles(id),
   horario_inicio timestamptz not null default now(),
@@ -127,6 +126,9 @@ create policy "profiles_update_admin" on checklist.profiles for update using (ch
 create policy "profiles_insert_admin" on checklist.profiles for insert with check (checklist.auth_role() = 'admin');
 
 create policy "areas_select" on checklist.areas for select using (auth.uid() is not null);
+create policy "areas_write_admin" on checklist.areas for all
+  using (checklist.auth_role() = 'admin')
+  with check (checklist.auth_role() = 'admin');
 
 create policy "templates_select" on checklist.checklist_templates for select using (checklist.pode_acessar_area(area_id));
 create policy "templates_write_admin" on checklist.checklist_templates for all using (checklist.auth_role() = 'admin') with check (checklist.auth_role() = 'admin');

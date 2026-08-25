@@ -1,5 +1,5 @@
 export type UserRole = 'admin' | 'editor' | 'visualizador'
-export type ChecklistTipo = 'abertura' | 'fechamento'
+export type ChecklistTipo = string
 export type CampoTipo = 'checkbox' | 'quantidade' | 'sim_nao' | 'texto'
 
 export interface Area {
