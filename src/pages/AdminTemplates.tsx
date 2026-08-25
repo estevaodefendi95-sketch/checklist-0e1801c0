@@ -26,6 +26,10 @@ export function AdminTemplates() {
   const [novoItemNome, setNovoItemNome] = useState('')
   const [novoItemTipo, setNovoItemTipo] = useState<CampoTipo>('checkbox')
 
+  const [itemEditando, setItemEditando] = useState<string | null>(null)
+  const [editNome, setEditNome] = useState('')
+  const [editTipo, setEditTipo] = useState<CampoTipo>('checkbox')
+
   useEffect(() => {
     load()
   }, [])
@@ -125,7 +129,51 @@ export function AdminTemplates() {
     setItems((prev) => prev.filter((i) => i.id !== id))
   }
 
-  const itensDoTemplate = items.filter((i) => i.template_id === templateSelecionado)
+  function iniciarEdicaoItem(item: ChecklistItem) {
+    setItemEditando(item.id)
+    setEditNome(item.nome_campo)
+    setEditTipo(item.tipo_campo)
+  }
+
+  async function salvarEdicaoItem(id: string) {
+    if (!editNome.trim()) return
+    const { data, error } = await db
+      .from('checklist_items')
+      .update({ nome_campo: editNome.trim(), tipo_campo: editTipo })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) {
+      alert('Não foi possível salvar: ' + error.message)
+      return
+    }
+    if (data) {
+      setItems((prev) => prev.map((i) => (i.id === id ? data : i)))
+    }
+    setItemEditando(null)
+  }
+
+  async function moverItem(id: string, direcao: -1 | 1) {
+    const lista = items
+      .filter((i) => i.template_id === templateSelecionado)
+      .sort((a, b) => a.ordem - b.ordem)
+    const idx = lista.findIndex((i) => i.id === id)
+    const alvo = lista[idx + direcao]
+    if (!alvo) return
+    const atual = lista[idx]
+
+    const [{ data: a }, { data: b }] = await Promise.all([
+      db.from('checklist_items').update({ ordem: alvo.ordem }).eq('id', atual.id).select().single(),
+      db.from('checklist_items').update({ ordem: atual.ordem }).eq('id', alvo.id).select().single(),
+    ])
+    if (a && b) {
+      setItems((prev) => prev.map((i) => (i.id === a.id ? a : i.id === b.id ? b : i)))
+    }
+  }
+
+  const itensDoTemplate = items
+    .filter((i) => i.template_id === templateSelecionado)
+    .sort((a, b) => a.ordem - b.ordem)
 
   return (
     <div className="grid gap-8 sm:grid-cols-2">
@@ -273,20 +321,81 @@ export function AdminTemplates() {
             </div>
 
             <div className="divide-y divide-line rounded border border-line">
-              {itensDoTemplate.map((i) => (
-                <div key={i.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                  <span>
-                    {i.nome_campo}
-                    <span className="ml-2 text-xs text-ink-soft">{camposLabel[i.tipo_campo]}</span>
-                  </span>
-                  <button
-                    onClick={() => excluirItem(i.id)}
-                    className="text-xs text-alert hover:underline"
-                  >
-                    excluir
-                  </button>
-                </div>
-              ))}
+              {itensDoTemplate.map((i, idx) =>
+                itemEditando === i.id ? (
+                  <div key={i.id} className="space-y-2 bg-paper-dim/40 px-3 py-2">
+                    <input
+                      value={editNome}
+                      onChange={(e) => setEditNome(e.target.value)}
+                      className="w-full rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+                    />
+                    <select
+                      value={editTipo}
+                      onChange={(e) => setEditTipo(e.target.value as CampoTipo)}
+                      className="w-full rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+                    >
+                      {Object.entries(camposLabel).map(([key, label]) => (
+                        <option key={key} value={key}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => salvarEdicaoItem(i.id)}
+                        className="flex-1 rounded bg-ink py-1.5 text-xs font-medium text-paper"
+                      >
+                        salvar
+                      </button>
+                      <button
+                        onClick={() => setItemEditando(null)}
+                        className="flex-1 rounded border border-line py-1.5 text-xs text-ink-soft"
+                      >
+                        cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={i.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <div className="flex items-center gap-1 text-ink-soft">
+                      <button
+                        onClick={() => moverItem(i.id, -1)}
+                        disabled={idx === 0}
+                        className="px-1 disabled:opacity-20"
+                        title="mover pra cima"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() => moverItem(i.id, 1)}
+                        disabled={idx === itensDoTemplate.length - 1}
+                        className="px-1 disabled:opacity-20"
+                        title="mover pra baixo"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                    <span className="min-w-0 flex-1 break-words">
+                      {i.nome_campo}
+                      <span className="ml-2 text-xs text-ink-soft">{camposLabel[i.tipo_campo]}</span>
+                    </span>
+                    <div className="flex shrink-0 gap-3 text-xs">
+                      <button
+                        onClick={() => iniciarEdicaoItem(i)}
+                        className="text-ink-soft hover:underline"
+                      >
+                        editar
+                      </button>
+                      <button
+                        onClick={() => excluirItem(i.id)}
+                        className="text-alert hover:underline"
+                      >
+                        excluir
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
               {itensDoTemplate.length === 0 && (
                 <p className="px-3 py-2 text-sm text-ink-soft">nenhum item ainda</p>
               )}
