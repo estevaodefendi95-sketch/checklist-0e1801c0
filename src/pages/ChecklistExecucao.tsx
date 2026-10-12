@@ -199,7 +199,7 @@ export function ChecklistExecucao() {
       )}
 
       {paraRepor.length > 0 && (
-        <div className="mt-4 rounded border border-alert/40 bg-alert/10 p-3 text-sm text-alert">
+        <div className="mt-4 rounded border border-alert-soft bg-alert-soft p-3 text-sm text-alert">
           <p className="mb-1 font-medium">para repor ({paraRepor.length})</p>
           <ul className="space-y-0.5 text-xs">
             {paraRepor.map((i) => (
