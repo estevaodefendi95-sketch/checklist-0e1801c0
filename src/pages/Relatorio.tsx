@@ -13,6 +13,7 @@ import {
   Aprovacao,
   Profile,
 } from '../lib/types'
+import { dataReferencia } from '../lib/periodo'
 
 export function Relatorio() {
   const { podeAcessarArea } = useAuth()
@@ -24,9 +25,14 @@ export function Relatorio() {
     setGerando(true)
     setErro(null)
 
+    const base = new Date(data + 'T00:00:00')
     const [{ data: execucoes }, { data: areas }, { data: templates }, { data: profiles }] =
       await Promise.all([
-        db.from('checklist_execucoes').select('*').eq('data', data),
+        db
+          .from('checklist_execucoes')
+          .select('*')
+          .gte('data', dataReferencia('semanal', base))
+          .lte('data', data),
         db.from('areas').select('*'),
         db.from('checklist_templates').select('*'),
         db.from('profiles').select('*'),
@@ -37,17 +43,21 @@ export function Relatorio() {
     const templatesTyped = (templates ?? []) as ChecklistTemplate[]
     const profilesTyped = (profiles ?? []) as Profile[]
 
-    const execVisiveis = execucoesTyped.filter((e) => podeAcessarArea(e.area_id))
+    const areaMap = Object.fromEntries(areasTyped.map((a) => [a.id, a]))
+    const templateMap = Object.fromEntries(templatesTyped.map((t) => [t.id, t]))
+    const profileMap = Object.fromEntries(profilesTyped.map((p) => [p.id, p]))
+
+    const execVisiveis = execucoesTyped.filter(
+      (e) =>
+        podeAcessarArea(e.area_id) &&
+        e.data === dataReferencia(templateMap[e.template_id]?.frequencia, base)
+    )
 
     if (execVisiveis.length === 0) {
       setErro('Nenhum checklist encontrado para essa data nas áreas que você acessa.')
       setGerando(false)
       return
     }
-
-    const areaMap = Object.fromEntries(areasTyped.map((a) => [a.id, a]))
-    const templateMap = Object.fromEntries(templatesTyped.map((t) => [t.id, t]))
-    const profileMap = Object.fromEntries(profilesTyped.map((p) => [p.id, p]))
 
     const execIds = execVisiveis.map((e) => e.id)
     const [{ data: respostas }, { data: itens }, { data: aprovacoes }] = await Promise.all([
@@ -64,7 +74,7 @@ export function Relatorio() {
 
     const doc = new jsPDF()
     doc.setFontSize(14)
-    doc.text(`Relatório de checklist — ${format(new Date(data + 'T00:00:00'), 'dd/MM/yyyy')}`, 14, 16)
+    doc.text(`Relatório de checklist — ${format(base, 'dd/MM/yyyy')}`, 14, 16)
 
     let y = 26
     for (const exec of execVisiveis) {
@@ -79,8 +89,13 @@ export function Relatorio() {
         y = 16
       }
 
+      doc.setTextColor(0, 0, 0)
       doc.setFontSize(11)
-      doc.text(`${area?.nome ?? '—'} · ${template?.tipo ?? '—'}`, 14, y)
+      doc.text(
+        `${area?.nome ?? '—'} · ${template?.tipo ?? '—'}${template?.frequencia === 'semanal' ? ' (semanal)' : ''}`,
+        14,
+        y
+      )
       doc.setFontSize(9)
       doc.text(
         `preenchido por ${preenchidoPor?.nome ?? '—'} às ${format(new Date(exec.horario_inicio), 'HH:mm')} · status: ${exec.status}`,
@@ -96,22 +111,58 @@ export function Relatorio() {
       }
 
       const respostasExec = respostasTyped.filter((r) => r.execucao_id === exec.id)
-      const rows = respostasExec.map((r) => [
-        itemMap[r.item_id]?.nome_campo ?? '—',
-        r.valor ?? '—',
-      ])
+      const repor: string[] = []
+      const reporRows = new Set<number>()
+      const rows = respostasExec.map((r, idx) => {
+        const item = itemMap[r.item_id]
+        const un = item?.unidade ? ' ' + item.unidade : ''
+        const isQtd = item?.tipo_campo === 'quantidade'
+        const temMin = isQtd && item.estoque_minimo != null
+        const abaixo =
+          temMin && r.valor != null && r.valor !== '' && Number(r.valor) < Number(item.estoque_minimo)
+        if (abaixo) {
+          reporRows.add(idx)
+          repor.push(`${item.nome_campo} (${r.valor}${un}, mín. ${item.estoque_minimo}${un})`)
+        }
+        return [
+          item?.nome_campo ?? '—',
+          r.valor ? (isQtd ? r.valor + un : r.valor) : '—',
+          temMin ? `${item.estoque_minimo}${un}` : '—',
+          abaixo ? 'REPOR' : temMin ? 'ok' : '—',
+        ]
+      })
 
       autoTable(doc, {
         startY: y + (aprovacao ? 14 : 9),
-        head: [['item', 'valor']],
+        head: [['item', 'contagem', 'mínimo', 'situação']],
         body: rows,
         styles: { fontSize: 9 },
         headStyles: { fillColor: [47, 111, 79] },
         margin: { left: 14, right: 14 },
+        didParseCell: (hook) => {
+          if (hook.section === 'body' && reporRows.has(hook.row.index)) {
+            hook.cell.styles.textColor = [180, 30, 30]
+            hook.cell.styles.fontStyle = 'bold'
+          }
+        },
       })
 
       // @ts-expect-error jspdf-autotable adiciona lastAutoTable ao doc
-      y = doc.lastAutoTable.finalY + 12
+      y = doc.lastAutoTable.finalY + 6
+
+      if (repor.length > 0) {
+        const linhas = doc.splitTextToSize(`Para repor: ${repor.join('; ')}`, 180)
+        if (y + linhas.length * 4 > 285) {
+          doc.addPage()
+          y = 16
+        }
+        doc.setFontSize(9)
+        doc.setTextColor(180, 30, 30)
+        doc.text(linhas, 14, y)
+        doc.setTextColor(0, 0, 0)
+        y += linhas.length * 4
+      }
+      y += 6
     }
 
     doc.save(`checklist-${data}.pdf`)

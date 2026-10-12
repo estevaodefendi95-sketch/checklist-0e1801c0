@@ -11,6 +11,17 @@ import {
   Aprovacao,
   Profile,
 } from '../lib/types'
+import { dataReferencia } from '../lib/periodo'
+
+function abaixoDoMinimo(item: ChecklistItem, valor?: string | null) {
+  return (
+    item.tipo_campo === 'quantidade' &&
+    item.estoque_minimo != null &&
+    valor != null &&
+    valor !== '' &&
+    Number(valor) < Number(item.estoque_minimo)
+  )
+}
 
 export function ChecklistExecucao() {
   const { templateId } = useParams()
@@ -33,7 +44,6 @@ export function ChecklistExecucao() {
   async function load() {
     if (!templateId) return
     setLoading(true)
-    const hoje = format(new Date(), 'yyyy-MM-dd')
 
     const { data: tpl } = await db
       .from('checklist_templates')
@@ -45,6 +55,7 @@ export function ChecklistExecucao() {
       return
     }
     setTemplate(tpl)
+    const hoje = dataReferencia(tpl.frequencia)
 
     const { data: its } = await db
       .from('checklist_items')
@@ -159,6 +170,8 @@ export function ChecklistExecucao() {
   const todosPreenchidos = items
     .filter((i) => i.obrigatorio)
     .every((i) => respostas[i.id]?.valor)
+  const semanal = template.frequencia === 'semanal'
+  const paraRepor = items.filter((i) => abaixoDoMinimo(i, respostas[i.id]?.valor))
 
   return (
     <div className="mx-auto max-w-xl">
@@ -167,7 +180,9 @@ export function ChecklistExecucao() {
       </Link>
       <h1 className="display text-xl font-medium capitalize">{template.tipo}</h1>
       <p className="mb-1 text-xs text-ink-soft/70">
-        {format(new Date(), 'dd/MM/yyyy')}
+        {semanal
+          ? `semana de ${format(new Date(dataReferencia('semanal') + 'T00:00:00'), 'dd/MM/yyyy')}`
+          : format(new Date(), 'dd/MM/yyyy')}
         {execucao && (
           <>
             {' · '}
@@ -181,6 +196,20 @@ export function ChecklistExecucao() {
         <p className="mb-4 inline-block rounded bg-ok-soft px-2 py-0.5 text-xs text-ok">
           concluído {execucao.horario_fim && format(new Date(execucao.horario_fim), 'às HH:mm')}
         </p>
+      )}
+
+      {paraRepor.length > 0 && (
+        <div className="mt-4 rounded border border-alert/40 bg-alert/10 p-3 text-sm text-alert">
+          <p className="mb-1 font-medium">para repor ({paraRepor.length})</p>
+          <ul className="space-y-0.5 text-xs">
+            {paraRepor.map((i) => (
+              <li key={i.id}>
+                {i.nome_campo}: {respostas[i.id]?.valor}
+                {i.unidade ? ' ' + i.unidade : ''} ({textoMinimo(i)})
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="mt-4 divide-y divide-line rounded border border-line">
@@ -239,6 +268,10 @@ export function ChecklistExecucao() {
   )
 }
 
+function textoMinimo(item: ChecklistItem) {
+  return `mín. ${item.estoque_minimo}${item.unidade ? ' ' + item.unidade : ''}`
+}
+
 function ItemCampo({
   item,
   resposta,
@@ -253,10 +286,14 @@ function ItemCampo({
   nomeAutor?: string
 }) {
   const [texto, setTexto] = useState(resposta?.valor ?? '')
+  const [qtd, setQtd] = useState(resposta?.valor ?? '')
 
   useEffect(() => {
     setTexto(resposta?.valor ?? '')
+    setQtd(resposta?.valor ?? '')
   }, [resposta?.valor])
+
+  const abaixo = abaixoDoMinimo(item, qtd)
 
   return (
     <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -265,6 +302,11 @@ function ItemCampo({
           {item.nome_campo}
           {item.obrigatorio && <span className="text-alert"> *</span>}
         </span>
+        {item.tipo_campo === 'quantidade' && item.estoque_minimo != null && (
+          <p className={`text-[11px] ${abaixo ? 'text-alert' : 'text-ink-soft/70'}`}>
+            {abaixo ? `abaixo do mínimo · ${textoMinimo(item)}` : textoMinimo(item)}
+          </p>
+        )}
         {nomeAutor && resposta?.updated_at && (
           <p className="text-[11px] text-ink-soft/60">
             {nomeAutor} às {format(new Date(resposta.updated_at), 'HH:mm')}
@@ -302,13 +344,20 @@ function ItemCampo({
       )}
 
       {item.tipo_campo === 'quantidade' && (
-        <input
-          type="number"
-          disabled={somenteLeitura}
-          defaultValue={resposta?.valor ?? ''}
-          onBlur={(e) => onSalvar(e.target.value)}
-          className="w-full rounded border border-line bg-paper px-2 py-1.5 text-right text-sm outline-none focus:border-ink sm:w-20"
-        />
+        <div className="flex shrink-0 items-center gap-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            disabled={somenteLeitura}
+            value={qtd}
+            onChange={(e) => setQtd(e.target.value)}
+            onBlur={() => onSalvar(qtd)}
+            className={`w-full rounded border bg-paper px-2 py-1.5 text-right text-sm outline-none sm:w-20 ${
+              abaixo ? 'border-alert text-alert' : 'border-line focus:border-ink'
+            }`}
+          />
+          {item.unidade && <span className="text-xs text-ink-soft">{item.unidade}</span>}
+        </div>
       )}
 
       {item.tipo_campo === 'texto' && (
