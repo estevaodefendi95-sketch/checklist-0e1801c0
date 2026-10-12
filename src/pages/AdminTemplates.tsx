@@ -154,6 +154,22 @@ export function AdminTemplates() {
     if (data) setTemplates((prev) => prev.map((t) => (t.id === id ? data : t)))
   }
 
+  async function alterarContagem(id: string, contagem_estoque: boolean) {
+    setSalvandoFrequencia(true)
+    const { data, error } = await db
+      .from('checklist_templates')
+      .update({ contagem_estoque })
+      .eq('id', id)
+      .select()
+      .single()
+    setSalvandoFrequencia(false)
+    if (error) {
+      alert('Não foi possível alterar: ' + error.message)
+      return
+    }
+    if (data) setTemplates((prev) => prev.map((t) => (t.id === id ? data : t)))
+  }
+
   async function excluirTemplate(id: string) {
     const ok = window.confirm(
       'Excluir esse modelo também apaga o histórico de checklists já preenchidos com ele. Continuar?'
@@ -401,6 +417,22 @@ export function AdminTemplates() {
               </select>
               <p className="text-xs text-ink-soft">
                 Os itens e o histórico são mantidos. Só muda como a contagem é aberta.
+              </p>
+              <label className="mt-3 flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!templateAtual?.contagem_estoque}
+                  disabled={salvandoFrequencia}
+                  onChange={(e) =>
+                    templateAtual && alterarContagem(templateAtual.id, e.target.checked)
+                  }
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-ok"
+                />
+                <span>registrar quantidade em cada item (contagem de estoque)</span>
+              </label>
+              <p className="mt-1 text-[11px] text-ink-soft/70">
+                Além do check, aparece o campo de contagem e de entrada na frente de cada produto. O
+                relatório de balanço usa esses números.
               </p>
             </div>
 

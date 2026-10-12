@@ -139,6 +139,28 @@ export function ChecklistExecucao() {
     setSaving(false)
   }
 
+  async function salvarEstoque(item: ChecklistItem, campo: 'quantidade' | 'entrada', texto: string) {
+    if (!execucao) return
+    const valor = texto.trim() === '' ? null : Number(texto)
+    setSaving(true)
+    const { data } = await db
+      .from('checklist_respostas')
+      .upsert(
+        {
+          execucao_id: execucao.id,
+          item_id: item.id,
+          [campo]: valor,
+          updated_at: new Date().toISOString(),
+          atualizado_por: profile?.id,
+        },
+        { onConflict: 'execucao_id,item_id' }
+      )
+      .select()
+      .single()
+    if (data) setRespostas((prev) => ({ ...prev, [item.id]: data }))
+    setSaving(false)
+  }
+
   async function concluirChecklist() {
     if (!execucao) return
     await db
@@ -220,6 +242,8 @@ export function ChecklistExecucao() {
             resposta={respostas[item.id]}
             somenteLeitura={somenteLeitura}
             onSalvar={(valor) => salvarResposta(item, valor)}
+            contagem={!!template.contagem_estoque && item.tipo_campo !== 'quantidade'}
+            onSalvarEstoque={(campo, v) => salvarEstoque(item, campo, v)}
             nomeAutor={
               profiles.find((p) => p.id === respostas[item.id]?.atualizado_por)?.nome
             }
@@ -278,7 +302,11 @@ function ItemCampo({
   somenteLeitura,
   onSalvar,
   nomeAutor,
+  contagem,
+  onSalvarEstoque,
 }: {
+  contagem?: boolean
+  onSalvarEstoque?: (campo: 'quantidade' | 'entrada', valor: string) => void
   item: ChecklistItem
   resposta?: ChecklistResposta
   somenteLeitura: boolean
@@ -292,6 +320,15 @@ function ItemCampo({
     setTexto(resposta?.valor ?? '')
     setQtd(resposta?.valor ?? '')
   }, [resposta?.valor])
+
+  const [contQtd, setContQtd] = useState('')
+  const [contEnt, setContEnt] = useState('')
+  useEffect(() => {
+    setContQtd(resposta?.quantidade != null ? String(resposta.quantidade) : '')
+  }, [resposta?.quantidade])
+  useEffect(() => {
+    setContEnt(resposta?.entrada != null ? String(resposta.entrada) : '')
+  }, [resposta?.entrada])
 
   const abaixo = abaixoDoMinimo(item, qtd)
 
@@ -369,6 +406,31 @@ function ItemCampo({
           onBlur={() => onSalvar(texto)}
           className="w-full rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink sm:w-40"
         />
+      )}
+
+      {contagem && (
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-44 sm:shrink-0">
+          {(
+            [
+              ['contagem', 'quantidade', contQtd, setContQtd],
+              ['entrada', 'entrada', contEnt, setContEnt],
+            ] as const
+          ).map(([rotulo, campo, v, setV]) => (
+            <label key={campo} className="block">
+              <span className="block text-[10px] text-ink-soft/70">{rotulo}</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                disabled={somenteLeitura}
+                value={v}
+                onChange={(e) => setV(e.target.value)}
+                onBlur={() => onSalvarEstoque?.(campo, v)}
+                className="w-full rounded border border-line bg-paper px-2 py-1.5 text-right text-sm outline-none focus:border-ink"
+              />
+            </label>
+          ))}
+        </div>
       )}
     </div>
   )

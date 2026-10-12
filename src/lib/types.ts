@@ -21,6 +21,7 @@ export interface ChecklistTemplate {
   nome: string
   ativo: boolean
   frequencia?: 'diaria' | 'semanal'
+  contagem_estoque?: boolean
 }
 
 export interface ChecklistItem {
@@ -52,6 +53,8 @@ export interface ChecklistResposta {
   item_id: string
   valor: string | null
   observacao: string | null
+  quantidade?: number | null
+  entrada?: number | null
   atualizado_por?: string | null
   updated_at?: string
 }
