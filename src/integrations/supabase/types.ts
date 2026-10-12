@@ -14,6 +14,106 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_settings: {
+        Row: {
+          company_id: string
+          lovable_gateway_allowed: boolean
+          model: string
+          monthly_limit: number
+          provider: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id: string
+          lovable_gateway_allowed?: boolean
+          model?: string
+          monthly_limit?: number
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          lovable_gateway_allowed?: boolean
+          model?: string
+          monthly_limit?: number
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_usage: {
+        Row: {
+          cache_read_tokens: number
+          cache_write_tokens: number
+          channel: string
+          company_id: string
+          created_at: string
+          id: string
+          input_tokens: number
+          kind: string
+          model: string | null
+          outcome: string
+          output_tokens: number
+          provider: string | null
+          tool_calls: number
+          tools: string[]
+          user_id: string | null
+        }
+        Insert: {
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          channel: string
+          company_id: string
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          kind: string
+          model?: string | null
+          outcome?: string
+          output_tokens?: number
+          provider?: string | null
+          tool_calls?: number
+          tools?: string[]
+          user_id?: string | null
+        }
+        Update: {
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          channel?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          kind?: string
+          model?: string | null
+          outcome?: string
+          output_tokens?: number
+          provider?: string | null
+          tool_calls?: number
+          tools?: string[]
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       annual_budgets: {
         Row: {
           amount: number
@@ -136,6 +236,48 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          actor: string | null
+          actor_role: string | null
+          after: Json | null
+          at: string
+          before: Json | null
+          changed: string[] | null
+          company_id: string | null
+          id: number
+          op: string
+          row_id: string
+          table_name: string
+        }
+        Insert: {
+          actor?: string | null
+          actor_role?: string | null
+          after?: Json | null
+          at?: string
+          before?: Json | null
+          changed?: string[] | null
+          company_id?: string | null
+          id?: number
+          op: string
+          row_id: string
+          table_name: string
+        }
+        Update: {
+          actor?: string | null
+          actor_role?: string | null
+          after?: Json | null
+          at?: string
+          before?: Json | null
+          changed?: string[] | null
+          company_id?: string | null
+          id?: number
+          op?: string
+          row_id?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
       bank_accounts: {
         Row: {
           account_number: string | null
@@ -150,7 +292,11 @@ export type Database = {
           is_active: boolean | null
           minimum_balance: number | null
           name: string
+          opening_balance_date: string | null
+          opening_balance_source: string | null
+          reconciliation_mode: string
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           account_number?: string | null
@@ -165,7 +311,11 @@ export type Database = {
           is_active?: boolean | null
           minimum_balance?: number | null
           name: string
+          opening_balance_date?: string | null
+          opening_balance_source?: string | null
+          reconciliation_mode?: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           account_number?: string | null
@@ -180,7 +330,11 @@ export type Database = {
           is_active?: boolean | null
           minimum_balance?: number | null
           name?: string
+          opening_balance_date?: string | null
+          opening_balance_source?: string | null
+          reconciliation_mode?: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -318,8 +472,10 @@ export type Database = {
           fitid: string | null
           id: string
           is_reconciled: boolean | null
+          raw_text: string | null
           transaction_id: string | null
           type: string | null
+          updated_by: string | null
         }
         Insert: {
           amount: number
@@ -331,8 +487,10 @@ export type Database = {
           fitid?: string | null
           id?: string
           is_reconciled?: boolean | null
+          raw_text?: string | null
           transaction_id?: string | null
           type?: string | null
+          updated_by?: string | null
         }
         Update: {
           amount?: number
@@ -344,8 +502,10 @@ export type Database = {
           fitid?: string | null
           id?: string
           is_reconciled?: boolean | null
+          raw_text?: string | null
           transaction_id?: string | null
           type?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -371,6 +531,162 @@ export type Database = {
           },
         ]
       }
+      bill_reminder_occurrences: {
+        Row: {
+          alert_date: string
+          alert_sent_at: string | null
+          company_id: string
+          competencia: string
+          created_at: string
+          due_date: string
+          id: string
+          reminder_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          transaction_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          alert_date: string
+          alert_sent_at?: string | null
+          company_id: string
+          competencia: string
+          created_at?: string
+          due_date: string
+          id?: string
+          reminder_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          alert_date?: string
+          alert_sent_at?: string | null
+          company_id?: string
+          competencia?: string
+          created_at?: string
+          due_date?: string
+          id?: string
+          reminder_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_reminder_occurrences_reminder_fk"
+            columns: ["reminder_id", "company_id"]
+            isOneToOne: false
+            referencedRelation: "bill_reminders"
+            referencedColumns: ["id", "company_id"]
+          },
+          {
+            foreignKeyName: "bill_reminder_occurrences_reminder_fk"
+            columns: ["reminder_id", "company_id"]
+            isOneToOne: false
+            referencedRelation: "bill_reminders_v"
+            referencedColumns: ["id", "company_id"]
+          },
+          {
+            foreignKeyName: "bill_reminder_occurrences_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bill_reminders: {
+        Row: {
+          active: boolean
+          alert_days_before: number
+          amount: number | null
+          bank_account_id: string | null
+          category_id: string | null
+          cnpj_cpf: string | null
+          company_id: string
+          created_at: string
+          created_by: string | null
+          description: string
+          due_day: number
+          id: string
+          identificador: string | null
+          recurrence: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          alert_days_before?: number
+          amount?: number | null
+          bank_account_id?: string | null
+          category_id?: string | null
+          cnpj_cpf?: string | null
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          due_day: number
+          id?: string
+          identificador?: string | null
+          recurrence?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          alert_days_before?: number
+          amount?: number | null
+          bank_account_id?: string | null
+          category_id?: string | null
+          cnpj_cpf?: string | null
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          due_day?: number
+          id?: string
+          identificador?: string | null
+          recurrence?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_reminders_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_reminders_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_reminders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_reminders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           color: string | null
@@ -379,6 +695,7 @@ export type Database = {
           dre_block: string | null
           icon: string | null
           id: string
+          internal_movement: string | null
           is_active: boolean | null
           is_cmv: boolean
           monthly_budget: number | null
@@ -393,6 +710,7 @@ export type Database = {
           dre_block?: string | null
           icon?: string | null
           id?: string
+          internal_movement?: string | null
           is_active?: boolean | null
           is_cmv?: boolean
           monthly_budget?: number | null
@@ -407,6 +725,7 @@ export type Database = {
           dre_block?: string | null
           icon?: string | null
           id?: string
+          internal_movement?: string | null
           is_active?: boolean | null
           is_cmv?: boolean
           monthly_budget?: number | null
@@ -800,6 +1119,7 @@ export type Database = {
           address: string | null
           city: string | null
           cnpj: string | null
+          conciliacao_v2: boolean
           created_at: string | null
           custom_app_name: string | null
           custom_favicon_url: string | null
@@ -825,6 +1145,7 @@ export type Database = {
           address?: string | null
           city?: string | null
           cnpj?: string | null
+          conciliacao_v2?: boolean
           created_at?: string | null
           custom_app_name?: string | null
           custom_favicon_url?: string | null
@@ -850,6 +1171,7 @@ export type Database = {
           address?: string | null
           city?: string | null
           cnpj?: string | null
+          conciliacao_v2?: boolean
           created_at?: string | null
           custom_app_name?: string | null
           custom_favicon_url?: string | null
@@ -1257,6 +1579,110 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "favorite_notifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_review_actions: {
+        Row: {
+          action: string
+          after: Json
+          bank_account_id: string
+          before: Json
+          company_id: string
+          confianca: string | null
+          created_at: string
+          created_by: string | null
+          diagnosis_key: string
+          fix: Json | null
+          id: string
+          tipo: string
+          undone_at: string | null
+          undone_by: string | null
+        }
+        Insert: {
+          action: string
+          after?: Json
+          bank_account_id: string
+          before?: Json
+          company_id: string
+          confianca?: string | null
+          created_at?: string
+          created_by?: string | null
+          diagnosis_key: string
+          fix?: Json | null
+          id?: string
+          tipo: string
+          undone_at?: string | null
+          undone_by?: string | null
+        }
+        Update: {
+          action?: string
+          after?: Json
+          bank_account_id?: string
+          before?: Json
+          company_id?: string
+          confianca?: string | null
+          created_at?: string
+          created_by?: string | null
+          diagnosis_key?: string
+          fix?: Json | null
+          id?: string
+          tipo?: string
+          undone_at?: string | null
+          undone_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_review_actions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_review_actions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mobile_summary_fallbacks: {
+        Row: {
+          company_id: string
+          created_at: string
+          error: string | null
+          id: string
+          month: string | null
+          screen: string
+          user_id: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          month?: string | null
+          screen: string
+          user_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          month?: string | null
+          screen?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mobile_summary_fallbacks_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
@@ -1881,6 +2307,61 @@ export type Database = {
           },
         ]
       }
+      statement_line_links: {
+        Row: {
+          amount: number
+          bank_statement_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          source: string
+          transaction_id: string
+        }
+        Insert: {
+          amount: number
+          bank_statement_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          source: string
+          transaction_id: string
+        }
+        Update: {
+          amount?: number
+          bank_statement_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          source?: string
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "statement_line_links_bank_statement_id_fkey"
+            columns: ["bank_statement_id"]
+            isOneToOne: false
+            referencedRelation: "bank_statements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "statement_line_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "statement_line_links_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_movements: {
         Row: {
           company_id: string
@@ -2182,6 +2663,7 @@ export type Database = {
           card_brand: string | null
           card_installments: number | null
           card_invoice_date: string | null
+          card_invoice_tx_id: string | null
           category_auto_applied: boolean | null
           category_id: string | null
           cnpj_cpf: string | null
@@ -2199,6 +2681,7 @@ export type Database = {
           edited_description: string | null
           id: string
           installment_number: number | null
+          is_card_invoice: boolean
           is_reconciled: boolean | null
           is_undated: boolean | null
           linha_digitavel: string | null
@@ -2217,6 +2700,7 @@ export type Database = {
           total_installments: number | null
           type: string
           updated_at: string | null
+          updated_by: string | null
           vencimento_original: string | null
         }
         Insert: {
@@ -2231,6 +2715,7 @@ export type Database = {
           card_brand?: string | null
           card_installments?: number | null
           card_invoice_date?: string | null
+          card_invoice_tx_id?: string | null
           category_auto_applied?: boolean | null
           category_id?: string | null
           cnpj_cpf?: string | null
@@ -2248,6 +2733,7 @@ export type Database = {
           edited_description?: string | null
           id?: string
           installment_number?: number | null
+          is_card_invoice?: boolean
           is_reconciled?: boolean | null
           is_undated?: boolean | null
           linha_digitavel?: string | null
@@ -2266,6 +2752,7 @@ export type Database = {
           total_installments?: number | null
           type: string
           updated_at?: string | null
+          updated_by?: string | null
           vencimento_original?: string | null
         }
         Update: {
@@ -2280,6 +2767,7 @@ export type Database = {
           card_brand?: string | null
           card_installments?: number | null
           card_invoice_date?: string | null
+          card_invoice_tx_id?: string | null
           category_auto_applied?: boolean | null
           category_id?: string | null
           cnpj_cpf?: string | null
@@ -2297,6 +2785,7 @@ export type Database = {
           edited_description?: string | null
           id?: string
           installment_number?: number | null
+          is_card_invoice?: boolean
           is_reconciled?: boolean | null
           is_undated?: boolean | null
           linha_digitavel?: string | null
@@ -2315,6 +2804,7 @@ export type Database = {
           total_installments?: number | null
           type?: string
           updated_at?: string | null
+          updated_by?: string | null
           vencimento_original?: string | null
         }
         Relationships: [
@@ -2337,6 +2827,13 @@ export type Database = {
             columns: ["bank_statement_import_id"]
             isOneToOne: false
             referencedRelation: "bank_statement_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_card_invoice_tx_id_fkey"
+            columns: ["card_invoice_tx_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
           {
@@ -2390,11 +2887,278 @@ export type Database = {
           },
         ]
       }
+      whatsapp_contacts: {
+        Row: {
+          active: boolean
+          company_id: string
+          created_at: string
+          id: string
+          phone_number: string
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          company_id: string
+          created_at?: string
+          id?: string
+          phone_number: string
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          company_id?: string
+          created_at?: string
+          id?: string
+          phone_number?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_conversations: {
+        Row: {
+          candidate: Json | null
+          company_id: string
+          contact_id: string
+          created_at: string
+          draft: Json
+          expires_at: string
+          id: string
+          resolved_at: string | null
+          state: string
+          status: string
+        }
+        Insert: {
+          candidate?: Json | null
+          company_id: string
+          contact_id: string
+          created_at?: string
+          draft: Json
+          expires_at?: string
+          id?: string
+          resolved_at?: string | null
+          state: string
+          status?: string
+        }
+        Update: {
+          candidate?: Json | null
+          company_id?: string
+          contact_id?: string
+          created_at?: string
+          draft?: Json
+          expires_at?: string
+          id?: string
+          resolved_at?: string | null
+          state?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_messages: {
+        Row: {
+          company_id: string | null
+          contact_id: string | null
+          content: string
+          created_at: string
+          delivery_status: string | null
+          direction: string
+          id: string
+          phone_number: string
+          provider_message_id: string | null
+          transaction_ids: string[] | null
+        }
+        Insert: {
+          company_id?: string | null
+          contact_id?: string | null
+          content: string
+          created_at?: string
+          delivery_status?: string | null
+          direction: string
+          id?: string
+          phone_number: string
+          provider_message_id?: string | null
+          transaction_ids?: string[] | null
+        }
+        Update: {
+          company_id?: string | null
+          contact_id?: string | null
+          content?: string
+          created_at?: string
+          delivery_status?: string | null
+          direction?: string
+          id?: string
+          phone_number?: string
+          provider_message_id?: string | null
+          transaction_ids?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      bill_reminders_v: {
+        Row: {
+          active: boolean | null
+          alert_days_before: number | null
+          amount: number | null
+          bank_account_id: string | null
+          category_id: string | null
+          cnpj_cpf: string | null
+          company_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          due_day: number | null
+          estimate_source: string | null
+          estimated_amount: number | null
+          id: string | null
+          identificador: string | null
+          recurrence: string | null
+          supplier_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          alert_days_before?: number | null
+          amount?: number | null
+          bank_account_id?: string | null
+          category_id?: string | null
+          cnpj_cpf?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          due_day?: number | null
+          estimate_source?: never
+          estimated_amount?: never
+          id?: string | null
+          identificador?: string | null
+          recurrence?: string | null
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          alert_days_before?: number | null
+          amount?: number | null
+          bank_account_id?: string | null
+          category_id?: string | null
+          cnpj_cpf?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          due_day?: number | null
+          estimate_source?: never
+          estimated_amount?: never
+          id?: string | null
+          identificador?: string | null
+          recurrence?: string | null
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_reminders_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_reminders_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_reminders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_reminders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      _import_insert_row: {
+        Args: { p_row: Json; p_table: string }
+        Returns: undefined
+      }
+      _irv_category: {
+        Args: { p_category: Json; p_company_id: string; p_type: string }
+        Returns: string
+      }
+      _irv_has_logs: { Args: { p_tx: string }; Returns: boolean }
+      _irv_internal_category: {
+        Args: { p_company_id: string; p_kind: string; p_type: string }
+        Returns: string
+      }
+      _irv_restore_row: {
+        Args: { p_row: Json; p_table: string }
+        Returns: undefined
+      }
+      _irv_rows: { Args: { p_ids: string[]; p_table: string }; Returns: Json }
+      apply_import_review_fix: {
+        Args: {
+          p_bank_account_id: string
+          p_company_id: string
+          p_confianca?: string
+          p_fix: Json
+          p_key: string
+          p_tipo: string
+        }
+        Returns: Json
+      }
+      bill_reminder_estimate: {
+        Args: { p_reminder_id: string }
+        Returns: number
+      }
       can_access_pages_read: {
         Args: { p_page_keys: string[] }
         Returns: boolean
@@ -2403,11 +3167,39 @@ export type Database = {
         Args: { p_page_keys: string[] }
         Returns: boolean
       }
+      can_apply_import_review: { Args: never; Returns: boolean }
       has_page_permission: {
         Args: { p_need_edit?: boolean; p_page_key: string }
         Returns: boolean
       }
+      ignore_import_review_diagnosis: {
+        Args: {
+          p_bank_account_id: string
+          p_company_id: string
+          p_confianca?: string
+          p_key: string
+          p_tipo: string
+        }
+        Returns: string
+      }
+      import_statement_apply: {
+        Args: {
+          p_import: Json
+          p_lines?: Json
+          p_tx_inserts?: Json
+          p_tx_updates?: Json
+        }
+        Returns: Json
+      }
       is_super_admin: { Args: never; Returns: boolean }
+      undo_import_review_action: {
+        Args: { p_action_id: string }
+        Returns: Json
+      }
+      unlink_transaction_from_statement: {
+        Args: { p_reason?: string; p_transaction_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
@@ -2426,12 +3218,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2455,11 +3247,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2480,11 +3272,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2505,11 +3297,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2522,11 +3314,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
