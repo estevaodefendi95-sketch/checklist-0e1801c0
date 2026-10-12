@@ -4,6 +4,7 @@ import { db } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Area, ChecklistExecucao, ChecklistTemplate } from '../lib/types'
 import { format } from 'date-fns'
+import { dataReferencia } from '../lib/periodo'
 
 interface AreaCard {
   area: Area
@@ -22,8 +23,6 @@ export function Dashboard() {
 
   async function load() {
     setLoading(true)
-    const hoje = format(new Date(), 'yyyy-MM-dd')
-
     const { data: areas } = await db.from('areas').select('*').order('nome')
     const { data: templates } = await db
       .from('checklist_templates')
@@ -32,7 +31,7 @@ export function Dashboard() {
     const { data: execucoes } = await db
       .from('checklist_execucoes')
       .select('*')
-      .eq('data', hoje)
+      .gte('data', dataReferencia('semanal'))
 
     const areasTyped = (areas ?? []) as Area[]
     const templatesTyped = (templates ?? []) as ChecklistTemplate[]
@@ -74,7 +73,8 @@ export function Dashboard() {
                 <p className="text-xs text-ink-soft">sem modelo cadastrado</p>
               )}
               {templates.map((t) => {
-                const exec = execucoesHoje.find((e) => e.template_id === t.id)
+                const ref = dataReferencia(t.frequencia)
+                const exec = execucoesHoje.find((e) => e.template_id === t.id && e.data === ref)
                 const status = exec?.status === 'concluido' ? 'concluído' : exec ? 'em andamento' : 'pendente'
                 const color =
                   status === 'concluído'
@@ -88,7 +88,12 @@ export function Dashboard() {
                     to={`/checklist/${t.id}`}
                     className="flex items-center justify-between rounded border border-line bg-paper px-3 py-2 text-sm hover:border-ink"
                   >
-                    <span className="capitalize">{t.tipo}</span>
+                    <span>
+                      <span className="capitalize">{t.tipo}</span>
+                      {t.frequencia === 'semanal' && (
+                        <span className="ml-2 text-xs text-ink-soft">semanal</span>
+                      )}
+                    </span>
                     <span className={`rounded px-2 py-0.5 text-xs ${color}`}>{status}</span>
                   </Link>
                 )
