@@ -20,6 +20,7 @@ export interface ChecklistTemplate {
   tipo: ChecklistTipo
   nome: string
   ativo: boolean
+  frequencia?: 'diaria' | 'semanal'
 }
 
 export interface ChecklistItem {
@@ -29,6 +30,8 @@ export interface ChecklistItem {
   tipo_campo: CampoTipo
   ordem: number
   obrigatorio: boolean
+  unidade?: string | null
+  estoque_minimo?: number | null
 }
 
 export interface ChecklistExecucao {

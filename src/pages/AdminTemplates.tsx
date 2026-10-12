@@ -11,6 +11,46 @@ const camposLabel: Record<CampoTipo, string> = {
 
 const tiposSugeridos = ['abertura', 'fechamento', 'estoque']
 
+function camposEstoque(tipo: CampoTipo, unidade: string, minimo: string) {
+  if (tipo !== 'quantidade') return { unidade: null, estoque_minimo: null }
+  return {
+    unidade: unidade.trim() || null,
+    estoque_minimo: minimo.trim() === '' ? null : Number(minimo),
+  }
+}
+
+function CamposEstoque({
+  unidade,
+  minimo,
+  setUnidade,
+  setMinimo,
+}: {
+  unidade: string
+  minimo: string
+  setUnidade: (v: string) => void
+  setMinimo: (v: string) => void
+}) {
+  return (
+    <div className="flex gap-2">
+      <input
+        placeholder="unidade (kg, un, cx)"
+        value={unidade}
+        onChange={(e) => setUnidade(e.target.value)}
+        className="min-w-0 flex-1 rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+      />
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        placeholder="estoque mínimo"
+        value={minimo}
+        onChange={(e) => setMinimo(e.target.value)}
+        className="min-w-0 flex-1 rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+      />
+    </div>
+  )
+}
+
 export function AdminTemplates() {
   const [areas, setAreas] = useState<Area[]>([])
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([])
@@ -22,13 +62,18 @@ export function AdminTemplates() {
   const [novoNome, setNovoNome] = useState('')
   const [novaArea, setNovaArea] = useState('')
   const [novoTipo, setNovoTipo] = useState('abertura')
+  const [novaFrequencia, setNovaFrequencia] = useState<'diaria' | 'semanal'>('diaria')
 
   const [novoItemNome, setNovoItemNome] = useState('')
   const [novoItemTipo, setNovoItemTipo] = useState<CampoTipo>('checkbox')
+  const [novoItemUnidade, setNovoItemUnidade] = useState('')
+  const [novoItemMinimo, setNovoItemMinimo] = useState('')
 
   const [itemEditando, setItemEditando] = useState<string | null>(null)
   const [editNome, setEditNome] = useState('')
   const [editTipo, setEditTipo] = useState<CampoTipo>('checkbox')
+  const [editUnidade, setEditUnidade] = useState('')
+  const [editMinimo, setEditMinimo] = useState('')
 
   useEffect(() => {
     load()
@@ -78,7 +123,12 @@ export function AdminTemplates() {
     if (!novoNome || !novaArea || !novoTipo.trim()) return
     const { data } = await db
       .from('checklist_templates')
-      .insert({ nome: novoNome, area_id: novaArea, tipo: novoTipo.trim().toLowerCase() })
+      .insert({
+        nome: novoNome,
+        area_id: novaArea,
+        tipo: novoTipo.trim().toLowerCase(),
+        frequencia: novaFrequencia,
+      })
       .select()
       .single()
     if (data) {
@@ -111,12 +161,15 @@ export function AdminTemplates() {
         nome_campo: novoItemNome,
         tipo_campo: novoItemTipo,
         ordem,
+        ...camposEstoque(novoItemTipo, novoItemUnidade, novoItemMinimo),
       })
       .select()
       .single()
     if (data) {
       setItems((prev) => [...prev, data])
       setNovoItemNome('')
+      setNovoItemUnidade('')
+      setNovoItemMinimo('')
     }
   }
 
@@ -133,13 +186,19 @@ export function AdminTemplates() {
     setItemEditando(item.id)
     setEditNome(item.nome_campo)
     setEditTipo(item.tipo_campo)
+    setEditUnidade(item.unidade ?? '')
+    setEditMinimo(item.estoque_minimo != null ? String(item.estoque_minimo) : '')
   }
 
   async function salvarEdicaoItem(id: string) {
     if (!editNome.trim()) return
     const { data, error } = await db
       .from('checklist_items')
-      .update({ nome_campo: editNome.trim(), tipo_campo: editTipo })
+      .update({
+        nome_campo: editNome.trim(),
+        tipo_campo: editTipo,
+        ...camposEstoque(editTipo, editUnidade, editMinimo),
+      })
       .eq('id', id)
       .select()
       .single()
@@ -248,6 +307,14 @@ export function AdminTemplates() {
               ))}
             </datalist>
           </div>
+          <select
+            value={novaFrequencia}
+            onChange={(e) => setNovaFrequencia(e.target.value as 'diaria' | 'semanal')}
+            className="w-full rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+          >
+            <option value="diaria">conferência diária</option>
+            <option value="semanal">conferência semanal</option>
+          </select>
           <button
             onClick={criarTemplate}
             className="w-full rounded bg-ink py-1.5 text-sm font-medium text-paper"
@@ -267,7 +334,10 @@ export function AdminTemplates() {
             >
               <span className="min-w-0 break-words">
                 {areas.find((a) => a.id === t.area_id)?.nome} · {t.nome}
-                <span className="ml-2 text-xs capitalize text-ink-soft">{t.tipo}</span>
+                <span className="ml-2 text-xs text-ink-soft">
+                  <span className="capitalize">{t.tipo}</span> ·{' '}
+                  {t.frequencia === 'semanal' ? 'semanal' : 'diário'}
+                </span>
               </span>
               <span
                 onClick={(e) => {
@@ -312,6 +382,14 @@ export function AdminTemplates() {
                   </option>
                 ))}
               </select>
+              {novoItemTipo === 'quantidade' && (
+                <CamposEstoque
+                  unidade={novoItemUnidade}
+                  minimo={novoItemMinimo}
+                  setUnidade={setNovoItemUnidade}
+                  setMinimo={setNovoItemMinimo}
+                />
+              )}
               <button
                 onClick={criarItem}
                 className="w-full rounded bg-ink py-1.5 text-sm font-medium text-paper"
@@ -340,6 +418,14 @@ export function AdminTemplates() {
                         </option>
                       ))}
                     </select>
+                    {editTipo === 'quantidade' && (
+                      <CamposEstoque
+                        unidade={editUnidade}
+                        minimo={editMinimo}
+                        setUnidade={setEditUnidade}
+                        setMinimo={setEditMinimo}
+                      />
+                    )}
                     <div className="flex gap-2">
                       <button
                         onClick={() => salvarEdicaoItem(i.id)}
@@ -377,7 +463,11 @@ export function AdminTemplates() {
                     </div>
                     <span className="min-w-0 flex-1 break-words">
                       {i.nome_campo}
-                      <span className="ml-2 text-xs text-ink-soft">{camposLabel[i.tipo_campo]}</span>
+                      <span className="ml-2 text-xs text-ink-soft">
+                        {camposLabel[i.tipo_campo]}
+                        {i.tipo_campo === 'quantidade' && i.estoque_minimo != null &&
+                          ` · mín. ${i.estoque_minimo}${i.unidade ? ' ' + i.unidade : ''}`}
+                      </span>
                     </span>
                     <div className="flex shrink-0 gap-3 text-xs">
                       <button
