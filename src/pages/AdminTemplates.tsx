@@ -56,6 +56,7 @@ export function AdminTemplates() {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([])
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [templateSelecionado, setTemplateSelecionado] = useState<string | null>(null)
+  const [salvandoFrequencia, setSalvandoFrequencia] = useState(false)
 
   const [novaAreaNome, setNovaAreaNome] = useState('')
 
@@ -135,6 +136,22 @@ export function AdminTemplates() {
       setTemplates((prev) => [...prev, data])
       setNovoNome('')
     }
+  }
+
+  async function alterarFrequencia(id: string, frequencia: 'diaria' | 'semanal') {
+    setSalvandoFrequencia(true)
+    const { data, error } = await db
+      .from('checklist_templates')
+      .update({ frequencia })
+      .eq('id', id)
+      .select()
+      .single()
+    setSalvandoFrequencia(false)
+    if (error) {
+      alert('Não foi possível alterar: ' + error.message)
+      return
+    }
+    if (data) setTemplates((prev) => prev.map((t) => (t.id === id ? data : t)))
   }
 
   async function excluirTemplate(id: string) {
@@ -229,6 +246,8 @@ export function AdminTemplates() {
       setItems((prev) => prev.map((i) => (i.id === a.id ? a : i.id === b.id ? b : i)))
     }
   }
+
+  const templateAtual = templates.find((t) => t.id === templateSelecionado)
 
   const itensDoTemplate = items
     .filter((i) => i.template_id === templateSelecionado)
@@ -364,6 +383,27 @@ export function AdminTemplates() {
           <p className="text-sm text-ink-soft">Selecione um modelo à esquerda.</p>
         ) : (
           <>
+            <div className="mb-4 space-y-2 rounded border border-line bg-paper-dim/40 p-3">
+              <label className="block text-xs font-medium text-ink-soft">
+                frequência da conferência deste modelo
+              </label>
+              <select
+                value={templateAtual?.frequencia ?? 'diaria'}
+                disabled={salvandoFrequencia}
+                onChange={(e) =>
+                  templateAtual &&
+                  alterarFrequencia(templateAtual.id, e.target.value as 'diaria' | 'semanal')
+                }
+                className="w-full rounded border border-line bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink disabled:opacity-50"
+              >
+                <option value="diaria">conferência diária</option>
+                <option value="semanal">conferência semanal</option>
+              </select>
+              <p className="text-xs text-ink-soft">
+                Os itens e o histórico são mantidos. Só muda como a contagem é aberta.
+              </p>
+            </div>
+
             <div className="mb-4 space-y-2 rounded border border-line bg-paper-dim/40 p-3">
               <input
                 placeholder="nome do item (ex: temperatura da câmara fria)"
