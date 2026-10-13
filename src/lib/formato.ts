@@ -16,7 +16,8 @@ export function diasDesde(v?: string | null) {
 }
 /** aceita "12,50" ou "12.50" */
 export function lerNumero(s: string): number | null {
-  const t = s.trim().replace(/\./g, (m, i, all) => (all.includes(',') ? '' : m)).replace(',', '.')
+  const b = s.trim()
+  const t = b.includes(',') ? b.replace(/\./g, '').replace(',', '.') : b
   if (!t) return null
   const n = Number(t)
   return Number.isFinite(n) ? n : null
