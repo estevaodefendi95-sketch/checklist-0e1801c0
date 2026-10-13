@@ -3,14 +3,15 @@ import { Link } from 'react-router-dom'
 import { db } from '../lib/supabase'
 import { usePermissoes } from '../context/PermissoesContext'
 import { reais, lerNumero } from '../lib/formato'
-import { Carregando, Vazio, Erro, inputCls, btnCls, btnSecCls } from '../components/Estado'
+import { Carregando, Vazio, Erro, inputCls, btnCls, btnSecCls, btnPerigoCls, cartaoCls, chipCls } from '../components/Estado'
+import { Cabecalho } from '../components/Cabecalho'
+import { BarraSalvar, useAlteracoesPendentes } from '../components/Alteracoes'
 
 interface Cardapio { id: string; nome: string; descricao: string | null; dias_semana: number[] | null; ordem: number; ativo: boolean }
 interface Vinculo { ficha_id: string; cardapio_id: string; preco_venda: number | null }
 interface Ficha { id: string; nome: string; preco_venda: number | null; ativo: boolean }
 
 const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
-const btnPerigoCls = 'min-h-[44px] rounded border border-alert px-3 text-sm text-alert hover:bg-alert-soft'
 
 export function Cardapios() {
   const { pode } = usePermissoes()
@@ -23,6 +24,14 @@ export function Cardapios() {
   const [erro, setErro] = useState<string | null>(null)
   const [aberto, setAberto] = useState<string | null>(null)
   const [configurando, setConfigurando] = useState<string | null>(null)
+  const [ajusteSujo, setAjusteSujo] = useState(false)
+
+  /** abre/fecha o painel "ajustar"; pergunta antes se houver alterações não salvas */
+  function alternarAjuste(id: string) {
+    if (ajusteSujo && !confirm('Há alterações não salvas neste cardápio. Descartar?')) return
+    setAjusteSujo(false)
+    setConfigurando(configurando === id ? null : id)
+  }
   const [novoNome, setNovoNome] = useState('')
 
   async function load() {
@@ -42,8 +51,12 @@ export function Cardapios() {
 
   async function atualizar(id: string, campos: Partial<Cardapio>) {
     const { error } = await db.from('cardapios').update(campos).eq('id', id)
-    if (error) return alert('Não foi possível salvar: ' + error.message)
+    if (error) {
+      alert('Não foi possível salvar: ' + error.message)
+      return false
+    }
     setCardapios((p) => p.map((c) => (c.id === id ? { ...c, ...campos } : c)))
+    return true
   }
   async function criar() {
     if (!novoNome.trim()) return
@@ -56,6 +69,8 @@ export function Cardapios() {
     if (!confirm(`Excluir o cardápio ${c.nome}?${n ? ` Os ${n} pratos saem dele, mas as fichas continuam existindo.` : ''}`)) return
     const { error } = await db.from('cardapios').delete().eq('id', c.id)
     if (error) return alert('Não foi possível excluir: ' + error.message)
+    setAjusteSujo(false)
+    setConfigurando(null)
     load()
   }
   async function addPrato(cardapio_id: string, ficha_id: string) {
@@ -80,10 +95,10 @@ export function Cardapios() {
 
   return (
     <div>
-      <h1 className="display mb-4 text-xl font-medium">cardápios</h1>
+      <Cabecalho titulo="Cardápios" subtitulo={carregando ? 'Carregando…' : `${cardapios.length} cardápios · ${cardapios.filter((c) => c.ativo).length} ativos`} />
       {erro && <Erro texto={erro} />}
       {carregando ? <Carregando /> : cardapios.length === 0 ? <Vazio texto="Nenhum cardápio cadastrado." /> : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {cardapios.map((c) => {
             const pratos = vinculos
               .filter((v) => v.cardapio_id === c.id)
@@ -92,29 +107,29 @@ export function Cardapios() {
             const dias = c.dias_semana ?? []
             const estaAberto = aberto === c.id
             return (
-              <section key={c.id} className="rounded border border-line">
+              <section key={c.id} className={`${cartaoCls} overflow-hidden`}>
                 {/* cabeçalho: nome, dias e status numa linha só */}
                 <div className="flex items-stretch">
                   <button
                     onClick={() => setAberto(estaAberto ? null : c.id)}
                     aria-expanded={estaAberto}
-                    className="flex min-h-[44px] flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left text-sm"
+                    className="flex min-h-[56px] flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-left text-sm"
                   >
                     <span className="w-3 text-ink-soft">{estaAberto ? '▾' : '▸'}</span>
-                    <span className={`font-medium ${c.ativo ? '' : 'text-ink-soft line-through'}`}>{c.nome}</span>
+                    <span className={`subtitulo ${c.ativo ? '' : 'text-ink-soft line-through'}`}>{c.nome}</span>
                     <span className="text-xs text-ink-soft">
                       {dias.length ? dias.map((d) => DIAS[d]).join(' · ') : 'todos os dias'}
                     </span>
-                    <span className={`rounded px-1.5 py-0.5 text-xs ${c.ativo ? 'bg-ok-soft text-ok' : 'bg-paper-dim text-ink-soft'}`}>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.ativo ? 'bg-ok-soft text-ok' : 'bg-paper-dim text-ink-soft'}`}>
                       {c.ativo ? 'ativo' : 'inativo'}
                     </span>
                     <span className="ml-auto text-xs text-ink-soft">{pratos.length} {pratos.length === 1 ? 'prato' : 'pratos'}</span>
                   </button>
                   {edita && (
                     <button
-                      onClick={() => setConfigurando(configurando === c.id ? null : c.id)}
+                      onClick={() => alternarAjuste(c.id)}
                       aria-label={`configurar ${c.nome}`}
-                      className={`min-h-[44px] min-w-[44px] border-l border-line px-3 text-xs ${configurando === c.id ? 'bg-paper-dim text-ink' : 'text-ink-soft'}`}
+                      className={`min-h-[56px] min-w-[56px] border-l border-line px-4 text-sm font-medium ${configurando === c.id ? 'bg-brand-soft text-brand' : 'text-ink-soft hover:text-brand'}`}
                     >
                       ajustar
                     </button>
@@ -122,32 +137,16 @@ export function Cardapios() {
                 </div>
 
                 {edita && configurando === c.id && (
-                  <div className="space-y-2 border-t border-line bg-paper-dim/40 p-3">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="block text-xs text-ink-soft">nome
-                        <input defaultValue={c.nome} onBlur={(e) => e.target.value.trim() && e.target.value !== c.nome && atualizar(c.id, { nome: e.target.value.trim() })} className={inputCls} />
-                      </label>
-                      <label className="block text-xs text-ink-soft">descrição
-                        <input defaultValue={c.descricao ?? ''} onBlur={(e) => e.target.value !== (c.descricao ?? '') && atualizar(c.id, { descricao: e.target.value || null })} className={inputCls} />
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1">
-                      {DIAS.map((d, i) => (
-                        <button key={d} onClick={() => atualizar(c.id, { dias_semana: dias.includes(i) ? dias.filter((x) => x !== i) : [...dias, i].sort() })}
-                          aria-pressed={dias.includes(i)}
-                          className={`min-h-[44px] min-w-[44px] rounded border text-xs ${dias.includes(i) ? 'border-ok bg-ok-soft text-ok' : 'border-line text-ink-soft'}`}>{d}</button>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <label className="flex items-center gap-2 text-xs text-ink-soft">ordem
-                        <input type="number" defaultValue={c.ordem} onBlur={(e) => Number(e.target.value) !== c.ordem && atualizar(c.id, { ordem: Number(e.target.value) })} className="min-h-[44px] w-20 rounded border border-line bg-paper px-2 text-sm" />
-                      </label>
-                      <label className="flex min-h-[44px] items-center gap-2 text-sm">
-                        <input type="checkbox" checked={c.ativo} onChange={(e) => atualizar(c.id, { ativo: e.target.checked })} className="h-5 w-5" /> ativo
-                      </label>
-                      <button onClick={() => excluir(c)} className={`${btnPerigoCls} ml-auto`}>excluir cardápio</button>
-                    </div>
-                  </div>
+                  <AjustarCardapio
+                    c={c}
+                    onSujo={setAjusteSujo}
+                    onSalvar={async (campos) => {
+                      const ok = await atualizar(c.id, campos)
+                      if (ok) setAjusteSujo(false)
+                      return ok
+                    }}
+                    onExcluir={() => excluir(c)}
+                  />
                 )}
 
                 {estaAberto && (
@@ -174,7 +173,7 @@ export function Cardapios() {
                       </ul>
                     )}
                     {edita && (
-                      <div className="border-t border-line p-3">
+                      <div className="border-t border-line p-4">
                         <select defaultValue="" onChange={(e) => { addPrato(c.id, e.target.value); e.target.value = '' }} className={inputCls} aria-label="adicionar prato">
                           <option value="">+ adicionar prato</option>
                           {fichas.filter((f) => f.ativo && !pratos.some((p) => p.v.ficha_id === f.id)).map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
@@ -189,9 +188,9 @@ export function Cardapios() {
         </div>
       )}
       {edita && (
-        <div className="mt-4 flex gap-2">
+        <div className={`${cartaoCls} mt-6 flex flex-col gap-2 p-4 sm:flex-row`}>
           <input placeholder="novo cardápio" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && criar()} className={inputCls} />
-          <button onClick={criar} className={btnCls}>criar</button>
+          <button onClick={criar} className={btnCls}>+ Criar cardápio</button>
         </div>
       )}
     </div>
@@ -235,7 +234,7 @@ function PratoLinha({
               defaultValue={especifico ? String(v.preco_venda).replace('.', ',') : ''}
               onBlur={(e) => onPreco(e.target.value)}
               title={`Deixe vazio para usar o preço da ficha (${reais(f?.preco_venda)})`}
-              className={`min-h-[44px] w-24 rounded border bg-paper px-2 text-right text-sm tabular-nums ${especifico ? 'border-ink text-ink' : 'border-line text-ink-soft'}`}
+              className={`min-h-[44px] w-24 rounded-[10px] border bg-surface px-2 text-right text-sm tabular-nums ${especifico ? 'border-ink text-ink' : 'border-line text-ink-soft'}`}
             />
           </label>
         ) : (
@@ -257,5 +256,100 @@ function PratoLinha({
         </span>
       )}
     </li>
+  )
+}
+
+/** Painel "ajustar": edita nome, descrição, dias, ordem e ativo, com Salvar/Descartar */
+function AjustarCardapio({
+  c,
+  onSujo,
+  onSalvar,
+  onExcluir,
+}: {
+  c: Cardapio
+  onSujo: (sujo: boolean) => void
+  onSalvar: (campos: Partial<Cardapio>) => Promise<boolean>
+  onExcluir: () => void
+}) {
+  const inicial = {
+    nome: c.nome,
+    descricao: c.descricao ?? '',
+    dias: [...(c.dias_semana ?? [])].sort(),
+    ordem: String(c.ordem),
+    ativo: c.ativo,
+  }
+  const [f, setF] = useState(inicial)
+  const [salvando, setSalvando] = useState(false)
+  const sujo = JSON.stringify(f) !== JSON.stringify(inicial)
+  const { liberar } = useAlteracoesPendentes(sujo)
+
+  useEffect(() => onSujo(sujo), [sujo])
+
+  async function salvar() {
+    if (!f.nome.trim()) return alert('Informe o nome do cardápio.')
+    setSalvando(true)
+    const ok = await onSalvar({
+      nome: f.nome.trim(),
+      descricao: f.descricao.trim() || null,
+      dias_semana: f.dias.length ? f.dias : null,
+      ordem: Number(f.ordem) || 0,
+      ativo: f.ativo,
+    })
+    setSalvando(false)
+    if (ok) liberar()
+  }
+
+  return (
+    <div className="space-y-4 border-t border-line bg-paper/60 p-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-xs text-ink-soft">
+          Nome
+          <input value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} className={inputCls} />
+        </label>
+        <label className="block text-xs text-ink-soft">
+          Descrição
+          <input value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} className={inputCls} />
+        </label>
+      </div>
+      <div>
+        <div className="mb-1 text-xs text-ink-soft">Dias da semana (nenhum = todos os dias)</div>
+        <div className="rolagem-x flex gap-2">
+          {DIAS.map((d, i) => {
+            const on = f.dias.includes(i)
+            return (
+              <button
+                key={d}
+                onClick={() => setF({ ...f, dias: on ? f.dias.filter((x) => x !== i) : [...f.dias, i].sort() })}
+                aria-pressed={on}
+                className={`${chipCls(on)} min-w-[52px] justify-center`}
+              >
+                {d}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-xs text-ink-soft">
+          Ordem
+          <input type="number" value={f.ordem} onChange={(e) => setF({ ...f, ordem: e.target.value })} className={`${inputCls} w-24`} />
+        </label>
+        <label className="flex min-h-[44px] items-center gap-2 text-sm">
+          <input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} className="h-5 w-5 accent-[var(--color-brand)]" />
+          Ativo
+        </label>
+      </div>
+      <BarraSalvar
+        sujo={sujo}
+        salvando={salvando}
+        onSalvar={salvar}
+        onDescartar={() => setF(inicial)}
+        extra={
+          <button onClick={onExcluir} disabled={salvando} className={btnPerigoCls}>
+            Excluir cardápio
+          </button>
+        }
+      />
+    </div>
   )
 }

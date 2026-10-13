@@ -38,7 +38,7 @@ export function Fornecedores() {
 
   return (
     <div className="max-w-xl">
-      <h1 className="display mb-4 text-xl font-medium">fornecedores</h1>
+      <h1 className="titulo mb-6">fornecedores</h1>
       {erro && <Erro texto={erro} />}
       {carregando ? <Carregando /> : lista.length === 0 ? <Vazio texto="Nenhum fornecedor cadastrado." /> : (
         <div className="divide-y divide-line rounded border border-line">

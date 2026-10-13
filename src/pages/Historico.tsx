@@ -41,7 +41,7 @@ export function Historico() {
 
   return (
     <div>
-      <h1 className="display mb-4 text-xl font-medium">histórico</h1>
+      <h1 className="titulo mb-6">histórico</h1>
 
       <input
         type="date"

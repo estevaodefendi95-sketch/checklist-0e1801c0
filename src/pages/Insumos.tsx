@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router-dom'
 import { db } from '../lib/supabase'
 import { usePermissoes, SoComCusto } from '../context/PermissoesContext'
 import { reais, pct, dataBR, diasDesde, lerNumero } from '../lib/formato'
-import { Carregando, Vazio, Erro, inputCls, btnCls, btnSecCls } from '../components/Estado'
+import { Carregando, Vazio, Erro, inputCls, btnCls, btnSecCls, cartaoCls } from '../components/Estado'
+import { Cabecalho } from '../components/Cabecalho'
+import { BarraSalvar, useAlteracoesPendentes } from '../components/Alteracoes'
 
 interface Insumo {
   id: string
@@ -91,7 +93,7 @@ export function Insumos() {
 
   return (
     <div>
-      <h1 className="display mb-4 text-xl font-medium">insumos</h1>
+      <Cabecalho titulo="Insumos" subtitulo={carregando ? 'Carregando…' : `${insumos.length} insumos ativos`} />
 
       <div className="mb-4 grid grid-cols-3 gap-2">
         <Card titulo="insumos" valor={insumos.length} />
@@ -124,7 +126,7 @@ export function Insumos() {
       ) : filtrados.length === 0 ? (
         <Vazio texto="Nenhum insumo encontrado." />
       ) : (
-        <div className="overflow-x-auto rounded border border-line">
+        <div className={`${cartaoCls} overflow-x-auto`}>
           <table className="w-full text-sm">
             <thead className="bg-paper-dim text-left text-xs text-ink-soft">
               <tr>
@@ -160,7 +162,7 @@ export function Insumos() {
                     <td className="px-3 py-2">{usos[i.id] ?? 0}</td>
                     <td className="px-3 py-2">
                       {(pode('editar_precos') || pode('editar_fichas')) && (
-                        <button onClick={() => setEditando(i)} className="text-xs underline">
+                        <button onClick={() => setEditando(i)} className="min-h-[44px] px-2 text-sm font-medium text-brand underline">
                           editar
                         </button>
                       )}
@@ -174,7 +176,7 @@ export function Insumos() {
       )}
 
       {pode('editar_fichas') && (
-        <div className="mt-6 rounded border border-line bg-paper-dim/40 p-3">
+        <div className={`${cartaoCls} mt-6 p-4`}>
           <h2 className="mb-2 text-sm font-medium">novo insumo</h2>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input placeholder="nome" value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} className={inputCls} />
@@ -206,7 +208,7 @@ export function Insumos() {
 
 function Card({ titulo, valor, alerta }: { titulo: string; valor: number; alerta?: boolean }) {
   return (
-    <div className="rounded border border-line p-3">
+    <div className={`${cartaoCls} p-3 md:p-4`}>
       <div className="text-xs text-ink-soft">{titulo}</div>
       <div className={`display text-2xl ${alerta ? 'text-warn' : ''}`}>{valor}</div>
     </div>
@@ -228,14 +230,20 @@ function EditarInsumo({
   onFechar: () => void
   onSalvo: () => void
 }) {
-  const [f, setF] = useState({
+  const [inicial] = useState(() => ({
     nome: insumo.nome,
     categoria: insumo.categoria ?? '',
     unidade: insumo.unidade,
     fator: String(insumo.fator_correcao ?? 1).replace('.', ','),
     fornecedor_id: insumo.fornecedor_id ?? '',
     preco: insumo.preco == null ? '' : String(insumo.preco).replace('.', ','),
-  })
+  }))
+  const [f, setF] = useState(inicial)
+  const sujo = JSON.stringify(f) !== JSON.stringify(inicial)
+  const { liberar, confirmarDescarte } = useAlteracoesPendentes(sujo)
+  function fechar() {
+    if (confirmarDescarte()) onFechar()
+  }
   const [sim, setSim] = useState<Simulacao[] | null>(null)
   const [simErro, setSimErro] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -272,15 +280,22 @@ function EditarInsumo({
     const { error } = await db.from('insumos').update(upd).eq('id', insumo.id)
     setSalvando(false)
     if (error) return alert('Não foi possível salvar: ' + error.message)
+    liberar()
     onSalvo()
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex justify-end bg-ink/40" onClick={onFechar}>
-      <div className="h-full w-full max-w-lg overflow-y-auto bg-paper p-4" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="display text-lg">{insumo.nome}</h2>
-          <button onClick={onFechar} className={btnSecCls}>fechar</button>
+    <div className="fixed inset-0 z-40 flex justify-end bg-ink/40" onClick={fechar}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Editar ${insumo.nome}`}
+        className="h-full w-full max-w-lg overflow-y-auto bg-paper p-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-[calc(16px+env(safe-area-inset-top))] shadow-[var(--shadow-sheet)] md:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="subtitulo">{insumo.nome}</h2>
+          <button onClick={fechar} className={btnSecCls}>Fechar</button>
         </div>
         <div className="space-y-2">
           <label className="block text-xs text-ink-soft">nome<input value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} className={inputCls} /></label>
@@ -335,9 +350,9 @@ function EditarInsumo({
           </div>
         )}
 
-        <button onClick={salvar} disabled={salvando} className={`${btnCls} mt-4 w-full`}>
-          {salvando ? 'salvando…' : 'salvar'}
-        </button>
+        <div className="sticky bottom-0 mt-4">
+          <BarraSalvar sujo={sujo} salvando={salvando} onSalvar={salvar} onDescartar={() => setF(inicial)} />
+        </div>
       </div>
     </div>
   )

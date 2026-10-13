@@ -1,9 +1,11 @@
+import { ler, gravar } from './armazenamento'
+
 export type Theme = 'light' | 'dark'
 
 const STORAGE_KEY = 'checklist-theme'
 
 export function getStoredTheme(): Theme | null {
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = ler<string | null>(STORAGE_KEY, null, true)
   return stored === 'light' || stored === 'dark' ? stored : null
 }
 
@@ -13,5 +15,5 @@ export function getPreferredTheme(): Theme {
 
 export function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle('dark', theme === 'dark')
-  localStorage.setItem(STORAGE_KEY, theme)
+  gravar(STORAGE_KEY, theme, true)
 }

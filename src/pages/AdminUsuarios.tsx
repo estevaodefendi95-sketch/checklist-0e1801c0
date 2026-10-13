@@ -99,7 +99,7 @@ export function AdminUsuarios() {
   return (
     <div className="grid gap-8 sm:grid-cols-2">
       <div>
-        <h1 className="display mb-1 text-xl font-medium">usuários</h1>
+        <h1 className="titulo mb-1">usuários</h1>
         <p className="mb-6 text-sm text-ink-soft">
           Apenas administradores podem criar novos usuários. Defina o papel e quais
           áreas cada pessoa enxerga.

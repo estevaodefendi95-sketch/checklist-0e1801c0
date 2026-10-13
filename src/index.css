@@ -1,53 +1,112 @@
 @import "tailwindcss";
 
+/* Paggio Operação: mocha + off-white (prévia aprovada). Os nomes antigos
+   (paper, ink, line…) continuam valendo para todas as telas existentes. */
 @theme {
-  --font-display: "Space Grotesk", sans-serif;
-  --font-mono: "IBM Plex Mono", monospace;
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Figtree", system-ui, sans-serif;
+  --font-mono: "Figtree", system-ui, sans-serif;
 
-  --color-paper: #F6F4EE;
-  --color-paper-dim: #EBE8DE;
-  --color-ink: #22221E;
-  --color-ink-soft: #56554C;
-  --color-line: #D8D4C6;
+  --color-paper: #F6F2EE;      /* fundo da página */
+  --color-paper-dim: #EFE7E0;  /* fundo de destaque suave */
+  --color-surface: #FFFFFF;    /* cartões, campos, barras */
+  --color-ink: #2B231E;
+  --color-ink-soft: #6B5D52;
+  --color-line: #E7E0D9;
 
-  --color-ok: #2F6F4F;
-  --color-ok-soft: #E3EEE4;
-  --color-warn: #B4761F;
-  --color-warn-soft: #F4E9D6;
-  --color-alert: #A83C34;
-  --color-alert-soft: #F3E0DD;
+  --color-brand: #5C4A3E;      /* cor primária (CTA, menu lateral) */
+  --color-brand-ink: #FDFBF9;  /* texto sobre a cor primária */
+  --color-brand-soft: #EFE7E0;
+
+  --color-ok: #2F5D46;
+  --color-ok-soft: #E4EEE7;
+  --color-warn: #8A5A12;
+  --color-warn-soft: #FBF1E4;
+  --color-alert: #9A3412;
+  --color-alert-soft: #FBE8E1;
+
+  --shadow-card: 0 1px 2px rgb(43 35 30 / 0.05), 0 2px 8px rgb(43 35 30 / 0.04);
+  --shadow-sheet: 0 -8px 32px rgb(43 35 30 / 0.18);
 }
 
 body {
   background: var(--color-paper);
   color: var(--color-ink);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-/* modo escuro — mesma identidade visual, tons invertidos */
+/* modo escuro: mesma identidade, tons invertidos (ativado pela classe .dark) */
 .dark {
-  --color-paper: #1B1A16;
-  --color-paper-dim: #242320;
-  --color-ink: #EDEAE0;
-  --color-ink-soft: #A6A399;
-  --color-line: #38362F;
+  --color-paper: #1A1614;
+  --color-paper-dim: #2A2320;
+  --color-surface: #241E1B;
+  --color-ink: #F3ECE6;
+  --color-ink-soft: #B3A89E;
+  --color-line: #3A312C;
 
-  --color-ok: #6FBF95;
+  --color-brand: #C9B3A1;
+  --color-brand-ink: #1A1614;
+  --color-brand-soft: #332A25;
+
+  --color-ok: #8CC9A6;
   --color-ok-soft: #1E2E24;
-  --color-warn: #E0AC5C;
-  --color-warn-soft: #332715;
-  --color-alert: #E2897F;
-  --color-alert-soft: #33211E;
+  --color-warn: #E7B86A;
+  --color-warn-soft: #3A2D1C;
+  --color-alert: #F08A6A;
+  --color-alert-soft: #3A221B;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-sheet: 0 -8px 32px rgb(0 0 0 / 0.5);
 
   color-scheme: dark;
 }
 
 h1, h2, h3, .display {
   font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* hierarquia: título da página, subtítulo e texto de apoio */
+@utility titulo {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  &::first-letter { text-transform: uppercase; }
+  @media (min-width: 768px) { font-size: 36px; }
+  @media (min-width: 1024px) { font-size: 40px; }
+}
+@utility subtitulo {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.2;
+  &::first-letter { text-transform: uppercase; }
+}
+@utility apoio {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+/* lista horizontal que rola sem mostrar a barra (chips de filtro) */
+@utility rolagem-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  &::-webkit-scrollbar { display: none; }
 }
 
 ::selection {
-  background: var(--color-ok);
-  color: var(--color-paper);
+  background: var(--color-brand);
+  color: var(--color-brand-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
 }

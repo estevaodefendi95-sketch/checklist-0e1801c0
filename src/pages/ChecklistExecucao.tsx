@@ -197,10 +197,10 @@ export function ChecklistExecucao() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <Link to="/" className="mb-4 inline-block text-xs text-ink-soft hover:text-ink">
+      <Link to="/" className="-ml-2 mb-1 inline-flex min-h-[44px] items-center rounded-[10px] px-2 text-sm text-ink-soft hover:text-ink">
         ← voltar
       </Link>
-      <h1 className="display text-xl font-medium capitalize">{template.tipo}</h1>
+      <h1 className="titulo capitalize">{template.tipo}</h1>
       <p className="mb-1 text-xs text-ink-soft/70">
         {semanal
           ? `semana de ${format(new Date(dataReferencia('semanal') + 'T00:00:00'), 'dd/MM/yyyy')}`

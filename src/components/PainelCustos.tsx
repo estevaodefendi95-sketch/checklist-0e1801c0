@@ -63,8 +63,8 @@ export function PainelCustos() {
   if (erro) return <Erro texto={erro} />
   return (
     <div className="mb-8">
-      <h1 className="display mb-3 text-xl font-medium">painel</h1>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <h2 className="subtitulo mb-3">Painel</h2>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Card titulo="fichas para revisar" valor={d?.revisar} para="/fichas?revisar=1" alerta={!!d?.revisar} />
         <Card titulo="insumos sem preço" valor={d?.semPreco} para="/insumos?filtro=sem_preco" alerta={!!d?.semPreco} />
         <Card titulo="preços com +60 dias" valor={d?.precoVelho} para="/insumos?filtro=desatualizado" alerta={!!d?.precoVelho} />
@@ -105,15 +105,15 @@ function Card({
   const corpo = (
     <>
       <div className="text-xs text-ink-soft">{titulo}</div>
-      <div className={`display ${pequeno ? 'text-base' : 'text-2xl'} ${alerta ? 'text-warn' : ''}`}>
+      <div className={`display ${pequeno ? 'text-lg' : 'text-3xl'} ${alerta ? 'text-warn' : ''}`}>
         {valor ?? '…'}
       </div>
       {detalhe && <div className="text-xs text-ink-soft">{detalhe}</div>}
     </>
   )
-  const cls = 'block min-h-[44px] rounded border border-line p-3'
+  const cls = 'block min-h-[44px] rounded-[14px] bg-surface p-4 shadow-card'
   return para ? (
-    <Link to={para} className={`${cls} hover:border-ink`}>
+    <Link to={para} className={`${cls} transition-shadow hover:shadow-md`}>
       {corpo}
     </Link>
   ) : (

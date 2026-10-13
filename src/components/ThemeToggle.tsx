@@ -19,7 +19,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
       onClick={alternar}
       aria-label={theme === 'dark' ? 'ativar modo claro' : 'ativar modo escuro'}
       title={theme === 'dark' ? 'modo claro' : 'modo escuro'}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border border-line text-ink-soft hover:border-ink hover:text-ink ${className}`}
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-ink-soft hover:border-brand hover:text-brand ${className}`}
     >
       {theme === 'dark' ? (
         // sol

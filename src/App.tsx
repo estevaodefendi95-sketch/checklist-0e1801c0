@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { PermissoesProvider } from './context/PermissoesContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -26,41 +26,33 @@ function Protected({ children, admin }: { children: React.ReactNode; admin?: boo
   )
 }
 
+// Roteador "de dados" (createBrowserRouter): é o que permite o aviso de
+// alterações não salvas antes de trocar de tela (useBlocker).
+const router = createBrowserRouter([
+  { path: '/login', element: <Login /> },
+  { path: '/', element: <Protected><Dashboard modo="hoje" /></Protected> },
+  { path: '/areas', element: <Protected><Dashboard modo="areas" /></Protected> },
+  { path: '/checklist/:templateId', element: <Protected><ChecklistExecucao /></Protected> },
+  { path: '/historico', element: <Protected><Historico /></Protected> },
+  { path: '/relatorio', element: <Protected><Relatorio /></Protected> },
+  { path: '/insumos', element: <Protected><Insumos /></Protected> },
+  { path: '/fornecedores', element: <Protected><Fornecedores /></Protected> },
+  { path: '/cardapios', element: <Protected><Cardapios /></Protected> },
+  { path: '/fichas', element: <Protected><Fichas /></Protected> },
+  { path: '/fichas/nova', element: <Protected><FichaEditor /></Protected> },
+  { path: '/fichas/:id', element: <Protected><FichaDetalhe /></Protected> },
+  { path: '/fichas/:id/editar', element: <Protected><FichaEditor /></Protected> },
+  // modo cozinha: tela cheia, sem menu
+  { path: '/fichas/:id/cozinha', element: <ProtectedRoute><FichaCozinha /></ProtectedRoute> },
+  { path: '/admin/templates', element: <Protected admin><AdminTemplates /></Protected> },
+  { path: '/admin/usuarios', element: <Protected admin><AdminUsuarios /></Protected> },
+])
+
 export default function App() {
   return (
     <AuthProvider>
       <PermissoesProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Protected><Dashboard /></Protected>} />
-            <Route
-              path="/checklist/:templateId"
-              element={<Protected><ChecklistExecucao /></Protected>}
-            />
-            <Route path="/historico" element={<Protected><Historico /></Protected>} />
-            <Route path="/relatorio" element={<Protected><Relatorio /></Protected>} />
-            <Route path="/insumos" element={<Protected><Insumos /></Protected>} />
-            <Route path="/fornecedores" element={<Protected><Fornecedores /></Protected>} />
-            <Route path="/cardapios" element={<Protected><Cardapios /></Protected>} />
-            <Route path="/fichas" element={<Protected><Fichas /></Protected>} />
-            <Route path="/fichas/nova" element={<Protected><FichaEditor /></Protected>} />
-            <Route path="/fichas/:id" element={<Protected><FichaDetalhe /></Protected>} />
-            <Route path="/fichas/:id/editar" element={<Protected><FichaEditor /></Protected>} />
-            <Route
-              path="/fichas/:id/cozinha"
-              element={<ProtectedRoute><FichaCozinha /></ProtectedRoute>}
-            />
-            <Route
-              path="/admin/templates"
-              element={<Protected admin><AdminTemplates /></Protected>}
-            />
-            <Route
-              path="/admin/usuarios"
-              element={<Protected admin><AdminUsuarios /></Protected>}
-            />
-          </Routes>
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </PermissoesProvider>
     </AuthProvider>
   )

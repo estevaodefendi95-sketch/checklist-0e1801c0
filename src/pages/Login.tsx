@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ThemeToggle } from '../components/ThemeToggle'
+import { inputCls, btnCls } from '../components/Estado'
 
 export function Login() {
   const { session, signIn } = useAuth()
@@ -27,9 +28,10 @@ export function Login() {
         <ThemeToggle />
       </div>
       <div className="w-full max-w-sm">
-        <h1 className="display mb-1 text-2xl font-medium">checklist</h1>
+        <h1 className="font-display text-5xl font-semibold leading-none text-brand">Paggio</h1>
+        <div className="mb-2 mt-1 text-xs uppercase tracking-[0.08em] text-ink-soft">Operação</div>
         <p className="mb-8 text-sm text-ink-soft">
-          conferência diária de cozinha, bar e salão
+          checklists, fichas técnicas e cardápios
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -40,7 +42,7 @@ export function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink"
+              className={inputCls}
               placeholder="voce@restaurante.com"
             />
           </div>
@@ -51,13 +53,13 @@ export function Login() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink"
+              className={inputCls}
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <p className="rounded border border-alert-soft bg-alert-soft px-3 py-2 text-xs text-alert">
+            <p className="rounded-[10px] bg-alert-soft px-3 py-2 text-sm text-alert" role="alert">
               {error}
             </p>
           )}
@@ -65,9 +67,9 @@ export function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded bg-ink py-2 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-50"
+            className={`${btnCls} w-full`}
           >
-            {loading ? 'entrando…' : 'entrar'}
+            {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
 

@@ -289,7 +289,7 @@ export function Relatorio() {
 
   return (
     <div className="mx-auto max-w-md">
-      <h1 className="display mb-4 text-xl font-medium">relatório</h1>
+      <h1 className="titulo mb-6">relatório</h1>
       <p className="mb-6 text-sm text-ink-soft">
         Gera um PDF com todos os checklists do dia escolhido, itens, respostas e aprovação.
       </p>

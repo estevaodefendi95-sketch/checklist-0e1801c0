@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { db } from '../lib/supabase'
 import { usePermissoes } from '../context/PermissoesContext'
 import { reais, pct, numero, dataBR } from '../lib/formato'
-import { Carregando, Erro, btnCls, btnSecCls } from '../components/Estado'
+import { Carregando, Erro, btnCls, btnSecCls, cartaoCls } from '../components/Estado'
+import { Cabecalho } from '../components/Cabecalho'
 import { Ingredientes, Passos, SeletorPorcoes } from '../components/FichaPartes'
 import { FichaHistorico } from '../components/FichaHistorico'
 import {
@@ -62,48 +63,49 @@ export function FichaDetalhe() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/fichas" className="text-xs text-ink-soft underline">
-          ← fichas técnicas
-        </Link>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="display text-2xl font-medium">{ficha.nome}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+        <Cabecalho
+          voltar={{ para: '/fichas', rotulo: 'fichas técnicas' }}
+          titulo={ficha.nome}
+          subtitulo={
+            <span className="flex flex-wrap items-center gap-1.5">
               <span>{TIPO_LABEL[ficha.tipo]}</span>
               {dados.cardapios.map((c) => (
-                <span key={c.id} className="rounded border border-line px-1.5 py-0.5">
+                <span key={c.id} className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand">
                   {c.nome}
                 </span>
               ))}
-              {!ficha.ativo && <span className="rounded bg-paper-dim px-1.5 py-0.5">inativa</span>}
+              {!ficha.ativo && <span className="rounded-full bg-paper-dim px-2 py-0.5 text-xs">inativa</span>}
               {ficha.precisa_revisao && (
-                <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn">Revisar</span>
+                <span className="rounded-full bg-warn-soft px-2.5 py-0.5 text-xs font-semibold text-warn">Revisar</span>
               )}
-            </div>
-            {ficha.precisa_revisao && ficha.observacao_revisao && (
-              <p className="mt-2 text-xs text-warn">{ficha.observacao_revisao}</p>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link to={`/fichas/${ficha.id}/cozinha`} className={`${btnSecCls} flex items-center`}>
-              modo cozinha
-            </Link>
-            {edita && (
-              <Link to={`/fichas/${ficha.id}/editar`} className={`${btnCls} flex items-center`}>
-                editar
+            </span>
+          }
+          acoes={
+            <>
+              {/* um único CTA: editar para quem edita; senão, o modo cozinha */}
+              <Link to={`/fichas/${ficha.id}/cozinha`} className={edita ? btnSecCls : btnCls}>
+                Modo cozinha
               </Link>
-            )}
-          </div>
-        </div>
+              {edita && (
+                <Link to={`/fichas/${ficha.id}/editar`} className={btnCls}>
+                  Editar ficha
+                </Link>
+              )}
+            </>
+          }
+        />
+        {ficha.precisa_revisao && ficha.observacao_revisao && (
+          <p className="-mt-3 mb-3 text-sm text-warn">{ficha.observacao_revisao}</p>
+        )}
         {edita && ficha.precisa_revisao && (
-          <button onClick={marcarRevisada} disabled={marcando} className={`${btnSecCls} mt-3 border-warn text-warn`}>
-            {marcando ? 'salvando…' : 'Marcar como revisada'}
+          <button onClick={marcarRevisada} disabled={marcando} className={`${btnSecCls} border-warn/50 text-warn hover:border-warn hover:bg-warn-soft`}>
+            {marcando ? 'Salvando…' : 'Marcar como revisada'}
           </button>
         )}
       </div>
 
       {ficha.foto_url && (
-        <img src={ficha.foto_url} alt={ficha.nome} className="max-h-72 w-full rounded border border-line object-cover" />
+        <img src={ficha.foto_url} alt={ficha.nome} className="max-h-80 w-full rounded-[14px] object-cover shadow-card" />
       )}
 
       {verCusto && custo && (
@@ -123,7 +125,7 @@ export function FichaDetalhe() {
         </div>
       )}
 
-      <section>
+      <section className={`${cartaoCls} p-4 md:p-6`}>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="display text-lg">ingredientes</h2>
           {qtd != null && (
@@ -147,26 +149,26 @@ export function FichaDetalhe() {
         )}
       </section>
 
-      <section>
-        <h2 className="display mb-2 text-lg">modo de preparo</h2>
+      <section className={`${cartaoCls} p-4 md:p-6`}>
+        <h2 className="subtitulo mb-3">modo de preparo</h2>
         <Passos texto={ficha.modo_preparo} />
       </section>
 
       {ficha.montagem && (
         <section>
-          <h2 className="display mb-2 text-lg">montagem</h2>
+          <h2 className="subtitulo mb-3">montagem</h2>
           <Passos texto={ficha.montagem} />
         </section>
       )}
       {ficha.utensilios && (
         <section>
-          <h2 className="display mb-2 text-lg">utensílios</h2>
+          <h2 className="subtitulo mb-3">utensílios</h2>
           <p className="whitespace-pre-line text-sm">{ficha.utensilios}</p>
         </section>
       )}
       {ficha.conservacao && (
         <section>
-          <h2 className="display mb-2 text-lg">conservação</h2>
+          <h2 className="subtitulo mb-3">conservação</h2>
           <p className="whitespace-pre-line text-sm">{ficha.conservacao}</p>
         </section>
       )}
@@ -182,7 +184,7 @@ export function FichaDetalhe() {
 
 function Info({ titulo, valor, cor }: { titulo: string; valor: string; cor?: string }) {
   return (
-    <div className="rounded border border-line p-3">
+    <div className={`${cartaoCls} p-3 md:p-4`}>
       <div className="text-xs text-ink-soft">{titulo}</div>
       <div className={`display text-xl ${cor ?? ''}`}>{valor}</div>
     </div>

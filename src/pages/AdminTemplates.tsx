@@ -272,7 +272,7 @@ export function AdminTemplates() {
   return (
     <div className="grid gap-8 sm:grid-cols-2">
       <div>
-        <h1 className="display mb-4 text-xl font-medium">áreas</h1>
+        <h1 className="titulo mb-6">áreas</h1>
 
         <div className="mb-4 flex gap-2 rounded border border-line bg-paper-dim/40 p-3">
           <input
@@ -308,7 +308,7 @@ export function AdminTemplates() {
           ))}
         </div>
 
-        <h1 className="display mb-4 text-xl font-medium">modelos</h1>
+        <h1 className="titulo mb-6">modelos</h1>
 
         <div className="mb-4 space-y-2 rounded border border-line bg-paper-dim/40 p-3">
           <input

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, db } from '../lib/supabase'
 import { usePermissoes } from '../context/PermissoesContext'
 import { lerNumero } from '../lib/formato'
-import { Carregando, Erro, inputCls, btnCls, btnSecCls } from '../components/Estado'
+import { Carregando, Erro, inputCls, btnCls, btnSecCls, btnPerigoCls, cartaoCls, chipCls } from '../components/Estado'
+import { Cabecalho } from '../components/Cabecalho'
+import { BarraSalvar, SeloAlteracoes, useAlteracoesPendentes } from '../components/Alteracoes'
 import {
   Ficha,
   TIPO_LABEL,
@@ -74,6 +76,20 @@ export function FichaEditor() {
     utensilios: '',
     ativo: true,
   })
+  // estado salvo, para saber se há alterações e para "Descartar"
+  const [base, setBase] = useState<{ f: typeof f; itens: LinhaItem[]; sel: string[] } | null>(null)
+  const retrato = (x: { f: typeof f; itens: LinhaItem[]; sel: string[] }) =>
+    JSON.stringify({ f: x.f, itens: x.itens.map(({ chave: _c, ...r }) => r), sel: [...x.sel].sort() })
+  const sujo = !!base && (!!foto || retrato({ f, itens, sel: selCardapios }) !== retrato(base))
+  const { liberar } = useAlteracoesPendentes(sujo)
+
+  function descartar() {
+    if (!base || !confirm('Descartar as alterações desta ficha?')) return
+    setF(base.f)
+    setItens(base.itens)
+    setSelCardapios(base.sel)
+    setFoto(null)
+  }
 
   useEffect(() => {
     ;(async () => {
@@ -100,7 +116,7 @@ export function FichaEditor() {
           const d = await carregarFicha(id)
           const x = d.ficha
           setOriginal(x)
-          setF({
+          const fCarregado = {
             tipo: x.tipo,
             nome: x.nome,
             rendimento: txt(x.rendimento),
@@ -115,9 +131,8 @@ export function FichaEditor() {
             conservacao: x.conservacao ?? '',
             utensilios: x.utensilios ?? '',
             ativo: x.ativo,
-          })
-          setItens(
-            d.itens.map((i) => ({
+          }
+          const itensCarregados: LinhaItem[] = d.itens.map((i) => ({
               chave: i.id,
               id: i.id,
               ref: ops.find((o) => o.id === (i.insumo_id ?? i.sub_ficha_id)) ?? {
@@ -131,14 +146,18 @@ export function FichaEditor() {
               grupo_escolha: i.grupo_escolha ?? '',
               observacao: i.observacao ?? '',
             }))
-          )
           setIdsOriginais(d.itens.map((i) => i.id))
           const sel = d.cardapios.map((c) => c.id)
-          setSelCardapios(sel)
           setCardapiosOriginais(sel)
+          setF(fCarregado)
+          setItens(itensCarregados)
+          setSelCardapios(sel)
+          setBase({ f: fCarregado, itens: itensCarregados, sel })
         } catch (e) {
           setErro((e as Error).message)
         }
+      } else {
+        setBase({ f, itens: [], sel: [] })
       }
       setCarregando(false)
     })()
@@ -275,6 +294,7 @@ export function FichaEditor() {
         if (r.error) throw r.error
       }
 
+      liberar()
       navigate(`/fichas/${fichaId}`)
     } catch (e) {
       const msg = (e as { message?: string }).message ?? String(e)
@@ -298,28 +318,25 @@ export function FichaEditor() {
           : 'Não foi possível excluir: ' + error.message
       )
     }
+    liberar()
     navigate('/fichas')
   }
 
   const prep = f.tipo === 'preparacao'
   return (
-    <div className="space-y-6 pb-24">
-      <div>
-        <Link to={id ? `/fichas/${id}` : '/fichas'} className="text-xs text-ink-soft underline">
-          ← voltar
-        </Link>
-        <h1 className="display mt-2 text-xl font-medium">{nova ? 'nova ficha' : `editar · ${original?.nome ?? ''}`}</h1>
-      </div>
+    <div className="space-y-8">
+      <Cabecalho
+        voltar={{ para: id ? `/fichas/${id}` : '/fichas', rotulo: id ? 'ficha' : 'fichas técnicas' }}
+        titulo={nova ? 'Nova ficha' : original?.nome ?? 'Editar ficha'}
+        subtitulo={nova ? 'preencha e salve para criar' : `editando · versão ${original?.versao ?? ''}`}
+        acoes={sujo && <SeloAlteracoes />}
+      />
       {erro && <Erro texto={erro} />}
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap gap-1">
+      <section className={`${cartaoCls} space-y-3 p-4 md:p-6`}>
+        <div className="flex flex-wrap gap-2">
           {(Object.keys(TIPO_LABEL) as TipoFicha[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => set('tipo', t)}
-              className={`min-h-[44px] rounded border px-3 text-sm ${f.tipo === t ? 'border-ink bg-ink text-paper' : 'border-line text-ink-soft'}`}
-            >
+            <button key={t} onClick={() => set('tipo', t)} className={chipCls(f.tipo === t)} aria-pressed={f.tipo === t}>
               {TIPO_LABEL[t]}
             </button>
           ))}
@@ -369,8 +386,8 @@ export function FichaEditor() {
         </label>
       </section>
 
-      <section>
-        <h2 className="display mb-2 text-lg">cardápios</h2>
+      <section className={`${cartaoCls} p-4 md:p-6`}>
+        <h2 className="subtitulo mb-3">cardápios</h2>
         <div className="flex flex-wrap gap-1">
           {cardapios.map((c) => {
             const on = selCardapios.includes(c.id)
@@ -378,7 +395,7 @@ export function FichaEditor() {
               <button
                 key={c.id}
                 onClick={() => setSelCardapios((p) => (on ? p.filter((x) => x !== c.id) : [...p, c.id]))}
-                className={`min-h-[44px] rounded border px-3 text-xs ${on ? 'border-ok bg-ok-soft text-ok' : 'border-line text-ink-soft'}`}
+                className={chipCls(on)} aria-pressed={on}
               >
                 {c.nome}
               </button>
@@ -387,12 +404,12 @@ export function FichaEditor() {
         </div>
       </section>
 
-      <section>
-        <h2 className="display mb-2 text-lg">ingredientes</h2>
+      <section className={`${cartaoCls} p-4 md:p-6`}>
+        <h2 className="subtitulo mb-3">ingredientes</h2>
         {itens.length === 0 && <p className="mb-2 text-sm text-ink-soft">Nenhum ingrediente ainda.</p>}
         <ul className="space-y-2">
           {itens.map((i, n) => (
-            <li key={i.chave} className="rounded border border-line p-2">
+            <li key={i.chave} className="rounded-xl bg-paper p-3">
               <div className="mb-2 flex items-center justify-between gap-2 text-sm">
                 <span className="font-medium">
                   {i.ref.nome}
@@ -430,8 +447,8 @@ export function FichaEditor() {
         </p>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="display text-lg">textos</h2>
+      <section className={`${cartaoCls} space-y-3 p-4 md:p-6`}>
+        <h2 className="subtitulo">textos</h2>
         <Campo label="modo de preparo (um passo por linha)">
           <textarea rows={8} value={f.modo_preparo} onChange={(e) => set('modo_preparo', e.target.value)} className={`${inputCls} py-2`} />
         </Campo>
@@ -446,8 +463,8 @@ export function FichaEditor() {
         </Campo>
       </section>
 
-      <section>
-        <h2 className="display mb-2 text-lg">foto</h2>
+      <section className={`${cartaoCls} p-4 md:p-6`}>
+        <h2 className="subtitulo mb-3">foto</h2>
         {original?.foto_url && !foto && (
           <img src={original.foto_url} alt="" className="mb-2 max-h-48 rounded border border-line object-cover" />
         )}
@@ -455,18 +472,21 @@ export function FichaEditor() {
         <input type="file" accept="image/*" onChange={(e) => setFoto(e.target.files?.[0] ?? null)} className="block min-h-[44px] text-sm" />
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-paper px-4 py-3">
-        <div className="mx-auto flex max-w-4xl gap-2">
-          <button onClick={salvar} disabled={salvando} className={`${btnCls} flex-1`}>
-            {salvando ? 'salvando…' : 'salvar'}
-          </button>
-          {!nova && (
-            <button onClick={excluir} disabled={salvando} className="min-h-[44px] rounded border border-alert px-4 text-sm text-alert">
-              excluir
+      <BarraSalvar
+        fixa
+        sujo={sujo}
+        salvando={salvando}
+        onSalvar={salvar}
+        onDescartar={nova ? undefined : descartar}
+        rotulo={nova ? 'Criar ficha' : 'Salvar alterações'}
+        extra={
+          !nova && (
+            <button onClick={excluir} disabled={salvando} className={btnPerigoCls}>
+              Excluir ficha
             </button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
     </div>
   )
 }
@@ -517,7 +537,7 @@ function BuscaItem({
   }
 
   return (
-    <div className="mt-3 rounded border border-dashed border-line p-2">
+    <div className="mt-3 rounded-xl border border-dashed border-line p-3">
       <input
         placeholder="+ adicionar insumo ou preparação"
         value={termo}
