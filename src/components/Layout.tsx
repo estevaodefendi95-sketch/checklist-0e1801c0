@@ -1,6 +1,7 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { ReactNode, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { usePermissoes } from '../context/PermissoesContext'
 import { ThemeToggle } from './ThemeToggle'
 
 const roleLabel: Record<string, string> = {
@@ -20,14 +21,21 @@ export function Layout({ children }: { children: ReactNode }) {
     navigate('/login')
   }
 
+  const { pode } = usePermissoes()
+  const admin = profile?.role === 'admin'
   const links = [
-    { to: '/', label: 'áreas' },
+    { to: '/', label: 'checklists' },
     { to: '/historico', label: 'histórico' },
     { to: '/relatorio', label: 'relatório' },
-    ...(profile?.role === 'admin'
+    { to: '/cardapios', label: 'cardápios' },
+    { to: '/insumos', label: 'insumos' },
+    ...(pode('editar_precos') || pode('lancar_estoque')
+      ? [{ to: '/fornecedores', label: 'fornecedores' }]
+      : []),
+    ...(admin
       ? [
           { to: '/admin/templates', label: 'modelos' },
-          { to: '/admin/usuarios', label: 'usuários' },
+          { to: '/admin/usuarios', label: 'usuários e permissões' },
         ]
       : []),
   ]
