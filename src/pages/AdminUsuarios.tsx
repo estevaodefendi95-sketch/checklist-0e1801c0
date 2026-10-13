@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { db, supabase } from '../lib/supabase'
 import { Area, Profile, UserRole } from '../lib/types'
+import { PermissoesUsuario } from '../components/PermissoesUsuario'
 
 export function AdminUsuarios() {
   const [profiles, setProfiles] = useState<Profile[]>([])
@@ -138,6 +139,7 @@ export function AdminUsuarios() {
                   ))}
                 </div>
               )}
+              <PermissoesUsuario userId={p.id} admin={p.role === 'admin'} />
             </div>
           ))}
         </div>
