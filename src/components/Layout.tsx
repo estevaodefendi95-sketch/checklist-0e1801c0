@@ -5,6 +5,7 @@ import { usePermissoes } from '../context/PermissoesContext'
 import { applyTheme } from '../lib/theme'
 import { ler, gravar } from '../lib/armazenamento'
 import { Icone, NomeIcone } from './Icone'
+import { LinhaVersao } from './AvisoAtualizacao'
 
 const roleLabel: Record<string, string> = {
   admin: 'Administrador',
@@ -150,6 +151,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
         <main className="mx-auto max-w-6xl px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-3 md:px-6 lg:px-8 lg:pb-12 lg:pt-8">
           {children}
+          <LinhaVersao className="mt-12 text-center text-ink-soft" />
         </main>
       </div>
 

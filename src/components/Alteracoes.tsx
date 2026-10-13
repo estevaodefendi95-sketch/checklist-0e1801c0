@@ -4,6 +4,10 @@ import { btnCls, btnSecCls } from './Estado'
 
 const AVISO = 'Há alterações não salvas. Sair mesmo assim e perder as alterações?'
 
+// quantos formulários abertos têm alterações (usado pela atualização do app)
+let formulariosSujos = 0
+export const haAlteracoesPendentes = () => formulariosSujos > 0
+
 /**
  * Avisa antes de sair da tela (navegação interna e fechar/recarregar a aba)
  * enquanto `sujo` for verdadeiro. `liberar()` desliga o aviso logo antes de
@@ -23,6 +27,14 @@ export function useAlteracoesPendentes(sujo: boolean) {
     if (window.confirm(AVISO)) blocker.proceed()
     else blocker.reset()
   }, [blocker])
+
+  useEffect(() => {
+    if (!ativo) return
+    formulariosSujos++
+    return () => {
+      formulariosSujos--
+    }
+  }, [ativo])
 
   useEffect(() => {
     if (!ativo) return

@@ -4,6 +4,7 @@ import { Ingredientes, Passos, SeletorPorcoes } from '../components/FichaPartes'
 import { Icone } from '../components/Icone'
 import { baseRendimento, unidadeRendimento, useFicha } from '../lib/fichas'
 import { registrarUsoFicha } from '../lib/armazenamento'
+import { LinhaVersao } from '../components/AvisoAtualizacao'
 
 /** Tela cheia para a cozinha: letra grande, fundo escuro e nenhum valor em R$ */
 export function FichaCozinha() {
@@ -87,6 +88,7 @@ export function FichaCozinha() {
             )}
           </div>
         )}
+        <LinhaVersao className="mt-16 text-center text-[#B3A89E]" />
       </div>
     </div>
   )

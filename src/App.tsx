@@ -17,6 +17,7 @@ import { Fichas } from './pages/Fichas'
 import { FichaDetalhe } from './pages/FichaDetalhe'
 import { FichaEditor } from './pages/FichaEditor'
 import { FichaCozinha } from './pages/FichaCozinha'
+import { AvisoAtualizacao } from './components/AvisoAtualizacao'
 
 function Protected({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
   return (
@@ -52,6 +53,7 @@ export default function App() {
   return (
     <AuthProvider>
       <PermissoesProvider>
+        <AvisoAtualizacao />
         <RouterProvider router={router} />
       </PermissoesProvider>
     </AuthProvider>
