@@ -24,6 +24,22 @@ const COR: Record<Status, string> = {
   pendente: 'bg-paper-dim text-ink-soft',
 }
 
+/** "2 pendentes · 1 em andamento · 3 concluídos" ou "tudo concluído" em verde */
+function ResumoArea({ itens }: { itens: { status: Status }[] }) {
+  if (itens.length === 0) return null
+  const n = (s: Status) => itens.filter((i) => i.status === s).length
+  const p = n('pendente')
+  const a = n('em andamento')
+  const c = n('concluído')
+  if (p === 0 && a === 0) return <span className="text-sm font-semibold text-ok">tudo concluído</span>
+  const partes = [
+    p && `${p} ${p === 1 ? 'pendente' : 'pendentes'}`,
+    a && `${a} em andamento`,
+    c && `${c} ${c === 1 ? 'concluído' : 'concluídos'}`,
+  ].filter(Boolean)
+  return <span className="apoio">{partes.join(' · ')}</span>
+}
+
 function statusDe(t: ChecklistTemplate, execucoes: ChecklistExecucao[]): Status {
   const ref = dataReferencia(t.frequencia)
   const exec = execucoes.find((e) => e.template_id === t.id && e.data === ref)
@@ -101,31 +117,42 @@ export function Dashboard({ modo }: { modo: 'hoje' | 'areas' }) {
       ) : cards.length === 0 ? (
         <Vazio texto="Você ainda não tem acesso a nenhuma área. Peça ao administrador para liberar." />
       ) : modo === 'hoje' ? (
-        todos.length === 0 ? (
-          <Vazio texto="Nenhum checklist cadastrado nas suas áreas." />
-        ) : (
-          <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {[...todos]
-              .sort((a, b) => ORDEM[a.status] - ORDEM[b.status] || a.area.nome.localeCompare(b.area.nome, 'pt-BR'))
-              .map(({ area, t, status }) => (
-                <li key={t.id}>
-                  <Link
-                    to={`/checklist/${t.id}`}
-                    className={`${cartaoCls} flex min-h-[72px] items-center justify-between gap-3 px-4 py-3 transition-shadow hover:shadow-md`}
-                  >
-                    <span className="min-w-0">
-                      <span className="apoio block">
-                        {area.nome}
-                        {t.frequencia === 'semanal' && ' · semanal'}
-                      </span>
-                      <span className="subtitulo block truncate capitalize">{t.tipo}</span>
-                    </span>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${COR[status]}`}>{status}</span>
-                  </Link>
-                </li>
-              ))}
-          </ul>
-        )
+        // uma área por bloco (celular); duas colunas de áreas no desktop. Áreas já vêm em ordem alfabética.
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          {cards.map(({ area, templates, execucoesHoje }) => {
+            const itens = templates
+              .map((t) => ({ t, status: statusDe(t, execucoesHoje) }))
+              .sort((a, b) => ORDEM[a.status] - ORDEM[b.status] || a.t.tipo.localeCompare(b.t.tipo, 'pt-BR'))
+            return (
+              <section key={area.id} className={`${cartaoCls} p-4 md:p-5`} aria-labelledby={`area-${area.id}`}>
+                <header className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <h2 id={`area-${area.id}`} className="subtitulo">{area.nome}</h2>
+                  <ResumoArea itens={itens} />
+                </header>
+                {itens.length === 0 ? (
+                  <p className="apoio">sem modelo cadastrado</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {itens.map(({ t, status }) => (
+                      <li key={t.id}>
+                        <Link
+                          to={`/checklist/${t.id}`}
+                          className="flex min-h-[52px] items-center justify-between gap-3 rounded-[10px] bg-paper px-3 text-sm transition-colors hover:bg-paper-dim"
+                        >
+                          <span className="min-w-0">
+                            <span className="font-medium capitalize">{t.tipo}</span>
+                            {t.frequencia === 'semanal' && <span className="ml-2 text-xs text-ink-soft">semanal</span>}
+                          </span>
+                          <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${COR[status]}`}>{status}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )
+          })}
+        </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {cards.map(({ area, templates, execucoesHoje }) => (
