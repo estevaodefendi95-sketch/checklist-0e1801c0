@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { Area, ChecklistExecucao, ChecklistTemplate } from '../lib/types'
 import { format } from 'date-fns'
 import { dataReferencia } from '../lib/periodo'
+import { usePermissoes } from '../context/PermissoesContext'
+import { PainelCustos } from '../components/PainelCustos'
 
 interface AreaCard {
   area: Area
@@ -14,6 +16,7 @@ interface AreaCard {
 
 export function Dashboard() {
   const { profile, podeAcessarArea } = useAuth()
+  const { pode } = usePermissoes()
   const [cards, setCards] = useState<AreaCard[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -49,18 +52,24 @@ export function Dashboard() {
     setLoading(false)
   }
 
-  if (loading) return <p className="text-sm text-ink-soft">Carregando…</p>
+  const painel = pode('ver_custos') ? <PainelCustos /> : null
+
+  if (loading) return <>{painel}<p className="text-sm text-ink-soft">Carregando…</p></>
 
   if (cards.length === 0) {
     return (
-      <p className="text-sm text-ink-soft">
-        Você ainda não tem acesso a nenhuma área. Peça ao administrador para liberar.
-      </p>
+      <>
+        {painel}
+        <p className="text-sm text-ink-soft">
+          Você ainda não tem acesso a nenhuma área. Peça ao administrador para liberar.
+        </p>
+      </>
     )
   }
 
   return (
     <div>
+      {painel}
       <h1 className="display mb-1 text-xl font-medium">áreas</h1>
       <p className="mb-6 text-sm text-ink-soft">{format(new Date(), 'dd/MM/yyyy')}</p>
 

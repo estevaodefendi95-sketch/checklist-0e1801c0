@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { db } from '../lib/supabase'
 import { usePermissoes, SoComCusto } from '../context/PermissoesContext'
 import { reais, pct, dataBR, diasDesde, lerNumero } from '../lib/formato'
@@ -32,6 +33,7 @@ export function Insumos() {
   const [usos, setUsos] = useState<Record<string, number>>({})
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  const [params, setParams] = useSearchParams()
   const [busca, setBusca] = useState('')
   const [categoria, setCategoria] = useState('')
   const [editando, setEditando] = useState<Insumo | null>(null)
@@ -60,10 +62,14 @@ export function Insumos() {
     () => [...new Set(insumos.map((i) => i.categoria).filter(Boolean))].sort() as string[],
     [insumos]
   )
+  // filtro vindo dos cards do painel (?filtro=sem_preco | desatualizado)
+  const filtroPainel = params.get('filtro')
   const filtrados = insumos.filter(
     (i) =>
       (!categoria || i.categoria === categoria) &&
-      i.nome.toLowerCase().includes(busca.toLowerCase())
+      i.nome.toLowerCase().includes(busca.toLowerCase()) &&
+      (filtroPainel !== 'sem_preco' || i.preco == null) &&
+      (filtroPainel !== 'desatualizado' || (i.preco != null && diasDesde(i.preco_atualizado_em) > 60))
   )
   const semPreco = insumos.filter((i) => i.preco == null).length
   const desatualizados = insumos.filter(
@@ -102,6 +108,15 @@ export function Insumos() {
           ))}
         </select>
       </div>
+
+      {filtroPainel && (
+        <button
+          onClick={() => setParams({}, { replace: true })}
+          className="mb-3 min-h-[44px] rounded border border-warn bg-warn-soft px-3 text-xs text-warn"
+        >
+          {filtroPainel === 'sem_preco' ? 'só sem preço' : 'só preço com +60 dias'} · limpar filtro ×
+        </button>
+      )}
 
       {erro && <Erro texto={erro} />}
       {carregando ? (

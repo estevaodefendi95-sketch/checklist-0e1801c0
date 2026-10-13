@@ -13,6 +13,10 @@ import { AdminUsuarios } from './pages/AdminUsuarios'
 import { Insumos } from './pages/Insumos'
 import { Fornecedores } from './pages/Fornecedores'
 import { Cardapios } from './pages/Cardapios'
+import { Fichas } from './pages/Fichas'
+import { FichaDetalhe } from './pages/FichaDetalhe'
+import { FichaEditor } from './pages/FichaEditor'
+import { FichaCozinha } from './pages/FichaCozinha'
 
 function Protected({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
   return (
@@ -39,6 +43,14 @@ export default function App() {
             <Route path="/insumos" element={<Protected><Insumos /></Protected>} />
             <Route path="/fornecedores" element={<Protected><Fornecedores /></Protected>} />
             <Route path="/cardapios" element={<Protected><Cardapios /></Protected>} />
+            <Route path="/fichas" element={<Protected><Fichas /></Protected>} />
+            <Route path="/fichas/nova" element={<Protected><FichaEditor /></Protected>} />
+            <Route path="/fichas/:id" element={<Protected><FichaDetalhe /></Protected>} />
+            <Route path="/fichas/:id/editar" element={<Protected><FichaEditor /></Protected>} />
+            <Route
+              path="/fichas/:id/cozinha"
+              element={<ProtectedRoute><FichaCozinha /></ProtectedRoute>}
+            />
             <Route
               path="/admin/templates"
               element={<Protected admin><AdminTemplates /></Protected>}

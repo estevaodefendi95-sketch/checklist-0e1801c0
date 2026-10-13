@@ -25,10 +25,11 @@ export function Layout({ children }: { children: ReactNode }) {
   const admin = profile?.role === 'admin'
   const links = [
     { to: '/', label: 'checklists' },
-    { to: '/historico', label: 'histórico' },
-    { to: '/relatorio', label: 'relatório' },
+    { to: '/fichas', label: 'fichas técnicas' },
     { to: '/cardapios', label: 'cardápios' },
     { to: '/insumos', label: 'insumos' },
+    { to: '/historico', label: 'histórico' },
+    { to: '/relatorio', label: 'relatório' },
     ...(pode('editar_precos') || pode('lancar_estoque')
       ? [{ to: '/fornecedores', label: 'fornecedores' }]
       : []),
@@ -49,11 +50,11 @@ export function Layout({ children }: { children: ReactNode }) {
       <header className="border-b border-line bg-paper">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="display shrink-0 text-lg font-medium tracking-tight">
-            checklist
+            paggio operação
           </Link>
 
           {/* nav desktop */}
-          <nav className="hidden flex-1 items-center gap-4 text-sm sm:flex">
+          <nav className="hidden flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-sm sm:flex">
             {links.map((l) => (
               <Link
                 key={l.to}
@@ -121,7 +122,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   key={l.to}
                   to={l.to}
                   onClick={() => setMenuAberto(false)}
-                  className={`rounded px-2 py-2 ${
+                  className={`flex min-h-[44px] items-center rounded px-2 ${
                     linkAtivo(l.to) ? 'bg-paper-dim text-ink' : 'text-ink-soft'
                   }`}
                 >
