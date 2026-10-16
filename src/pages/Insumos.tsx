@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { format } from 'date-fns'
 import { db } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissoes, SoComCusto } from '../context/PermissoesContext'
@@ -18,6 +17,7 @@ import {
 } from '../components/Estado'
 import { Cabecalho } from '../components/Cabecalho'
 import { BarraSalvar, useAlteracoesPendentes } from '../components/Alteracoes'
+import { baixarCotacaoPdf } from '../lib/cotacaoPdf'
 
 interface Insumo {
   id: string
@@ -51,44 +51,6 @@ function mensagemErro(error: { code?: string; message: string }) {
   return error.message
 }
 
-function csvCampo(v: string) {
-  return /[;"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
-}
-
-function exportarCotacao(fornecedor: string, itens: Insumo[], incluirPreco: boolean) {
-  const cab = ['Produto', 'Unidade de compra']
-  if (incluirPreco) cab.push('Preço atual (R$)')
-  cab.push('Quantidade desejada', 'Preço cotado', 'Observação')
-  const linhas = [
-    ['Fornecedor', fornecedor],
-    ['Data', new Date().toLocaleDateString('pt-BR')],
-    [],
-    cab,
-    ...itens.map((i) => {
-      const l = [i.nome, i.unidade]
-      if (incluirPreco)
-        l.push(i.preco == null ? '' : Number(i.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }))
-      l.push('', '', '')
-      return l
-    }),
-  ]
-  const csv = '﻿' + linhas.map((l) => l.map(csvCampo).join(';')).join('\r\n')
-  const slug = fornecedor
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `cotacao-${slug || 'fornecedor'}-${format(new Date(), 'yyyy-MM-dd')}.csv`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
-
 export function Insumos() {
   const { pode } = usePermissoes()
   const { profile } = useAuth()
@@ -105,7 +67,8 @@ export function Insumos() {
   const [fornecedor, setFornecedor] = useState('')
   const [arquivados, setArquivados] = useState(false)
   const [marcados, setMarcados] = useState<Set<string>>(new Set())
-  const [incluirPreco, setIncluirPreco] = useState(false)
+  const [gerandoPdf, setGerandoPdf] = useState(false)
+  const [pdfErro, setPdfErro] = useState<string | null>(null)
   const [reativando, setReativando] = useState<string | null>(null)
   const [editando, setEditando] = useState<Insumo | null>(null)
   const [novo, setNovo] = useState({ nome: '', categoria: '', unidade: 'kg' })
@@ -184,9 +147,20 @@ export function Insumos() {
       return n
     })
   }
-  function exportar() {
-    const itens = insumos.filter((i) => marcados.has(i.id) && i.fornecedor_id === fornecedor)
-    if (itens.length) exportarCotacao(nomeForn(fornecedor), itens, incluirPreco && pode('ver_custos'))
+  async function exportar() {
+    // só nome e unidade: nenhum preço ou custo do sistema vai para o fornecedor
+    const itens = insumos
+      .filter((i) => marcados.has(i.id) && i.fornecedor_id === fornecedor)
+      .map((i) => ({ nome: i.nome, unidade: i.unidade }))
+    if (!itens.length) return
+    setGerandoPdf(true)
+    setPdfErro(null)
+    try {
+      await baixarCotacaoPdf(nomeForn(fornecedor), itens)
+    } catch (e) {
+      setPdfErro('Não foi possível gerar o PDF: ' + ((e as Error).message ?? String(e)))
+    }
+    setGerandoPdf(false)
   }
 
   async function reativar(i: Insumo) {
@@ -293,21 +267,15 @@ export function Insumos() {
               {todosVisiveisMarcados ? 'Desmarcar todos' : 'Selecionar todos'}
             </button>
             <span className="apoio">{marcados.size} marcados</span>
-            <SoComCusto>
-              <label className="flex min-h-[44px] items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={incluirPreco}
-                  onChange={(e) => setIncluirPreco(e.target.checked)}
-                  className="h-5 w-5 accent-[var(--color-brand)]"
-                />
-                incluir preço atual
-              </label>
-            </SoComCusto>
           </div>
-          <button onClick={exportar} disabled={marcados.size === 0} className={btnCls}>
-            Exportar cotação
+          <button onClick={exportar} disabled={marcados.size === 0 || gerandoPdf} className={btnCls}>
+            {gerandoPdf ? 'Gerando PDF…' : 'Exportar cotação (PDF)'}
           </button>
+          {pdfErro && (
+            <div className="w-full">
+              <Erro texto={pdfErro} />
+            </div>
+          )}
         </div>
       )}
 
