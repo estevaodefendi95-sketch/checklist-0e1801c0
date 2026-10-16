@@ -33,6 +33,9 @@ export interface ChecklistItem {
   obrigatorio: boolean
   unidade?: string | null
   estoque_minimo?: number | null
+  insumo_id?: string | null
+  /** 1 unidade contada = X da unidade do insumo */
+  fator_contagem?: number | null
 }
 
 export interface ChecklistExecucao {

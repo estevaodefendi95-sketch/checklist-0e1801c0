@@ -65,6 +65,19 @@ export function FichaDetalhe() {
       <div>
         <Cabecalho
           voltar={{ para: '/fichas', rotulo: 'fichas técnicas' }}
+          topo={
+            ficha.foto_url ? (
+              <img
+                src={ficha.foto_url}
+                alt={ficha.nome}
+                className="aspect-[4/3] w-full rounded-[14px] bg-paper-dim object-cover shadow-card md:max-h-[420px]"
+              />
+            ) : (
+              <div className="flex min-h-[112px] items-center justify-center rounded-[14px] bg-paper-dim px-4 py-6 text-center">
+                <span className="display text-2xl text-ink-soft md:text-3xl">{ficha.nome}</span>
+              </div>
+            )
+          }
           titulo={ficha.nome}
           subtitulo={
             <span className="flex flex-wrap items-center gap-1.5">
@@ -103,10 +116,6 @@ export function FichaDetalhe() {
           </button>
         )}
       </div>
-
-      {ficha.foto_url && (
-        <img src={ficha.foto_url} alt={ficha.nome} className="max-h-80 w-full rounded-[14px] object-cover shadow-card" />
-      )}
 
       {verCusto && custo && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

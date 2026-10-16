@@ -23,6 +23,81 @@ function abaixoDoMinimo(item: ChecklistItem, valor?: string | null) {
   )
 }
 
+/** último lançamento de contagem de um item: quantidade na unidade do item e data (yyyy-MM-dd) */
+interface Ultimo {
+  qtd: number
+  data: string
+}
+
+const numBR = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
+
+/**
+ * Último lançamento de cada item de um checklist de contagem: a resposta mais
+ * recente (quantidade) entre as últimas 30 execuções concluídas do modelo e,
+ * para itens ligados a insumo, a última estoque_contagens, se for mais nova.
+ */
+async function buscarUltimos(
+  templateId: string,
+  antesDe: string,
+  itens: ChecklistItem[]
+): Promise<Record<string, Ultimo>> {
+  const execs = await db
+    .from('checklist_execucoes')
+    .select('id,data')
+    .eq('template_id', templateId)
+    .eq('status', 'concluido')
+    .lt('data', antesDe)
+    .order('data', { ascending: false })
+    .limit(30)
+  if (execs.error) throw execs.error
+  const lista = (execs.data ?? []) as { id: string; data: string }[]
+  const dataExec = Object.fromEntries(lista.map((e) => [e.id, e.data]))
+
+  const ultimos: Record<string, Ultimo> = {}
+  // em lotes de 10 execuções (bem abaixo do limite de 1000 linhas por consulta),
+  // da mais nova para a mais antiga, até achar todos os itens
+  for (let i = 0; i < lista.length && Object.keys(ultimos).length < itens.length; i += 10) {
+    const lote = lista.slice(i, i + 10).map((e) => e.id)
+    const r = await db
+      .from('checklist_respostas')
+      .select('item_id,execucao_id,quantidade')
+      .in('execucao_id', lote)
+      .not('quantidade', 'is', null)
+    if (r.error) throw r.error
+    for (const x of (r.data ?? []) as { item_id: string; execucao_id: string; quantidade: number }[]) {
+      const data = dataExec[x.execucao_id]
+      const atual = ultimos[x.item_id]
+      if (!atual || data > atual.data) ultimos[x.item_id] = { qtd: Number(x.quantidade), data }
+    }
+  }
+
+  const comInsumo = itens.filter((i) => i.insumo_id)
+  if (comInsumo.length) {
+    const r = await db
+      .from('estoque_contagens')
+      .select('insumo_id,data,quantidade')
+      .in('insumo_id', [...new Set(comInsumo.map((i) => i.insumo_id))])
+      .order('data', { ascending: false })
+      .limit(1000)
+    if (r.error) throw r.error
+    // soma as contagens do dia mais recente de cada insumo (como v_contagens)
+    const porInsumo: Record<string, Ultimo> = {}
+    for (const x of (r.data ?? []) as { insumo_id: string; data: string; quantidade: number }[]) {
+      const atual = porInsumo[x.insumo_id]
+      if (!atual) porInsumo[x.insumo_id] = { qtd: Number(x.quantidade), data: x.data }
+      else if (atual.data === x.data) atual.qtd += Number(x.quantidade)
+    }
+    for (const item of comInsumo) {
+      const c = porInsumo[item.insumo_id!]
+      if (!c) continue
+      const fator = Number(item.fator_contagem) || 1
+      const atual = ultimos[item.id]
+      if (!atual || c.data > atual.data) ultimos[item.id] = { qtd: c.qtd / fator, data: c.data }
+    }
+  }
+  return ultimos
+}
+
 export function ChecklistExecucao() {
   const { templateId } = useParams()
   const { profile, podeAcessarArea, podeEditar } = useAuth()
@@ -36,6 +111,9 @@ export function ChecklistExecucao() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // último lançamento por item (só checklists de contagem); undefined = carregando
+  const [ultimos, setUltimos] = useState<Record<string, Ultimo> | undefined>(undefined)
+  const [ultimosErro, setUltimosErro] = useState(false)
 
   useEffect(() => {
     load()
@@ -63,6 +141,15 @@ export function ChecklistExecucao() {
       .eq('template_id', templateId)
       .order('ordem')
     setItems(its ?? [])
+
+    // não segura o checklist: o histórico chega depois
+    if (tpl.contagem_estoque) {
+      setUltimos(undefined)
+      setUltimosErro(false)
+      buscarUltimos(tpl.id, hoje, ((its ?? []) as ChecklistItem[]).filter((i) => i.tipo_campo === 'checkbox'))
+        .then(setUltimos)
+        .catch(() => setUltimosErro(true))
+    }
 
     let { data: exec } = await db
       .from('checklist_execucoes')
@@ -234,6 +321,12 @@ export function ChecklistExecucao() {
         </div>
       )}
 
+      {ultimosErro && (
+        <p className="mt-4 text-xs text-ink-soft" role="status">
+          Não foi possível carregar os últimos lançamentos. O checklist funciona normalmente.
+        </p>
+      )}
+
       <div className="mt-4 divide-y divide-line rounded border border-line">
         {items.map((item) => (
           <ItemCampo
@@ -244,6 +337,13 @@ export function ChecklistExecucao() {
             onSalvar={(valor) => salvarResposta(item, valor)}
             contagem={!!template.contagem_estoque && item.tipo_campo !== 'quantidade'}
             onSalvarEstoque={(campo, v) => salvarEstoque(item, campo, v)}
+            ultimo={
+              template.contagem_estoque && item.tipo_campo === 'checkbox' && !ultimosErro
+                ? ultimos === undefined
+                  ? undefined
+                  : (ultimos[item.id] ?? null)
+                : false
+            }
             nomeAutor={
               profiles.find((p) => p.id === respostas[item.id]?.atualizado_por)?.nome
             }
@@ -304,8 +404,11 @@ function ItemCampo({
   nomeAutor,
   contagem,
   onSalvarEstoque,
+  ultimo,
 }: {
   contagem?: boolean
+  /** último lançamento: objeto, null = nunca houve, undefined = carregando, false = não mostrar */
+  ultimo?: Ultimo | null | false
   onSalvarEstoque?: (campo: 'quantidade' | 'entrada', valor: string) => void
   item: ChecklistItem
   resposta?: ChecklistResposta
@@ -430,7 +533,40 @@ function ItemCampo({
               />
             </label>
           ))}
+          {ultimo !== false && (
+            <UltimoLancamento ultimo={ultimo} unidade={item.unidade} digitado={contQtd} />
+          )}
         </div>
+      )}
+    </div>
+  )
+}
+
+function UltimoLancamento({
+  ultimo,
+  unidade,
+  digitado,
+}: {
+  ultimo: Ultimo | null | undefined
+  unidade?: string | null
+  digitado: string
+}) {
+  if (ultimo === undefined)
+    return <p className="col-span-2 text-[11px] text-ink-soft/70">buscando último lançamento…</p>
+  if (ultimo === null) return <p className="col-span-2 text-[11px] text-ink-soft">Sem lançamento anterior</p>
+  const [, mes, dia] = ultimo.data.split('-')
+  const n = digitado.trim() === '' ? NaN : Number(digitado)
+  const dif = Number.isFinite(n) ? Math.round((n - ultimo.qtd) * 1000) / 1000 : 0
+  return (
+    <div className="col-span-2 text-[11px] leading-snug">
+      <p className="text-ink-soft">
+        Último: {numBR(ultimo.qtd)}
+        {unidade ? ` ${unidade}` : ''} · {dia}/{mes}
+      </p>
+      {dif !== 0 && (
+        <p className={`font-medium ${dif < 0 ? 'text-warn' : 'text-ok'}`}>
+          {dif < 0 ? `−${numBR(-dif)}` : `+${numBR(dif)}`} desde o último lançamento
+        </p>
       )}
     </div>
   )

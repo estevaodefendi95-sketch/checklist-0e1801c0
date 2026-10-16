@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Ingredientes, Passos, SeletorPorcoes } from '../components/FichaPartes'
 import { Icone } from '../components/Icone'
-import { baseRendimento, unidadeRendimento, useFicha } from '../lib/fichas'
+import { Ficha, baseRendimento, unidadeRendimento, useFicha } from '../lib/fichas'
 import { registrarUsoFicha } from '../lib/armazenamento'
 import { LinhaVersao } from '../components/AvisoAtualizacao'
 
@@ -63,33 +63,67 @@ export function FichaCozinha() {
         {carregando && !dados && <p className="text-2xl">Carregando…</p>}
         {erro && <p className="text-2xl text-[#F08A6A]">{erro}</p>}
 
-        {dados && ficha && (
+        {dados && ficha && ficha.foto_url && (
+          <div className="space-y-10 [&_.divide-line>*]:border-[#3A312C]">
+            <div className="relative overflow-hidden rounded-2xl bg-[#2A2320]">
+              <img
+                src={ficha.foto_url}
+                alt=""
+                className="aspect-[4/3] w-full object-cover min-[900px]:aspect-auto min-[900px]:h-[46vh]"
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-5 pb-5 pt-20 sm:px-8 sm:pb-7">
+                <h1 className="font-display text-4xl font-semibold leading-tight text-white sm:text-5xl">{ficha.nome}</h1>
+              </div>
+            </div>
+            {/* tablet na horizontal: ingredientes fixos à esquerda, passos à direita */}
+            <div className="space-y-10 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[900px]:items-start min-[900px]:gap-10 min-[900px]:space-y-0">
+              <section className="min-[900px]:sticky min-[900px]:top-[104px] min-[900px]:max-h-[calc(100vh-120px)] min-[900px]:overflow-y-auto">
+                <h2 className="mb-3 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-[#B3A89E]">Ingredientes</h2>
+                <Ingredientes itens={dados.itens} fator={qtd ? qtd / baseRendimento(ficha) : 1} grande />
+              </section>
+              <div className="space-y-10">
+                <Preparo ficha={ficha} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {dados && ficha && !ficha.foto_url && (
           <div className="space-y-10 [&_.divide-line>*]:border-[#3A312C]">
             <h1 className="font-display text-4xl font-semibold leading-tight sm:text-5xl">{ficha.nome}</h1>
             <section>
               <h2 className="mb-3 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-[#B3A89E]">Ingredientes</h2>
               <Ingredientes itens={dados.itens} fator={qtd ? qtd / baseRendimento(ficha) : 1} grande />
             </section>
-            <section>
-              <h2 className="mb-4 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-[#B3A89E]">Modo de preparo</h2>
-              <Passos texto={ficha.modo_preparo} grande />
-            </section>
-            {ficha.montagem && (
-              <section>
-                <h2 className="mb-4 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-[#B3A89E]">Montagem</h2>
-                <Passos texto={ficha.montagem} grande />
-              </section>
-            )}
-            {ficha.conservacao && (
-              <section>
-                <h2 className="mb-2 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-[#B3A89E]">Conservação</h2>
-                <p className="whitespace-pre-line text-xl leading-relaxed">{ficha.conservacao}</p>
-              </section>
-            )}
+            <Preparo ficha={ficha} />
           </div>
         )}
         <LinhaVersao className="mt-16 text-center text-[#B3A89E]" />
       </div>
     </div>
+  )
+}
+
+/** modo de preparo, montagem e conservação */
+function Preparo({ ficha }: { ficha: Ficha }) {
+  return (
+    <>
+      <section>
+        <h2 className="mb-4 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-[#B3A89E]">Modo de preparo</h2>
+        <Passos texto={ficha.modo_preparo} grande />
+      </section>
+      {ficha.montagem && (
+        <section>
+          <h2 className="mb-4 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-[#B3A89E]">Montagem</h2>
+          <Passos texto={ficha.montagem} grande />
+        </section>
+      )}
+      {ficha.conservacao && (
+        <section>
+          <h2 className="mb-2 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-[#B3A89E]">Conservação</h2>
+          <p className="whitespace-pre-line text-xl leading-relaxed">{ficha.conservacao}</p>
+        </section>
+      )}
+    </>
   )
 }

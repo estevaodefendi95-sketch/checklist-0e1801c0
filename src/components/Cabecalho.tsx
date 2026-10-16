@@ -8,12 +8,15 @@ export function Cabecalho({
   subtitulo,
   voltar,
   acoes,
+  topo,
 }: {
   titulo: ReactNode
   subtitulo?: ReactNode
   /** destino do botão voltar, com o rótulo */
   voltar?: { para: string; rotulo?: string }
   acoes?: ReactNode
+  /** conteúdo entre o "voltar" e o título (ex.: foto) */
+  topo?: ReactNode
 }) {
   return (
     <header className="mb-6">
@@ -26,6 +29,7 @@ export function Cabecalho({
           {voltar.rotulo ?? 'voltar'}
         </Link>
       )}
+      {topo && <div className="mb-4">{topo}</div>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="titulo">{titulo}</h1>

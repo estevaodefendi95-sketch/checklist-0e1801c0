@@ -33,6 +33,32 @@ interface LinhaItem {
   observacao: string
 }
 
+const TIPOS_FOTO = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_FOTO = 5 * 1024 * 1024
+const LARGURA_FOTO = 1600
+
+/** reduz para 1600 px de largura (JPEG) quando a imagem é maior; senão devolve o arquivo como está */
+async function prepararFoto(arquivo: File): Promise<File> {
+  const img = await createImageBitmap(arquivo)
+  try {
+    if (img.width <= LARGURA_FOTO) return arquivo
+    const canvas = document.createElement('canvas')
+    canvas.width = LARGURA_FOTO
+    canvas.height = Math.round((img.height * LARGURA_FOTO) / img.width)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Não foi possível reduzir a imagem.')
+    // fundo branco para PNG/WEBP com transparência (JPEG não tem alfa)
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, 'image/jpeg', 0.85))
+    if (!blob) throw new Error('Não foi possível reduzir a imagem.')
+    return new File([blob], arquivo.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
+  } finally {
+    img.close()
+  }
+}
+
 const txt = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','))
 let seq = 0
 const novaChave = () => `n${++seq}`
@@ -60,6 +86,16 @@ export function FichaEditor() {
   const [itens, setItens] = useState<LinhaItem[]>([])
   const [idsOriginais, setIdsOriginais] = useState<string[]>([])
   const [foto, setFoto] = useState<File | null>(null)
+  const [removerFoto, setRemoverFoto] = useState(false)
+  const [preparandoFoto, setPreparandoFoto] = useState(false)
+  const [fotoErro, setFotoErro] = useState<string | null>(null)
+  const previaFoto = useMemo(() => (foto ? URL.createObjectURL(foto) : null), [foto])
+  useEffect(
+    () => () => {
+      if (previaFoto) URL.revokeObjectURL(previaFoto)
+    },
+    [previaFoto]
+  )
   const [f, setF] = useState({
     tipo: 'prato' as TipoFicha,
     nome: '',
@@ -80,7 +116,7 @@ export function FichaEditor() {
   const [base, setBase] = useState<{ f: typeof f; itens: LinhaItem[]; sel: string[] } | null>(null)
   const retrato = (x: { f: typeof f; itens: LinhaItem[]; sel: string[] }) =>
     JSON.stringify({ f: x.f, itens: x.itens.map(({ chave: _c, ...r }) => r), sel: [...x.sel].sort() })
-  const sujo = !!base && (!!foto || retrato({ f, itens, sel: selCardapios }) !== retrato(base))
+  const sujo = !!base && (!!foto || removerFoto || retrato({ f, itens, sel: selCardapios }) !== retrato(base))
   const { liberar } = useAlteracoesPendentes(sujo)
 
   function descartar() {
@@ -89,6 +125,8 @@ export function FichaEditor() {
     setItens(base.itens)
     setSelCardapios(base.sel)
     setFoto(null)
+    setRemoverFoto(false)
+    setFotoErro(null)
   }
 
   useEffect(() => {
@@ -192,6 +230,30 @@ export function FichaEditor() {
     setItens((p) => p.filter((x) => x.chave !== i.chave))
   }
 
+  // foto mostrada no bloco: a nova (prévia), a atual ou nenhuma
+  const fotoAtual = previaFoto ?? (removerFoto ? null : (original?.foto_url ?? null))
+
+  async function escolherFoto(arquivo?: File) {
+    if (!arquivo) return
+    setFotoErro(null)
+    if (!TIPOS_FOTO.includes(arquivo.type)) return setFotoErro('Use uma imagem JPG, PNG ou WEBP.')
+    if (arquivo.size > MAX_FOTO) return setFotoErro('A imagem passa de 5 MB. Escolha uma menor.')
+    setPreparandoFoto(true)
+    try {
+      setFoto(await prepararFoto(arquivo))
+      setRemoverFoto(false)
+    } catch (e) {
+      setFotoErro((e as Error).message || 'Não foi possível ler a imagem.')
+    }
+    setPreparandoFoto(false)
+  }
+  function tirarFoto() {
+    setFoto(null)
+    setFotoErro(null)
+    // só marca para remover se a ficha já tinha foto gravada
+    setRemoverFoto(!!original?.foto_url)
+  }
+
   async function salvar() {
     const nome = f.nome.trim()
     if (!nome) return alert('Informe o nome da ficha.')
@@ -232,6 +294,23 @@ export function FichaEditor() {
     }
 
     setSalvando(true)
+    setFotoErro(null)
+
+    // 0. foto primeiro: se o envio falhar, nada é gravado e o formulário fica como está
+    if (foto) {
+      const ext = foto.type === 'image/png' ? 'png' : foto.type === 'image/webp' ? 'webp' : 'jpg'
+      const path = `${id ?? 'nova-' + crypto.randomUUID()}/${Date.now()}.${ext}`
+      const up = await supabase.storage.from('fichas').upload(path, foto, { contentType: foto.type })
+      if (up.error) {
+        setSalvando(false)
+        setFotoErro('Não foi possível enviar a foto. Nada foi salvo. ' + up.error.message)
+        return
+      }
+      campos.foto_url = supabase.storage.from('fichas').getPublicUrl(path).data.publicUrl
+    } else if (removerFoto) {
+      campos.foto_url = null
+    }
+
     try {
       // 1. ficha (no update, o gatilho guarda a versão anterior com os itens antigos)
       let fichaId = id
@@ -244,18 +323,7 @@ export function FichaEditor() {
         if (r.error) throw r.error
       }
 
-      // 2. foto
-      if (foto && fichaId) {
-        const ext = foto.name.split('.').pop()?.toLowerCase() || 'jpg'
-        const path = `${fichaId}/${Date.now()}.${ext}`
-        const up = await supabase.storage.from('fichas').upload(path, foto, { contentType: foto.type })
-        if (up.error) throw new Error('A ficha foi salva, mas a foto não: ' + up.error.message)
-        const url = supabase.storage.from('fichas').getPublicUrl(path).data.publicUrl
-        const r = await db.from('fichas').update({ foto_url: url }).eq('id', fichaId)
-        if (r.error) throw r.error
-      }
-
-      // 3. itens: apaga os removidos, atualiza os que ficaram, insere os novos
+      // 2. itens: apaga os removidos, atualiza os que ficaram, insere os novos
       const linha = (i: LinhaItem, ordem: number) => ({
         ficha_id: fichaId,
         insumo_id: i.ref.tipo === 'insumo' ? i.ref.id : null,
@@ -282,7 +350,7 @@ export function FichaEditor() {
         if (r.error) throw r.error
       }
 
-      // 4. cardápios
+      // 3. cardápios
       const tirarCard = cardapiosOriginais.filter((c) => !selCardapios.includes(c))
       const porCard = selCardapios.filter((c) => !cardapiosOriginais.includes(c))
       if (tirarCard.length) {
@@ -332,6 +400,53 @@ export function FichaEditor() {
         acoes={sujo && <SeloAlteracoes />}
       />
       {erro && <Erro texto={erro} />}
+
+      <section className={`${cartaoCls} p-4 md:p-6`} aria-label="foto do prato">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="w-full sm:w-64 sm:shrink-0">
+            {fotoAtual ? (
+              <img src={fotoAtual} alt="prévia da foto" className="aspect-[4/3] w-full rounded-[14px] bg-paper-dim object-cover" />
+            ) : (
+              <div className="flex aspect-[4/3] w-full items-center justify-center rounded-[14px] bg-paper-dim px-4 text-center">
+                <span className="display text-xl text-ink-soft">{f.nome.trim() || 'sem foto'}</span>
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 space-y-2">
+            <h2 className="subtitulo">foto</h2>
+            <p className="apoio">
+              {foto
+                ? 'Nova foto: será enviada ao salvar.'
+                : removerFoto
+                  ? 'A foto será removida ao salvar.'
+                  : fotoAtual
+                    ? 'JPG, PNG ou WEBP, até 5 MB.'
+                    : 'Sem foto. JPG, PNG ou WEBP, até 5 MB.'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <label className={`${btnSecCls} cursor-pointer ${preparandoFoto || salvando ? 'pointer-events-none opacity-50' : ''}`}>
+                {preparandoFoto ? 'Preparando…' : fotoAtual ? 'Trocar foto' : 'Adicionar foto'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  disabled={preparandoFoto || salvando}
+                  onChange={(e) => {
+                    escolherFoto(e.target.files?.[0])
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              {fotoAtual && (
+                <button type="button" onClick={tirarFoto} disabled={salvando} className={btnPerigoCls}>
+                  Remover foto
+                </button>
+              )}
+            </div>
+            {fotoErro && <Erro texto={fotoErro} />}
+          </div>
+        </div>
+      </section>
 
       <section className={`${cartaoCls} space-y-3 p-4 md:p-6`}>
         <div className="flex flex-wrap gap-2">
@@ -461,15 +576,6 @@ export function FichaEditor() {
         <Campo label="utensílios">
           <textarea rows={2} value={f.utensilios} onChange={(e) => set('utensilios', e.target.value)} className={`${inputCls} py-2`} />
         </Campo>
-      </section>
-
-      <section className={`${cartaoCls} p-4 md:p-6`}>
-        <h2 className="subtitulo mb-3">foto</h2>
-        {original?.foto_url && !foto && (
-          <img src={original.foto_url} alt="" className="mb-2 max-h-48 rounded border border-line object-cover" />
-        )}
-        {foto && <img src={URL.createObjectURL(foto)} alt="" className="mb-2 max-h-48 rounded border border-line object-cover" />}
-        <input type="file" accept="image/*" onChange={(e) => setFoto(e.target.files?.[0] ?? null)} className="block min-h-[44px] text-sm" />
       </section>
 
       <BarraSalvar
