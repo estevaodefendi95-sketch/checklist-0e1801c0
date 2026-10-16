@@ -82,7 +82,9 @@ export function FichaHistorico({
 
   function descrever(i: FichaItem) {
     const n = nomes.get(i.insumo_id ?? i.sub_ficha_id ?? '') ?? '(item)'
-    return `${n}: ${numero(i.quantidade)} ${i.unidade}${i.grupo_escolha ? ` [${i.grupo_escolha}]` : ''}`
+    // perda só para quem vê custos; versões antigas não têm o campo (undefined = sem perda)
+    const perda = verCusto && Number(i.perda_pct) > 0 ? ` · perda ${numero(i.perda_pct!)}%` : ''
+    return `${n}: ${numero(i.quantidade)} ${i.unidade}${i.grupo_escolha ? ` [${i.grupo_escolha}]` : ''}${perda}`
   }
 
   /** o que mudou de `antes` (versão salva) para `depois` (versão seguinte ou atual) */
@@ -125,6 +127,7 @@ export function FichaHistorico({
               grupo_escolha: i.grupo_escolha,
               observacao: i.observacao,
               ordem: i.ordem,
+              perda_pct: i.perda_pct ?? null,
             }))
           )
         : { error: null }

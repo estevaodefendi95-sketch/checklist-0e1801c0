@@ -45,6 +45,8 @@ export interface FichaItem {
   grupo_escolha: string | null
   observacao: string | null
   ordem: number
+  /** perda deste prato sobre a linha (null = sem perda); a do produto fica no fator de correção do insumo */
+  perda_pct: number | null
 }
 
 /** item com o nome do insumo ou da preparação-base já resolvido */

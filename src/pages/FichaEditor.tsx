@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, db } from '../lib/supabase'
 import { usePermissoes } from '../context/PermissoesContext'
-import { lerNumero } from '../lib/formato'
+import { lerNumero, reais } from '../lib/formato'
 import { Carregando, Erro, inputCls, btnCls, btnSecCls, btnPerigoCls, cartaoCls, chipCls } from '../components/Estado'
 import { Cabecalho } from '../components/Cabecalho'
 import { BarraSalvar, SeloAlteracoes, useAlteracoesPendentes } from '../components/Alteracoes'
@@ -13,6 +13,7 @@ import {
   UNIDADES_ITEM,
   UNIDADES_RENDIMENTO,
   Unidade,
+  carregarCustoItens,
   carregarFicha,
 } from '../lib/fichas'
 
@@ -31,6 +32,7 @@ interface LinhaItem {
   unidade: Unidade
   grupo_escolha: string
   observacao: string
+  perda_pct: string // em branco = sem perda
 }
 
 const TIPOS_FOTO = ['image/jpeg', 'image/png', 'image/webp']
@@ -85,6 +87,10 @@ export function FichaEditor() {
   const [cardapiosOriginais, setCardapiosOriginais] = useState<string[]>([])
   const [itens, setItens] = useState<LinhaItem[]>([])
   const [idsOriginais, setIdsOriginais] = useState<string[]>([])
+  // custo de cada linha como está gravado no banco (custo_itens_ficha); null = sem acesso ou sem a função
+  const [custoItens, setCustoItens] = useState<Map<string, number | null> | null>(null)
+  // a ficha já tinha alguma perda por linha gravada (para saber se perda_pct precisa ir no salvamento)
+  const [tinhaPerdaLinha, setTinhaPerdaLinha] = useState(false)
   const [foto, setFoto] = useState<File | null>(null)
   const [removerFoto, setRemoverFoto] = useState(false)
   const [preparandoFoto, setPreparandoFoto] = useState(false)
@@ -183,8 +189,10 @@ export function FichaEditor() {
               unidade: i.unidade,
               grupo_escolha: i.grupo_escolha ?? '',
               observacao: i.observacao ?? '',
+              perda_pct: txt(i.perda_pct),
             }))
           setIdsOriginais(d.itens.map((i) => i.id))
+          setTinhaPerdaLinha(d.itens.some((i) => i.perda_pct != null))
           const sel = d.cardapios.map((c) => c.id)
           setCardapiosOriginais(sel)
           setF(fCarregado)
@@ -201,6 +209,11 @@ export function FichaEditor() {
     })()
   }, [id])
 
+  // custo por linha vem sempre do banco; as permissões podem chegar depois da ficha
+  useEffect(() => {
+    if (id && verCusto) carregarCustoItens(id).then(setCustoItens)
+  }, [id, verCusto])
+
   if (!carregado || carregando) return <Carregando />
   if (!pode('editar_fichas'))
     return <Erro texto="Você não tem permissão para editar fichas. Peça ao administrador." />
@@ -210,7 +223,7 @@ export function FichaEditor() {
   function addItem(o: Opcao) {
     setItens((p) => [
       ...p,
-      { chave: novaChave(), ref: o, quantidade: '', unidade: unidadeSugerida(o.unidade), grupo_escolha: '', observacao: '' },
+      { chave: novaChave(), ref: o, quantidade: '', unidade: unidadeSugerida(o.unidade), grupo_escolha: '', observacao: '', perda_pct: '' },
     ])
   }
   function mudarItem(chave: string, campos: Partial<LinhaItem>) {
@@ -264,6 +277,18 @@ export function FichaEditor() {
     const ruins = itens.filter((i) => !((lerNumero(i.quantidade) ?? 0) > 0))
     if (ruins.length) return alert(`Informe a quantidade de: ${ruins.map((i) => i.ref.nome).join(', ')}`)
     if (id && itens.some((i) => i.ref.id === id)) return alert('Uma ficha não pode usar a si mesma.')
+    if (verCusto) {
+      const perdaRuim = itens.filter((i) => {
+        if (!i.perda_pct.trim()) return false
+        const p = lerNumero(i.perda_pct)
+        return p == null || p < 0 || p > 99
+      })
+      if (perdaRuim.length)
+        return alert(`A perda deve ficar entre 0 e 99%: ${perdaRuim.map((i) => i.ref.nome).join(', ')}`)
+    }
+    // perda por linha só vai no salvamento para quem vê custos; quem não vê não mexe na perda gravada.
+    // Também fica de fora enquanto nenhuma linha usa perda (assim nada depende da coluna nova).
+    const enviarPerda = verCusto && (tinhaPerdaLinha || itens.some((i) => i.perda_pct.trim() !== ''))
 
     const campos: Record<string, unknown> = {
       tipo: f.tipo,
@@ -333,6 +358,8 @@ export function FichaEditor() {
         grupo_escolha: i.grupo_escolha.trim() || null,
         observacao: i.observacao.trim() || null,
         ordem,
+        // 0 ou em branco = sem perda (null)
+        ...(enviarPerda ? { perda_pct: lerNumero(i.perda_pct) || null } : {}),
       })
       const removidos = idsOriginais.filter((x) => !itens.some((i) => i.id === x))
       if (removidos.length) {
@@ -369,7 +396,9 @@ export function FichaEditor() {
       alert(
         msg.includes('fichas_tipo_nome_key') || msg.includes('duplicate key')
           ? 'Já existe uma ficha deste tipo com esse nome.'
-          : 'Não foi possível salvar: ' + msg
+          : msg.includes('perda_pct')
+            ? 'A perda por ingrediente ainda não está ativa no banco. Deixe a perda em branco ou peça ao administrador para aplicar o arquivo 7_perda_por_ingrediente.sql.'
+            : 'Não foi possível salvar: ' + msg
       )
     }
     setSalvando(false)
@@ -536,16 +565,41 @@ export function FichaEditor() {
                   <button onClick={() => tirar(i)} className="min-h-[44px] min-w-[44px] rounded border border-alert text-alert" aria-label="tirar">×</button>
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <input inputMode="decimal" placeholder="quantidade" value={i.quantidade} onChange={(e) => mudarItem(i.chave, { quantidade: e.target.value })} className={inputCls} />
-                <select value={i.unidade} onChange={(e) => mudarItem(i.chave, { unidade: e.target.value as Unidade })} className={inputCls}>
-                  {UNIDADES_ITEM.map((u) => (
-                    <option key={u}>{u}</option>
-                  ))}
-                </select>
-                <input placeholder="grupo de escolha (opcional)" value={i.grupo_escolha} onChange={(e) => mudarItem(i.chave, { grupo_escolha: e.target.value })} className={inputCls} />
-                <input placeholder="observação" value={i.observacao} onChange={(e) => mudarItem(i.chave, { observacao: e.target.value })} className={inputCls} />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className={`grid gap-2 ${verCusto ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <input inputMode="decimal" placeholder="quantidade" aria-label="quantidade" value={i.quantidade} onChange={(e) => mudarItem(i.chave, { quantidade: e.target.value })} className={inputCls} />
+                  <select value={i.unidade} aria-label="unidade" onChange={(e) => mudarItem(i.chave, { unidade: e.target.value as Unidade })} className={inputCls}>
+                    {UNIDADES_ITEM.map((u) => (
+                      <option key={u}>{u}</option>
+                    ))}
+                  </select>
+                  {verCusto && (
+                    <label className="relative block">
+                      <span className="sr-only">perda %</span>
+                      <input
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={i.perda_pct}
+                        onChange={(e) => mudarItem(i.chave, { perda_pct: e.target.value })}
+                        className={`${inputCls} pr-16`}
+                      />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-ink-soft" aria-hidden>
+                        % perda
+                      </span>
+                    </label>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input placeholder="grupo de escolha (opcional)" aria-label="grupo de escolha" value={i.grupo_escolha} onChange={(e) => mudarItem(i.chave, { grupo_escolha: e.target.value })} className={inputCls} />
+                  <input placeholder="observação" aria-label="observação" value={i.observacao} onChange={(e) => mudarItem(i.chave, { observacao: e.target.value })} className={inputCls} />
+                </div>
               </div>
+              {verCusto && (
+                <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-ink-soft">
+                  <span>Perda deste prato. Perda do produto fica no fator de correção do insumo.</span>
+                  <CustoLinha item={i} base={base?.itens.find((b) => b.chave === i.chave)} custos={custoItens} />
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -594,6 +648,31 @@ export function FichaEditor() {
         }
       />
     </div>
+  )
+}
+
+/** custo da linha como está gravado (custo_itens_ficha, já com a perda); nada é calculado aqui */
+function CustoLinha({
+  item,
+  base,
+  custos,
+}: {
+  item: LinhaItem
+  base?: LinhaItem
+  custos: Map<string, number | null> | null
+}) {
+  if (!custos) return null // sem acesso ou função ainda não criada no banco
+  if (!item.id || !custos.has(item.id)) return <span>custo aparece depois de salvar</span>
+  const valor = reais(custos.get(item.id))
+  const mudou = !base || JSON.stringify({ ...item, chave: '' }) !== JSON.stringify({ ...base, chave: '' })
+  return mudou ? (
+    <span>
+      custo salvo: <b className="font-medium text-ink">{valor}</b> · atualiza ao salvar
+    </span>
+  ) : (
+    <span>
+      custo da linha: <b className="font-medium text-ink">{valor}</b>
+    </span>
   )
 }
 
