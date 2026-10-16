@@ -23,79 +23,85 @@ function abaixoDoMinimo(item: ChecklistItem, valor?: string | null) {
   )
 }
 
-/** último lançamento de contagem de um item: quantidade na unidade do item e data (yyyy-MM-dd) */
-interface Ultimo {
+/**
+ * Referência de estoque de um item, na unidade de contagem do item: a última
+ * contagem (data da execução e horário da resposta) e as entradas lançadas
+ * depois desse horário, até ontem. A entrada de hoje vem do próprio checklist.
+ */
+interface Referencia {
   qtd: number
   data: string
+  horario: number
+  entradas: number
 }
 
 const numBR = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
+const ms = (iso: string) => new Date(iso).getTime()
 
 /**
- * Último lançamento de cada item de um checklist de contagem: a resposta mais
- * recente (quantidade) entre as últimas 30 execuções concluídas do modelo e,
- * para itens ligados a insumo, a última estoque_contagens, se for mais nova.
+ * Referências dos itens de um checklist de contagem. Uma consulta às respostas
+ * das execuções concluídas do modelo e, só se houver item ligado a insumo, uma
+ * a estoque_entradas. Não considera vendas (módulo ainda inativo).
  */
-async function buscarUltimos(
+async function buscarReferencias(
   templateId: string,
   antesDe: string,
   itens: ChecklistItem[]
-): Promise<Record<string, Ultimo>> {
-  const execs = await db
-    .from('checklist_execucoes')
-    .select('id,data')
-    .eq('template_id', templateId)
-    .eq('status', 'concluido')
-    .lt('data', antesDe)
-    .order('data', { ascending: false })
-    .limit(30)
-  if (execs.error) throw execs.error
-  const lista = (execs.data ?? []) as { id: string; data: string }[]
-  const dataExec = Object.fromEntries(lista.map((e) => [e.id, e.data]))
+): Promise<Record<string, Referencia>> {
+  const r = await db
+    .from('checklist_respostas')
+    .select('item_id,quantidade,entrada,updated_at,checklist_execucoes!inner(data)')
+    .eq('checklist_execucoes.template_id', templateId)
+    .eq('checklist_execucoes.status', 'concluido')
+    .lt('checklist_execucoes.data', antesDe)
+    .or('quantidade.not.is.null,entrada.not.is.null')
+    .order('updated_at', { ascending: false })
+    .limit(1000)
+  if (r.error) throw r.error
+  const linhas = (r.data ?? []) as unknown as {
+    item_id: string
+    quantidade: number | null
+    entrada: number | null
+    updated_at: string
+    checklist_execucoes: { data: string }
+  }[]
 
-  const ultimos: Record<string, Ultimo> = {}
-  // em lotes de 10 execuções (bem abaixo do limite de 1000 linhas por consulta),
-  // da mais nova para a mais antiga, até achar todos os itens
-  for (let i = 0; i < lista.length && Object.keys(ultimos).length < itens.length; i += 10) {
-    const lote = lista.slice(i, i + 10).map((e) => e.id)
-    const r = await db
-      .from('checklist_respostas')
-      .select('item_id,execucao_id,quantidade')
-      .in('execucao_id', lote)
-      .not('quantidade', 'is', null)
-    if (r.error) throw r.error
-    for (const x of (r.data ?? []) as { item_id: string; execucao_id: string; quantidade: number }[]) {
-      const data = dataExec[x.execucao_id]
-      const atual = ultimos[x.item_id]
-      if (!atual || data > atual.data) ultimos[x.item_id] = { qtd: Number(x.quantidade), data }
+  const refs: Record<string, Referencia> = {}
+  // da mais recente para a mais antiga: a primeira com quantidade é a última contagem
+  for (const x of linhas) {
+    if (x.quantidade == null || refs[x.item_id]) continue
+    refs[x.item_id] = {
+      qtd: Number(x.quantidade),
+      data: x.checklist_execucoes.data,
+      horario: ms(x.updated_at),
+      entradas: 0,
     }
   }
+  // entradas lançadas depois do horário da contagem (a do mesmo horário não entra)
+  for (const x of linhas) {
+    const ref = refs[x.item_id]
+    if (ref && x.entrada != null && ms(x.updated_at) > ref.horario) ref.entradas += Number(x.entrada)
+  }
 
-  const comInsumo = itens.filter((i) => i.insumo_id)
-  if (comInsumo.length) {
-    const r = await db
-      .from('estoque_contagens')
-      .select('insumo_id,data,quantidade')
-      .in('insumo_id', [...new Set(comInsumo.map((i) => i.insumo_id))])
-      .order('data', { ascending: false })
+  const ligados = itens.filter((i) => i.insumo_id && refs[i.id])
+  if (ligados.length) {
+    const desde = Math.min(...ligados.map((i) => refs[i.id].horario))
+    const e = await db
+      .from('estoque_entradas')
+      .select('insumo_id,quantidade,criado_em')
+      .in('insumo_id', [...new Set(ligados.map((i) => i.insumo_id))])
+      .gt('criado_em', new Date(desde).toISOString())
       .limit(1000)
-    if (r.error) throw r.error
-    // soma as contagens do dia mais recente de cada insumo (como v_contagens)
-    const porInsumo: Record<string, Ultimo> = {}
-    for (const x of (r.data ?? []) as { insumo_id: string; data: string; quantidade: number }[]) {
-      const atual = porInsumo[x.insumo_id]
-      if (!atual) porInsumo[x.insumo_id] = { qtd: Number(x.quantidade), data: x.data }
-      else if (atual.data === x.data) atual.qtd += Number(x.quantidade)
-    }
-    for (const item of comInsumo) {
-      const c = porInsumo[item.insumo_id!]
-      if (!c) continue
+    if (e.error) throw e.error
+    const entradas = (e.data ?? []) as { insumo_id: string; quantidade: number; criado_em: string }[]
+    for (const item of ligados) {
+      const ref = refs[item.id]
       const fator = Number(item.fator_contagem) || 1
-      const atual = ultimos[item.id]
-      if (!atual || c.data > atual.data) ultimos[item.id] = { qtd: c.qtd / fator, data: c.data }
+      for (const x of entradas)
+        if (x.insumo_id === item.insumo_id && ms(x.criado_em) > ref.horario) ref.entradas += Number(x.quantidade) / fator
     }
   }
-  return ultimos
+  return refs
 }
 
 export function ChecklistExecucao() {
@@ -111,9 +117,9 @@ export function ChecklistExecucao() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  // último lançamento por item (só checklists de contagem); undefined = carregando
-  const [ultimos, setUltimos] = useState<Record<string, Ultimo> | undefined>(undefined)
-  const [ultimosErro, setUltimosErro] = useState(false)
+  // referência de estoque por item (só checklists de contagem); undefined = carregando
+  const [refs, setRefs] = useState<Record<string, Referencia> | undefined>(undefined)
+  const [refsErro, setRefsErro] = useState(false)
 
   useEffect(() => {
     load()
@@ -144,11 +150,11 @@ export function ChecklistExecucao() {
 
     // não segura o checklist: o histórico chega depois
     if (tpl.contagem_estoque) {
-      setUltimos(undefined)
-      setUltimosErro(false)
-      buscarUltimos(tpl.id, hoje, ((its ?? []) as ChecklistItem[]).filter((i) => i.tipo_campo === 'checkbox'))
-        .then(setUltimos)
-        .catch(() => setUltimosErro(true))
+      setRefs(undefined)
+      setRefsErro(false)
+      buscarReferencias(tpl.id, hoje, ((its ?? []) as ChecklistItem[]).filter((i) => i.tipo_campo === 'checkbox'))
+        .then(setRefs)
+        .catch(() => setRefsErro(true))
     }
 
     let { data: exec } = await db
@@ -303,7 +309,7 @@ export function ChecklistExecucao() {
       </p>
       {execucao?.status === 'concluido' && (
         <p className="mb-4 inline-block rounded bg-ok-soft px-2 py-0.5 text-xs text-ok">
-          concluído {execucao.horario_fim && format(new Date(execucao.horario_fim), 'às HH:mm')}
+          concluído{execucao.horario_fim && ' às ' + format(new Date(execucao.horario_fim), 'HH:mm')}
         </p>
       )}
 
@@ -321,13 +327,16 @@ export function ChecklistExecucao() {
         </div>
       )}
 
-      {ultimosErro && (
+      {refsErro && (
         <p className="mt-4 text-xs text-ink-soft" role="status">
-          Não foi possível carregar os últimos lançamentos. O checklist funciona normalmente.
+          Não foi possível carregar a referência de estoque. O checklist funciona normalmente.
         </p>
       )}
+      {template.contagem_estoque && !refsErro && (
+        <p className="mt-4 text-[11px] text-ink-soft/70">referência estimada, sem vendas</p>
+      )}
 
-      <div className="mt-4 divide-y divide-line rounded border border-line">
+      <div className={`${template.contagem_estoque ? 'mt-1' : 'mt-4'} divide-y divide-line rounded border border-line`}>
         {items.map((item) => (
           <ItemCampo
             key={item.id}
@@ -337,11 +346,11 @@ export function ChecklistExecucao() {
             onSalvar={(valor) => salvarResposta(item, valor)}
             contagem={!!template.contagem_estoque && item.tipo_campo !== 'quantidade'}
             onSalvarEstoque={(campo, v) => salvarEstoque(item, campo, v)}
-            ultimo={
-              template.contagem_estoque && item.tipo_campo === 'checkbox' && !ultimosErro
-                ? ultimos === undefined
+            referencia={
+              template.contagem_estoque && item.tipo_campo === 'checkbox' && !refsErro
+                ? refs === undefined
                   ? undefined
-                  : (ultimos[item.id] ?? null)
+                  : (refs[item.id] ?? null)
                 : false
             }
             nomeAutor={
@@ -404,11 +413,11 @@ function ItemCampo({
   nomeAutor,
   contagem,
   onSalvarEstoque,
-  ultimo,
+  referencia,
 }: {
   contagem?: boolean
-  /** último lançamento: objeto, null = nunca houve, undefined = carregando, false = não mostrar */
-  ultimo?: Ultimo | null | false
+  /** referência de estoque: objeto, null = sem contagem anterior, undefined = carregando, false = não mostrar */
+  referencia?: Referencia | null | false
   onSalvarEstoque?: (campo: 'quantidade' | 'entrada', valor: string) => void
   item: ChecklistItem
   resposta?: ChecklistResposta
@@ -435,9 +444,20 @@ function ItemCampo({
 
   const abaixo = abaixoDoMinimo(item, qtd)
 
+  // estimado = última contagem + entradas desde então + entrada digitada hoje
+  const num = (t: string) => (t.trim() === '' ? NaN : Number(t))
+  const entHoje = num(contEnt)
+  const estimado = referencia
+    ? referencia.qtd + referencia.entradas + (Number.isFinite(entHoje) ? entHoje : 0)
+    : null
+  const contado = num(contQtd)
+  const dif =
+    estimado != null && Number.isFinite(contado) ? Math.round((contado - estimado) * 1000) / 1000 : 0
+  const mostrarRef = contagem && referencia !== false
+
   return (
     <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <div className="min-w-0">
+      <div className="min-w-0 sm:flex-1">
         <span className="text-sm break-words">
           {item.nome_campo}
           {item.obrigatorio && <span className="text-alert"> *</span>}
@@ -511,6 +531,15 @@ function ItemCampo({
         />
       )}
 
+      {mostrarRef && (
+        <ColunaReferencia
+          referencia={referencia}
+          estimado={estimado}
+          unidade={item.unidade}
+          apagada={somenteLeitura}
+        />
+      )}
+
       {contagem && (
         <div className="grid w-full grid-cols-2 gap-2 sm:w-44 sm:shrink-0">
           {(
@@ -533,8 +562,10 @@ function ItemCampo({
               />
             </label>
           ))}
-          {ultimo !== false && (
-            <UltimoLancamento ultimo={ultimo} unidade={item.unidade} digitado={contQtd} />
+          {mostrarRef && !somenteLeitura && dif !== 0 && (
+            <p className={`col-span-2 text-[11px] font-medium ${dif < 0 ? 'text-warn' : 'text-ok'}`}>
+              {dif < 0 ? `−${numBR(-dif)}` : `+${numBR(dif)}`} em relação ao estimado
+            </p>
           )}
         </div>
       )}
@@ -542,32 +573,42 @@ function ItemCampo({
   )
 }
 
-function UltimoLancamento({
-  ultimo,
+/** coluna de referência (tablet) ou linha única acima dos campos (celular) */
+function ColunaReferencia({
+  referencia,
+  estimado,
   unidade,
-  digitado,
+  apagada,
 }: {
-  ultimo: Ultimo | null | undefined
+  referencia: Referencia | null | undefined
+  estimado: number | null
   unidade?: string | null
-  digitado: string
+  apagada: boolean
 }) {
-  if (ultimo === undefined)
-    return <p className="col-span-2 text-[11px] text-ink-soft/70">buscando último lançamento…</p>
-  if (ultimo === null) return <p className="col-span-2 text-[11px] text-ink-soft">Sem lançamento anterior</p>
-  const [, mes, dia] = ultimo.data.split('-')
-  const n = digitado.trim() === '' ? NaN : Number(digitado)
-  const dif = Number.isFinite(n) ? Math.round((n - ultimo.qtd) * 1000) / 1000 : 0
+  const cor = apagada ? 'text-ink-soft/60' : 'text-ink-soft'
+  if (referencia === undefined)
+    return <p className="text-[11px] text-ink-soft/70 sm:w-28 sm:shrink-0">buscando referência…</p>
+  if (referencia === null)
+    return <p className={`text-[11px] ${cor} sm:w-28 sm:shrink-0`}>sem referência</p>
+  const [, mes, dia] = referencia.data.split('-')
+  const un = unidade ? ` ${unidade}` : ''
+  const contagem = `${numBR(referencia.qtd)}${un} · ${dia}/${mes}`
+  const ent = referencia.entradas
   return (
-    <div className="col-span-2 text-[11px] leading-snug">
-      <p className="text-ink-soft">
-        Último: {numBR(ultimo.qtd)}
-        {unidade ? ` ${unidade}` : ''} · {dia}/{mes}
+    <>
+      <p className={`text-[11px] ${cor} sm:hidden`}>
+        ref. {contagem}
+        {ent > 0 && ` · +${numBR(ent)} ent.`} · ≈ {numBR(estimado ?? referencia.qtd)}
+        {un}
       </p>
-      {dif !== 0 && (
-        <p className={`font-medium ${dif < 0 ? 'text-warn' : 'text-ok'}`}>
-          {dif < 0 ? `−${numBR(-dif)}` : `+${numBR(dif)}`} desde o último lançamento
+      <div className={`hidden text-[11px] leading-snug ${cor} sm:block sm:w-28 sm:shrink-0`}>
+        <p>{contagem}</p>
+        {ent > 0 && <p>+{numBR(ent)} entradas</p>}
+        <p>
+          ≈ {numBR(estimado ?? referencia.qtd)}
+          {un} estimado
         </p>
-      )}
-    </div>
+      </div>
+    </>
   )
 }
