@@ -1332,6 +1332,7 @@ export type Database = {
           due_day: number | null
           id: string
           is_active: boolean | null
+          issuer_cnpj: string | null
           last_four_digits: string | null
           name: string
           statement_match_pattern: string | null
@@ -1346,6 +1347,7 @@ export type Database = {
           due_day?: number | null
           id?: string
           is_active?: boolean | null
+          issuer_cnpj?: string | null
           last_four_digits?: string | null
           name: string
           statement_match_pattern?: string | null
@@ -1360,6 +1362,7 @@ export type Database = {
           due_day?: number | null
           id?: string
           is_active?: boolean | null
+          issuer_cnpj?: string | null
           last_four_digits?: string | null
           name?: string
           statement_match_pattern?: string | null
