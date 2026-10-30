@@ -31,7 +31,7 @@ function ativo(to: string, pathname: string) {
 
 export function Layout({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth()
-  const { pode } = usePermissoes()
+  const { pode, master } = usePermissoes()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [recolhido, setRecolhido] = useState(() => ler<boolean>(RECOLHIDO, false))
@@ -56,11 +56,9 @@ export function Layout({ children }: { children: ReactNode }) {
     ...(pode('lancar_estoque')
       ? [{ to: '#estoque', rotulo: 'Estoque', icone: 'estoque', grupo: 'breve', emBreve: true } as Item]
       : []),
+    ...(master ? [{ to: '/usuarios', rotulo: 'Usuários', icone: 'usuarios', grupo: 'admin' } as Item] : []),
     ...(admin
-      ? ([
-          { to: '/admin/usuarios', rotulo: 'Usuários e permissões', icone: 'usuarios', grupo: 'admin' },
-          { to: '/admin/templates', rotulo: 'Áreas e modelos', icone: 'modelos', grupo: 'admin' },
-        ] as Item[])
+      ? [{ to: '/admin/templates', rotulo: 'Áreas e modelos', icone: 'modelos', grupo: 'admin' } as Item]
       : []),
   ]
 

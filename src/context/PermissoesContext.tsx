@@ -21,31 +21,39 @@ const vazio: Mapa = {
   lancar_estoque: false,
 }
 
-const Ctx = createContext<{ pode: (p: Permissao) => boolean; carregado: boolean }>({
+const Ctx = createContext<{ pode: (p: Permissao) => boolean; master: boolean; carregado: boolean }>({
   pode: () => false,
+  master: false,
   carregado: false,
 })
 
 export function PermissoesProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth()
   const [mapa, setMapa] = useState<Mapa>(vazio)
+  // administrador master: único que gerencia usuários (checklist.eh_master)
+  const [master, setMaster] = useState(false)
   const [carregado, setCarregado] = useState(false)
 
   useEffect(() => {
     if (!profile) {
       setMapa(vazio)
+      setMaster(false)
       setCarregado(false)
       return
     }
     let ativo = true
-    Promise.all(
-      PERMISSOES.map(async ({ key }) => {
-        const { data } = await db.rpc('tem_permissao', { p: key })
-        return [key, data === true] as const
-      })
-    ).then((pares) => {
+    Promise.all([
+      Promise.all(
+        PERMISSOES.map(async ({ key }) => {
+          const { data } = await db.rpc('tem_permissao', { p: key })
+          return [key, data === true] as const
+        })
+      ),
+      db.rpc('eh_master').then(({ data }: { data: unknown }) => data === true),
+    ]).then(([pares, eMaster]) => {
       if (!ativo) return
       setMapa(Object.fromEntries(pares) as Mapa)
+      setMaster(eMaster)
       setCarregado(true)
     })
     return () => {
@@ -54,7 +62,7 @@ export function PermissoesProvider({ children }: { children: ReactNode }) {
   }, [profile?.id])
 
   const pode = (p: Permissao) => profile?.role === 'admin' || mapa[p]
-  return <Ctx.Provider value={{ pode, carregado }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ pode, master, carregado }}>{children}</Ctx.Provider>
 }
 
 export function usePermissoes() {

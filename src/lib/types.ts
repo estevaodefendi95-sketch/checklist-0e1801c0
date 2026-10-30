@@ -12,6 +12,9 @@ export interface Profile {
   nome: string
   role: UserRole
   areas_permitidas: string[]
+  is_master?: boolean
+  ativo?: boolean
+  desativado_em?: string | null
 }
 
 export interface ChecklistTemplate {

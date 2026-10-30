@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { PermissoesProvider } from './context/PermissoesContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -10,7 +10,7 @@ import { Historico } from './pages/Historico'
 import { Relatorio } from './pages/Relatorio'
 import { RelatorioEstoque } from './pages/RelatorioEstoque'
 import { AdminTemplates } from './pages/AdminTemplates'
-import { AdminUsuarios } from './pages/AdminUsuarios'
+import { Usuarios } from './pages/Usuarios'
 import { Insumos } from './pages/Insumos'
 import { Fornecedores } from './pages/Fornecedores'
 import { Cardapios } from './pages/Cardapios'
@@ -48,7 +48,9 @@ const router = createBrowserRouter([
   // modo cozinha: tela cheia, sem menu
   { path: '/fichas/:id/cozinha', element: <ProtectedRoute><FichaCozinha /></ProtectedRoute> },
   { path: '/admin/templates', element: <Protected admin><AdminTemplates /></Protected> },
-  { path: '/admin/usuarios', element: <Protected admin><AdminUsuarios /></Protected> },
+  // só o administrador master (a própria tela confere eh_master e volta ao início se não for)
+  { path: '/usuarios', element: <Protected><Usuarios /></Protected> },
+  { path: '/admin/usuarios', element: <Navigate to="/usuarios" replace /> },
 ])
 
 export default function App() {
