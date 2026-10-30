@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -290,6 +291,18 @@ export function Relatorio() {
   return (
     <div className="mx-auto max-w-md">
       <h1 className="titulo mb-6">relatório</h1>
+      <Link
+        to="/relatorio/estoque"
+        className="mb-8 flex min-h-[56px] items-center justify-between rounded border border-line px-4 py-3 text-sm hover:border-ink"
+      >
+        <span>
+          <span className="font-medium">Estoque</span>
+          <span className="block text-xs text-ink-soft">
+            por dia, por item, consumo aparente, última contagem e abaixo do mínimo
+          </span>
+        </span>
+        <span aria-hidden>→</span>
+      </Link>
       <p className="mb-6 text-sm text-ink-soft">
         Gera um PDF com todos os checklists do dia escolhido, itens, respostas e aprovação.
       </p>

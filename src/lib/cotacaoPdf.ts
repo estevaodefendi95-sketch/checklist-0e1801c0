@@ -14,20 +14,20 @@ export interface Logo {
   altura: number
 }
 
-const RESTAURANTE = 'Paggio Gastro Bar, Franca/SP'
+export const RESTAURANTE = 'Paggio Gastro Bar, Franca/SP'
 const RODAPE = 'Por favor, devolva com o preço unitário e a validade da proposta.'
 
 // paleta da marca (mocha)
-const TINTA: [number, number, number] = [42, 33, 28]
-const APOIO: [number, number, number] = [110, 98, 90]
-const MOCHA: [number, number, number] = [92, 74, 62]
-const MOCHA_CLARO: [number, number, number] = [239, 231, 224]
-const LINHA_ALTERNADA: [number, number, number] = [250, 247, 244]
+export const TINTA: [number, number, number] = [42, 33, 28]
+export const APOIO: [number, number, number] = [110, 98, 90]
+export const MOCHA: [number, number, number] = [92, 74, 62]
+export const MOCHA_CLARO: [number, number, number] = [239, 231, 224]
+export const LINHA_ALTERNADA: [number, number, number] = [250, 247, 244]
 
-const MARGEM = 15
-const LARGURA_A4 = 210
-const ALTURA_A4 = 297
-const RESERVA_RODAPE = 20
+export const MARGEM = 15
+export const LARGURA_A4 = 210
+export const ALTURA_A4 = 297
+export const RESERVA_RODAPE = 20
 
 /** "Hortifrúti São João" → "hortifruti-sao-joao" */
 export function slugArquivo(texto: string) {

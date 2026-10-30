@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard'
 import { ChecklistExecucao } from './pages/ChecklistExecucao'
 import { Historico } from './pages/Historico'
 import { Relatorio } from './pages/Relatorio'
+import { RelatorioEstoque } from './pages/RelatorioEstoque'
 import { AdminTemplates } from './pages/AdminTemplates'
 import { AdminUsuarios } from './pages/AdminUsuarios'
 import { Insumos } from './pages/Insumos'
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
   { path: '/checklist/:templateId', element: <Protected><ChecklistExecucao /></Protected> },
   { path: '/historico', element: <Protected><Historico /></Protected> },
   { path: '/relatorio', element: <Protected><Relatorio /></Protected> },
+  { path: '/relatorio/estoque', element: <Protected><RelatorioEstoque /></Protected> },
   { path: '/insumos', element: <Protected><Insumos /></Protected> },
   { path: '/fornecedores', element: <Protected><Fornecedores /></Protected> },
   { path: '/cardapios', element: <Protected><Cardapios /></Protected> },
