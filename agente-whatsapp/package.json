@@ -1,0 +1,1 @@
+{ "name": "agente-whatsapp-paggio", "version": "1.0.0", "private": true, "type": "module", "scripts": { "start": "node agente.mjs" }, "dependencies": { "whatsapp-web.js": "^1.26.0" } }

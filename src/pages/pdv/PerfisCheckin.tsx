@@ -51,13 +51,13 @@ export function PerfisCheckin({
         <span className="text-sm font-semibold">Quem chegou</span>
         <span className="rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold text-brand">{pessoas} {pessoas === 1 ? 'pessoa' : 'pessoas'}</span>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid auto-rows-fr grid-cols-2 gap-2">
         {perfis.map((p) => {
           const q = qtds[p.id] ?? 0
           return (
-            <div key={p.id} className={`relative flex flex-col items-center rounded-2xl border-2 p-3 text-center transition-colors ${q > 0 ? 'border-brand bg-brand-soft' : 'border-line bg-surface'}`}>
+            <div key={p.id} className={`relative flex flex-col items-center justify-between rounded-2xl border-2 p-3 text-center transition-colors [&:last-child:nth-child(odd)]:col-span-2 ${q > 0 ? 'border-brand bg-brand-soft' : 'border-line bg-surface'}`}>
               <button type="button" onClick={() => mudar(p.id, 1)} className="w-full">
-                <span className="block text-base font-semibold leading-tight">{p.nome}</span>
+                <span className="flex min-h-[2.5rem] items-center justify-center text-base font-semibold leading-tight">{p.nome}</span>
                 <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${p.percentual === 0 ? 'bg-emerald-100 text-emerald-800' : p.percentual < 100 ? 'bg-amber-100 text-amber-800' : 'bg-surface text-ink-soft ring-1 ring-line'}`}>
                   {p.percentual === 0 ? 'não paga' : p.percentual < 100 ? `paga ${p.percentual}%` : 'paga inteiro'}
                 </span>

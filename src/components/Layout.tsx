@@ -60,6 +60,8 @@ export function Layout({ children }: { children: ReactNode }) {
       ? [
           { to: '/pdv/comandas', rotulo: 'Comandas', curto: 'Comandas', icone: 'nota', grupo: 'atendimento' } as Item,
           { to: '/pdv/crm', rotulo: 'Clientes e CRM', curto: 'CRM', icone: 'crm', grupo: 'atendimento' } as Item,
+          { to: '/pdv/reservas', rotulo: 'Reservas', curto: 'Reservas', icone: 'checklist', grupo: 'atendimento' } as Item,
+          { to: '/whatsapp', rotulo: 'WhatsApp', curto: 'WhatsApp', icone: 'chat', grupo: 'atendimento' } as Item,
         ]
       : []),
     ...(pode('pdv_caixa') ? [{ to: '/pdv/caixa', rotulo: 'Caixa', icone: 'caixa', grupo: 'atendimento' } as Item] : []),

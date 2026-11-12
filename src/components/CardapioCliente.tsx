@@ -8,8 +8,8 @@ export interface CardCat { id: string; nome: string }
 export interface CardProd { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; personalizavel?: boolean }
 const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, lateral, qtdDe, onAdd, onMenos, acoes, rodape, sobrepor }: {
-  tema: CardTema; mesa: string; boasVindas?: string | null; categorias: CardCat[]; produtos: CardProd[]; lateral: boolean
+export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, lateral, qtdDe, onAdd, onMenos, acoes, rodape, sobrepor, somenteLeitura }: {
+  somenteLeitura?: boolean; tema: CardTema; mesa?: string; boasVindas?: string | null; categorias: CardCat[]; produtos: CardProd[]; lateral: boolean
   qtdDe: (id: string) => number; onAdd: (p: CardProd) => void; onMenos: (id: string) => void
   acoes?: ReactNode; rodape?: ReactNode; sobrepor?: ReactNode
 }) {
@@ -42,7 +42,7 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
     const foto = fotos ? (p.foto_url
       ? <img src={p.foto_url} alt="" loading="lazy" className={vertical ? 'aspect-[4/3] w-full object-cover' : 'h-24 w-24 shrink-0 rounded-xl object-cover'} />
       : <span className={`grid place-items-center text-3xl font-semibold ${vertical ? 'aspect-[4/3] w-full' : 'h-24 w-24 shrink-0 rounded-xl'}`} style={{ background: 'color-mix(in srgb, var(--p) 10%, white)', color: 'var(--p)' }}>{p.nome.slice(0, 1).toUpperCase()}</span>) : null
-    const controle = q > 0 ? (
+    const controle = somenteLeitura ? null : q > 0 ? (
       <span className="flex items-center gap-2 rounded-full bg-white px-1 py-1 shadow" onClick={(e) => e.stopPropagation()}>
         <button className="grid h-8 w-8 place-items-center rounded-full border text-lg" onClick={() => onMenos(p.id)} aria-label="Remover um">−</button>
         <b className="min-w-4 text-center text-sm">{q}</b>
@@ -53,7 +53,7 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
     )
     return (
       <li className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
-        <div role="button" tabIndex={0} onClick={() => onAdd(p)} onKeyDown={(e) => e.key === 'Enter' && onAdd(p)} className={`flex cursor-pointer ${vertical ? 'h-full flex-col' : 'items-stretch gap-3 p-3'}`}>
+        <div role="button" tabIndex={0} onClick={() => !somenteLeitura && onAdd(p)} onKeyDown={(e) => e.key === 'Enter' && !somenteLeitura && onAdd(p)} className={`flex ${somenteLeitura ? '' : 'cursor-pointer'} ${vertical ? 'h-full flex-col' : 'items-stretch gap-3 p-3'}`}>
           {vertical && foto}
           <div className={`flex min-w-0 flex-1 flex-col ${vertical ? 'p-3' : ''}`}>
             <b className="leading-tight">{p.nome}</b>
@@ -76,7 +76,7 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
       <header className="shrink-0 px-4 pb-3 pt-4" style={{ background: 'var(--p)', color: '#fff' }}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.2em] opacity-80">Mesa {mesa}</div>
+            <div className="text-[11px] uppercase tracking-[0.2em] opacity-80">{mesa ? `Mesa ${mesa}` : 'Cardápio digital'}</div>
             <h1 className="truncate text-2xl font-semibold leading-tight">{tema.titulo || 'Paggio'}</h1>
             {(boasVindas || tema.subtitulo) && <p className="mt-0.5 line-clamp-2 text-xs opacity-85">{boasVindas || tema.subtitulo}</p>}
           </div>

@@ -87,7 +87,7 @@ export function Tablet() {
         <h2 className="font-semibold">Dispositivos (tablets, celulares de garçom, agente de impressão)</h2>
         <div className="flex flex-wrap gap-2">
           <input className={inputCls + ' !w-52'} placeholder="Nome (ex.: Agente cozinha)" value={nd.nome} onChange={(e) => setNd({ ...nd, nome: e.target.value })} />
-          <select className={inputCls + ' !w-44'} value={nd.tipo} onChange={(e) => setNd({ ...nd, tipo: e.target.value })}><option value="tablet">tablet</option><option value="garcom">celular garçom</option><option value="caixa">caixa</option><option value="agente_impressao">agente de impressão</option></select>
+          <select className={inputCls + ' !w-44'} value={nd.tipo} onChange={(e) => setNd({ ...nd, tipo: e.target.value })}><option value="tablet">tablet</option><option value="garcom">celular garçom</option><option value="caixa">caixa</option><option value="agente_impressao">agente de impressão</option><option value="agente_whatsapp">agente de WhatsApp</option></select>
           <button className={btnSecCls} onClick={addDisp}>Cadastrar</button>
         </div>
         <ul className="divide-y divide-line text-sm">

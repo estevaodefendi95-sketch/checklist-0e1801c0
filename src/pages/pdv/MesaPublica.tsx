@@ -75,7 +75,7 @@ export function MesaPublica() {
     const r = await chamar('pedir', { itens }) as Estado & { ok?: boolean }
     setEnv(false)
     if (r.erro) return setMsg(r.erro)
-    setCar([]); setMsg('Pedido enviado! Já está sendo preparado.'); carregar()
+    setCar([]); setMsg(`Pedido enviado para a mesa ${e?.mesa}! Já está sendo preparado e será levado até você.`); carregar()
   }
   async function simples(acao: 'garcom' | 'conta', texto: string) {
     const r = await chamar(acao)
