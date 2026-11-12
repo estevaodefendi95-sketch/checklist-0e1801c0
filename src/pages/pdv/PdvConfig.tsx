@@ -7,11 +7,13 @@ import { Categoria, DESTINOS, Destino, Impressora, Mesa, Produto, Sala } from '.
 import { usePermissoes } from '../../context/PermissoesContext'
 import { Modal } from './PdvCaixa'
 import { Tablet } from './ConfigTablet'
+import { Checkin } from './ConfigCheckin'
 import { Fiscal, Tef } from './ConfigFiscal'
 
-type Aba = 'salao' | 'produtos' | 'impressoras' | 'tablet' | 'fiscal' | 'pagamentos'
+type Aba = 'salao' | 'checkin' | 'produtos' | 'impressoras' | 'tablet' | 'fiscal' | 'pagamentos'
 const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
   { v: 'salao', r: 'Salão e mesas', perm: 'pdv_gerir' },
+  { v: 'checkin', r: 'Check-in: couvert e rodízio', perm: 'pdv_gerir' },
   { v: 'produtos', r: 'Produtos', perm: 'pdv_gerir' },
   { v: 'impressoras', r: 'Impressoras', perm: 'pdv_gerir' },
   { v: 'tablet', r: 'Tablet e QR Code', perm: 'pdv_gerir' },
@@ -30,6 +32,7 @@ export function PdvConfig() {
         {abas.map((a) => <button key={a.v} className={aba === a.v ? btnCls : btnSecCls} onClick={() => setAba(a.v)}>{a.r}</button>)}
       </div>
       {aba === 'salao' && <Salao />}
+      {aba === 'checkin' && <Checkin />}
       {aba === 'produtos' && <Produtos />}
       {aba === 'impressoras' && <Impressoras />}
       {aba === 'tablet' && <Tablet />}

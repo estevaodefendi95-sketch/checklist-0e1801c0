@@ -6,6 +6,7 @@ import { Carregando, Erro, Vazio, btnCls, btnSecCls, cartaoCls, inputCls } from 
 import { reais } from '../../lib/formato'
 import { Comanda, Mesa, Sala, Totais, minutosDesde, num, useAoVivo } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
+import { PerfisCheckin, usePerfisCobrancas } from './PerfisCheckin'
 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
@@ -24,7 +25,8 @@ export function PdvSalao() {
   const [erro, setErro] = useState('')
   const [pronto, setPronto] = useState(false)
   const [novaMesa, setNovaMesa] = useState<Mesa | null>(null)
-  const [pessoas, setPessoas] = useState('2')
+  const [qtds, setQtds] = useState<Record<string, number>>({})
+  const { perfis, cobrancas, exige } = usePerfisCobrancas()
   const [cliente, setCliente] = useState('')
   const [tel, setTel] = useState('')
 
@@ -54,11 +56,13 @@ export function PdvSalao() {
 
   async function abrir(mesa: Mesa | null) {
     setErro('')
+    const pessoas = Object.values(qtds).reduce((a, n) => a + n, 0)
+    if (perfis.length && exige && pessoas === 0) return setErro('Informe quantas pessoas de cada perfil (adulto, criança…).')
     const { data, error } = await db
       .from('pdv_comandas')
       .insert({
         mesa_id: mesa?.id ?? null,
-        pessoas: Number(pessoas) || 1,
+        pessoas: pessoas || 1,
         nome_cliente: cliente.trim() || null,
         telefone: tel.trim() || null,
         origem: 'sistema',
@@ -68,6 +72,10 @@ export function PdvSalao() {
       .select('id')
       .single()
     if (error) return setErro(error.code === '23505' ? 'Essa mesa já tem comanda aberta.' : error.message)
+    if (pessoas > 0) {
+      const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: data.id, p_perfis: Object.entries(qtds).map(([perfil_id, qtd]) => ({ perfil_id, qtd })) })
+      if (r.error) setErro('Comanda aberta, mas não consegui lançar couvert/rodízio: ' + r.error.message)
+    }
     nav(`/pdv/comanda/${data.id}`)
   }
 
@@ -76,7 +84,7 @@ export function PdvSalao() {
     if (c) nav(`/pdv/comanda/${c.id}`)
     else {
       setNovaMesa(m)
-      setPessoas(String(Math.min(m.capacidade, 2)))
+      setQtds({})
       setCliente('')
       setTel('')
     }
@@ -89,7 +97,7 @@ export function PdvSalao() {
         titulo="Salão"
         subtitulo={`${abertas} comanda(s) aberta(s) · ${reais(aberto)} em consumo`}
         acoes={
-          <button className={btnSecCls} onClick={() => { setNovaMesa({ id: '', numero: 'Balcão' } as Mesa); setCliente(''); setTel(''); setPessoas('1') }}>
+          <button className={btnSecCls} onClick={() => { setNovaMesa({ id: '', numero: 'Balcão' } as Mesa); setCliente(''); setTel(''); setQtds({}) }}>
             Comanda sem mesa
           </button>
         }
@@ -150,9 +158,9 @@ export function PdvSalao() {
       )}
       {novaMesa && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={() => setNovaMesa(null)}>
-          <div className={`${cartaoCls} w-full max-w-sm space-y-3 p-5`} onClick={(e) => e.stopPropagation()}>
+          <div className={`${cartaoCls} max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto p-5`} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold">Check-in · {novaMesa.id ? `mesa ${novaMesa.numero}` : 'sem mesa'}</h3>
-            <label className="block text-sm">Pessoas<input className={inputCls} inputMode="numeric" value={pessoas} onChange={(e) => setPessoas(e.target.value)} /></label>
+            <PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={qtds} onChange={setQtds} />
             <label className="block text-sm">Nome (opcional)<input className={inputCls} value={cliente} onChange={(e) => setCliente(e.target.value)} /></label>
             <label className="block text-sm">Telefone (opcional)<input className={inputCls} inputMode="tel" value={tel} onChange={(e) => setTel(e.target.value)} /></label>
             <div className="flex gap-2">

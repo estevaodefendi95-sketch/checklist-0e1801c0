@@ -102,7 +102,7 @@ export function Tef() {
       </p>
       <section className={`${cartaoCls} space-y-3 p-4`}>
         <Campo r="Provedor"><select className={inputCls} value={t.provedor} onChange={(e) => setT({ ...t, provedor: e.target.value })}>
-          <option value="nenhum">Nenhum (manual com NSU)</option><option value="stone">Stone</option><option value="cielo">Cielo (LIO)</option><option value="rede">Rede</option><option value="getnet">Getnet</option><option value="pagbank">PagBank</option><option value="mercadopago">Mercado Pago Point</option><option value="outro">Outro</option>
+          <option value="nenhum">Nenhum (manual com NSU)</option><option value="sipag_rede">Sipag e Rede (as duas maquininhas da casa)</option><option value="sipag">Sipag</option><option value="rede">Rede</option><option value="outro">Outro</option>
         </select></Campo>
         <Campo r="Modelo da maquininha"><input className={inputCls} value={t.modelo_maquininha ?? ''} onChange={(e) => setT({ ...t, modelo_maquininha: e.target.value })} /></Campo>
         <Campo r="Parâmetros não secretos (JSON: terminal, loja, etc.)"><textarea className={inputCls + ' min-h-[100px] py-2 font-mono'} value={param} onChange={(e) => setParam(e.target.value)} /></Campo>

@@ -8,8 +8,10 @@ import {
   Categoria, Comanda as TComanda, FORMAS, Item, Mesa, Produto, Sessao, Totais, enfileirar, hora, num, rotuloForma, useAoVivo,
 } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
+import { PerfisCheckin, usePerfisCobrancas } from './PerfisCheckin'
+import { Modal } from './PdvCaixa'
 
-interface Pag { id: string; forma: string; valor: number; troco: number; tef_status: string | null; tef_nsu: string | null; estornado: boolean; criado_em: string }
+interface Pag { tef_provedor: string | null; id: string; forma: string; valor: number; troco: number; tef_status: string | null; tef_nsu: string | null; estornado: boolean; criado_em: string }
 
 const ST_COR: Record<string, string> = {
   enviado: 'bg-brand-soft text-brand', preparando: 'bg-amber-100 text-amber-800', pronto: 'bg-emerald-100 text-emerald-800',
@@ -38,7 +40,10 @@ export function Comanda() {
   const [forma, setForma] = useState<string>('credito')
   const [valor, setValor] = useState('')
   const [nsu, setNsu] = useState('')
+  const [maq, setMaq] = useState(() => { try { return localStorage.getItem('pdv-maquininha') || 'Sipag' } catch { return 'Sipag' } })
   const [recebido, setRecebido] = useState('')
+  const [editPerfis, setEditPerfis] = useState<Record<string, number> | null>(null)
+  const { perfis, cobrancas } = usePerfisCobrancas()
 
   const carregar = useCallback(async () => {
     if (!id) return
@@ -140,7 +145,7 @@ export function Comanda() {
     const cartao = forma === 'credito' || forma === 'debito'
     const { error } = await db.from('pdv_pagamentos').insert({
       comanda_id: c.id, sessao_id: sessao.id, forma, valor: forma === 'dinheiro' ? aplicado + troco : aplicado, troco,
-      tef_provedor: cartao ? 'manual' : null, tef_status: cartao ? 'aprovado' : null, tef_nsu: nsu.trim() || null,
+      tef_provedor: cartao ? maq : null, tef_status: cartao ? 'aprovado' : null, tef_nsu: nsu.trim() || null,
       user_id: (await supabase.auth.getUser()).data.user?.id,
     })
     if (error) return setErro(error.message)
@@ -170,6 +175,16 @@ export function Comanda() {
     await db.from('pdv_pedido_itens').update({ status: 'cancelado', cancelado_motivo: 'comanda cancelada' }).eq('comanda_id', c.id)
     await db.from('pdv_comandas').update({ status: 'cancelada', fechada_em: new Date().toISOString() }).eq('id', c.id)
     nav('/pdv')
+  }
+  async function abrirPerfis() {
+    const { data } = await db.from('pdv_comanda_perfis').select('perfil_id,qtd').eq('comanda_id', id)
+    setEditPerfis(Object.fromEntries((data ?? []).map((x: { perfil_id: string; qtd: number }) => [x.perfil_id, x.qtd])))
+  }
+  async function salvarPerfis() {
+    if (!c || !editPerfis) return
+    const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: c.id, p_perfis: Object.entries(editPerfis).map(([perfil_id, qtd]) => ({ perfil_id, qtd })) })
+    if (r.error) return setErro(r.error.message)
+    setEditPerfis(null); setErro(''); carregar()
   }
   async function ajusteConta(campo: 'desconto' | 'taxa_servico_pct') {
     if (!c) return
@@ -243,6 +258,13 @@ export function Comanda() {
                   </label>
                 )}
                 {(forma === 'credito' || forma === 'debito') && (
+                  <div className="flex gap-2">
+                    {['Sipag', 'Rede', 'Outra'].map((m) => (
+                      <button key={m} type="button" className={maq === m ? btnCls : btnSecCls} onClick={() => { setMaq(m); try { localStorage.setItem('pdv-maquininha', m) } catch { /* ignora */ } }}>{m}</button>
+                    ))}
+                  </div>
+                )}
+                {(forma === 'credito' || forma === 'debito') && (
                   <label className="block text-sm">NSU / comprovante da maquininha
                     <input className={inputCls} value={nsu} onChange={(e) => setNsu(e.target.value)} />
                   </label>
@@ -258,7 +280,7 @@ export function Comanda() {
               <ul className="divide-y divide-line text-sm">
                 {pags.map((p) => (
                   <li key={p.id} className={`flex items-center justify-between py-2 ${p.estornado ? 'opacity-50 line-through' : ''}`}>
-                    <span>{rotuloForma(p.forma)} {p.tef_nsu ? `· NSU ${p.tef_nsu}` : ''}</span>
+                    <span>{rotuloForma(p.forma)}{p.tef_provedor ? ` · ${p.tef_provedor}` : ''} {p.tef_nsu ? `· NSU ${p.tef_nsu}` : ''}</span>
                     <span className="flex items-center gap-2">
                       {reais(p.valor - p.troco)}
                       {aberta && !p.estornado && pode('pdv_caixa') && <button className="text-alert" onClick={() => estornar(p)}>estornar</button>}
@@ -304,7 +326,8 @@ export function Comanda() {
                     <span className={`rounded-full px-2 py-0.5 ${ST_COR[i.status]}`}>{i.status}</span>
                     <span className="text-ink-soft">{i.destino} · {i.origem} · {hora(i.criado_em)}</span>
                     {aberta && i.status === 'pronto' && <button className="text-brand" onClick={() => statusItem(i, 'entregue')}>entregue</button>}
-                    {aberta && i.status !== 'cancelado' && <button className="text-alert" onClick={() => cancelarItem(i)}>cancelar</button>}
+                    {aberta && i.status !== 'cancelado' && i.tipo === 'produto' && <button className="text-alert" onClick={() => cancelarItem(i)}>cancelar</button>}
+                    {i.tipo !== 'produto' && <span className="rounded-full bg-paper-dim px-2 py-0.5">{i.tipo}</span>}
                   </div>
                 </li>
               ))}
@@ -320,6 +343,7 @@ export function Comanda() {
           </dl>
           {aberta && (
             <div className="flex flex-wrap gap-2">
+              <button className={btnSecCls} onClick={abrirPerfis}>Pessoas e perfis</button>
               <button className={btnSecCls} onClick={pedirConta}>Imprimir pré-conta</button>
               {pode('pdv_caixa') && <button className={btnCls} onClick={fechar}>Fechar comanda</button>}
               {pode('pdv_caixa') && <button className={btnPerigoCls} onClick={cancelarComanda}>Cancelar</button>}
@@ -327,6 +351,13 @@ export function Comanda() {
           )}
         </aside>
       </div>
+      {editPerfis && (
+        <Modal titulo="Pessoas e perfis (couvert / rodízio)" fechar={() => setEditPerfis(null)}>
+          <PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={editPerfis} onChange={setEditPerfis} />
+          <p className="text-xs text-ink-soft">Ao salvar, o couvert e o rodízio da comanda são recalculados para estes perfis.</p>
+          <button className={btnCls} onClick={salvarPerfis}>Salvar</button>
+        </Modal>
+      )}
     </div>
   )
 }

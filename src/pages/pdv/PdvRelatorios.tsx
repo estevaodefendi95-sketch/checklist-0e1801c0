@@ -5,7 +5,7 @@ import { Carregando, Erro, Vazio, btnSecCls, cartaoCls, inputCls } from '../../c
 import { reais } from '../../lib/formato'
 import { Comanda, Item, Mesa, FORMAS, num, rotuloForma, hora } from '../../lib/pdv'
 
-interface Pag { comanda_id: string; forma: string; valor: number; troco: number }
+interface Pag { comanda_id: string; forma: string; valor: number; troco: number; tef_provedor: string | null }
 
 const hojeISO = () => new Date().toLocaleDateString('sv-SE')
 const soma = (d: string, n: number) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('sv-SE') }
@@ -32,7 +32,7 @@ export function PdvRelatorios() {
     const ids = cs.map((x) => x.id)
     const [i, p, m, pr, ct] = await Promise.all([
       ids.length ? db.from('pdv_pedido_itens').select('*').in('comanda_id', ids) : { data: [] },
-      ids.length ? db.from('pdv_pagamentos').select('comanda_id,forma,valor,troco').in('comanda_id', ids).eq('estornado', false) : { data: [] },
+      ids.length ? db.from('pdv_pagamentos').select('comanda_id,forma,valor,troco,tef_provedor').in('comanda_id', ids).eq('estornado', false) : { data: [] },
       db.from('pdv_mesas').select('*'),
       db.from('pdv_produtos').select('id,categoria_id'),
       db.from('pdv_categorias').select('id,nome'),
@@ -58,16 +58,21 @@ export function PdvRelatorios() {
     const idsF = new Set(fechadas.map((c) => c.id))
     const porForma: Record<string, number> = {}
     pags.filter((p) => idsF.has(p.comanda_id)).forEach((p) => (porForma[p.forma] = (porForma[p.forma] ?? 0) + num(p.valor) - num(p.troco)))
+    const maq: Record<string, number> = {}
+    pags.filter((p) => idsF.has(p.comanda_id) && (p.forma === 'credito' || p.forma === 'debito')).forEach((p) => { const k = `${p.tef_provedor ?? 'Sem maquininha'} · ${rotuloForma(p.forma)}`; maq[k] = (maq[k] ?? 0) + num(p.valor) - num(p.troco) })
     const prod: Record<string, { qtd: number; valor: number }> = {}
     const cat: Record<string, number> = {}
-    ativos.filter((i) => idsF.has(i.comanda_id)).forEach((i) => {
+    ativos.filter((i) => idsF.has(i.comanda_id) && i.tipo === 'produto').forEach((i) => {
       prod[i.nome] = { qtd: (prod[i.nome]?.qtd ?? 0) + num(i.qtd), valor: (prod[i.nome]?.valor ?? 0) + i.qtd * i.preco_unit }
       const k = (i.produto_id && catDe[i.produto_id]) || 'Sem categoria'
       cat[k] = (cat[k] ?? 0) + i.qtd * i.preco_unit
     })
     const pessoas = fechadas.reduce((s, c) => s + c.pessoas, 0)
+    const soTipo = (t: string) => ativos.filter((i) => idsF.has(i.comanda_id) && i.tipo === t).reduce((s, i) => s + i.qtd * i.preco_unit, 0)
+    const couvert = soTipo('couvert')
+    const rodizio = soTipo('rodizio')
     const cancel = itens.filter((i) => i.status === 'cancelado')
-    return { fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
+    return { maq, couvert, rodizio, fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
   }, [comandas, itens, pags, catDe])
 
   function csv() {
@@ -99,6 +104,8 @@ export function PdvRelatorios() {
             <Kpi t="Ticket médio" v={reais(r.fechadas.length ? r.fat / r.fechadas.length : 0)} />
             <Kpi t="Por pessoa" v={reais(r.pessoas ? r.fat / r.pessoas : 0)} />
             <Kpi t="Serviço (taxa)" v={reais(r.servico)} />
+            <Kpi t="Couvert artístico" v={reais(r.couvert)} />
+            <Kpi t="Rodízio" v={reais(r.rodizio)} />
             <Kpi t="Mesas abertas agora" v={String(r.abertas.length)} />
             <Kpi t="Comandas canceladas" v={String(r.canceladas.length)} />
             <Kpi t="Itens cancelados" v={String(r.cancel.length)} />
@@ -106,6 +113,10 @@ export function PdvRelatorios() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Bloco t="Por forma de pagamento">
               {FORMAS.map((f) => <Linha key={f.v} a={rotuloForma(f.v)} b={reais(r.porForma[f.v] ?? 0)} />)}
+            </Bloco>
+            <Bloco t="Cartão por maquininha (conferir com Sipag e Rede)">
+              {Object.entries(r.maq).sort().map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}
+              {!Object.keys(r.maq).length && <p className="text-sm text-ink-soft">Sem pagamentos em cartão.</p>}
             </Bloco>
             <Bloco t="Por categoria">
               {Object.entries(r.cat).sort((a, b) => b[1] - a[1]).map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}

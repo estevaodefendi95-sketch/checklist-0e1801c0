@@ -18,15 +18,24 @@ interface Item {
   rotulo: string
   curto?: string // rótulo da barra inferior
   icone: NomeIcone
-  grupo: 'operacao' | 'pdv' | 'breve' | 'admin'
+  grupo: 'atendimento' | 'operacao' | 'cardapio' | 'admin'
   emBreve?: boolean
 }
 
 const RECOLHIDO = 'paggio-menu-recolhido'
-const NA_BARRA = ['/', '/areas', '/fichas']
+const ROTULO_GRUPO: Record<Item['grupo'], string> = {
+  atendimento: 'Atendimento',
+  operacao: 'Operação',
+  cardapio: 'Cardápio e custos',
+  admin: 'Configurações',
+}
 
 function ativo(to: string, pathname: string) {
-  return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
+  if (to === '/') return pathname === '/'
+  // /relatorio não pode ficar aceso dentro de /relatorio/estoque (e vice-versa)
+  if (to === '/relatorio') return pathname === '/relatorio'
+  if (to === '/pdv') return pathname === '/pdv' || pathname.startsWith('/pdv/comanda')
+  return pathname === to || pathname.startsWith(to + '/')
 }
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -40,37 +49,35 @@ export function Layout({ children }: { children: ReactNode }) {
 
   // itens sem permissão nem entram na lista
   const itens: Item[] = [
-    { to: '/', rotulo: 'Checklists', curto: 'Checklist', icone: 'checklist', grupo: 'operacao' },
-    { to: '/areas', rotulo: 'Áreas', icone: 'areas', grupo: 'operacao' },
-    { to: '/fichas', rotulo: 'Fichas técnicas', curto: 'Fichas', icone: 'fichas', grupo: 'operacao' },
-    { to: '/cardapios', rotulo: 'Cardápios', icone: 'cardapios', grupo: 'operacao' },
-    { to: '/insumos', rotulo: 'Insumos', icone: 'insumos', grupo: 'operacao' },
-    ...(pode('editar_precos') || pode('lancar_estoque')
-      ? [{ to: '/fornecedores', rotulo: 'Fornecedores', icone: 'fornecedores', grupo: 'operacao' } as Item]
-      : []),
-    { to: '/historico', rotulo: 'Histórico', icone: 'historico', grupo: 'operacao' },
-    { to: '/relatorio', rotulo: 'Relatórios', icone: 'relatorio', grupo: 'operacao' },
-    ...(pode('lancar_vendas')
-      ? [{ to: '#vendas', rotulo: 'Vendas', icone: 'vendas', grupo: 'breve', emBreve: true } as Item]
-      : []),
-    ...(pode('lancar_estoque')
-      ? [{ to: '#estoque', rotulo: 'Estoque', icone: 'estoque', grupo: 'breve', emBreve: true } as Item]
-      : []),
     ...(pode('pdv_operar')
       ? [
-          { to: '/pdv', rotulo: 'PDV · Salão', curto: 'PDV', icone: 'pdv', grupo: 'pdv' } as Item,
-          { to: '/pdv/relatorios', rotulo: 'PDV · Relatórios', icone: 'relatorio', grupo: 'pdv' } as Item,
+          { to: '/pdv', rotulo: 'Salão e mesas', curto: 'Salão', icone: 'pdv', grupo: 'atendimento' } as Item,
         ]
       : []),
-    ...(pode('pdv_caixa') ? [{ to: '/pdv/caixa', rotulo: 'PDV · Caixa', icone: 'caixa', grupo: 'pdv' } as Item] : []),
+    ...(pode('pdv_caixa') ? [{ to: '/pdv/caixa', rotulo: 'Caixa', icone: 'caixa', grupo: 'atendimento' } as Item] : []),
+    ...(pode('pdv_operar')
+      ? [{ to: '/pdv/relatorios', rotulo: 'Vendas e relatórios PDV', curto: 'Vendas', icone: 'vendas', grupo: 'atendimento' } as Item]
+      : []),
+    { to: '/', rotulo: 'Checklists', curto: 'Checklist', icone: 'checklist', grupo: 'operacao' },
+    { to: '/areas', rotulo: 'Áreas', icone: 'areas', grupo: 'operacao' },
+    { to: '/relatorio/estoque', rotulo: 'Estoque', icone: 'estoque', grupo: 'operacao' },
+    { to: '/historico', rotulo: 'Histórico', icone: 'historico', grupo: 'operacao' },
+    { to: '/relatorio', rotulo: 'Relatórios', icone: 'relatorio', grupo: 'operacao' },
+    { to: '/fichas', rotulo: 'Fichas técnicas', curto: 'Fichas', icone: 'fichas', grupo: 'cardapio' },
+    { to: '/cardapios', rotulo: 'Cardápios', icone: 'cardapios', grupo: 'cardapio' },
+    { to: '/insumos', rotulo: 'Insumos', icone: 'insumos', grupo: 'cardapio' },
+    ...(pode('editar_precos') || pode('lancar_estoque')
+      ? [{ to: '/fornecedores', rotulo: 'Fornecedores', icone: 'fornecedores', grupo: 'cardapio' } as Item]
+      : []),
     ...(pode('pdv_gerir') || pode('pdv_fiscal')
-      ? [{ to: '/pdv/config', rotulo: 'PDV · Configurações', icone: 'impressora', grupo: 'pdv' } as Item]
+      ? [{ to: '/pdv/config', rotulo: 'Configurações do PDV', curto: 'Config.', icone: 'impressora', grupo: 'admin' } as Item]
       : []),
     ...(master ? [{ to: '/usuarios', rotulo: 'Usuários', icone: 'usuarios', grupo: 'admin' } as Item] : []),
     ...(admin
       ? [{ to: '/admin/templates', rotulo: 'Áreas e modelos', icone: 'modelos', grupo: 'admin' } as Item]
       : []),
   ]
+  const NA_BARRA = pode('pdv_operar') ? ['/pdv', '/', '/relatorio/estoque'] : ['/', '/areas', '/fichas']
 
   useEffect(() => setMaisAberto(false), [pathname])
 
@@ -104,17 +111,17 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3.5">
-          {(['operacao', 'pdv', 'breve', 'admin'] as const).map((g) => {
+          {(['atendimento', 'operacao', 'cardapio', 'admin'] as const).map((g) => {
             const doGrupo = itens.filter((i) => i.grupo === g)
             if (!doGrupo.length) return null
             return (
               <div key={g} className="mb-2">
                 {!recolhido && (
                   <div className="px-2.5 pb-1.5 pt-3.5 text-[11px] uppercase tracking-[0.08em] opacity-60">
-                    {g === 'operacao' ? 'Operação' : g === 'pdv' ? 'PDV' : g === 'breve' ? 'Em breve' : 'Admin'}
+                    {ROTULO_GRUPO[g]}
                   </div>
                 )}
-                {recolhido && g !== 'operacao' && <hr className="mx-3 my-2 border-brand-ink/20" />}
+                {recolhido && g !== 'atendimento' && <hr className="mx-3 my-2 border-brand-ink/20" />}
                 {doGrupo.map((i) => (
                   <ItemLateral key={i.to} item={i} recolhido={recolhido} ativo={ativo(i.to, pathname)} />
                 ))}

@@ -37,6 +37,7 @@ export interface Item {
   id: string; comanda_id: string; produto_id: string | null; nome: string; qtd: number; preco_unit: number
   obs: string | null; destino: Destino; origem: string
   status: 'enviado' | 'preparando' | 'pronto' | 'entregue' | 'cancelado'; criado_em: string
+  tipo: 'produto' | 'couvert' | 'rodizio'
 }
 export interface Totais { comanda_id: string; subtotal: number; servico: number; total: number; pago: number }
 export interface Impressora {
@@ -63,6 +64,7 @@ export function useAoVivo(tabelas: string[], cb: () => void, cada = 15000) {
       canal.on('postgres_changes', { event: '*', schema: 'checklist', table: t }, () => ref.current())
     )
     canal.subscribe()
+    ref.current() // carga inicial (o Realtime só avisa de mudanças)
     const iv = setInterval(() => ref.current(), cada)
     return () => {
       clearInterval(iv)

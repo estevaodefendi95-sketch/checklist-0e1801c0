@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
       const { data: ja } = await db.from("pdv_notas").select("id,status").eq("comanda_id", body.comanda_id).in("status", ["autorizada", "processando", "pendente"]).limit(1);
       if (ja?.length) return json({ error: "Esta comanda já tem nota em andamento ou autorizada." }, 409);
       const { data: com } = await db.from("pdv_comandas").select("*").eq("id", body.comanda_id).single();
-      const { data: its } = await db.from("pdv_pedido_itens").select("*, produto:pdv_produtos(*)").eq("comanda_id", com.id).neq("status", "cancelado");
+      const { data: its } = await db.from("pdv_pedido_itens").select("*, produto:pdv_produtos(*), cobranca:pdv_cobrancas(*)").eq("comanda_id", com.id).neq("status", "cancelado");
       const { data: pgs } = await db.from("pdv_pagamentos").select("forma,valor,troco").eq("comanda_id", com.id).eq("estornado", false);
       if (!its?.length) return json({ error: "Comanda sem itens." }, 400);
 
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
       const desc = Math.min(com.desconto, bruto);
       const simples = cfg.regime_tributario !== "regime_normal";
       const itens = its.map((i: any, n: number) => {
-        const p = i.produto ?? {};
+        const p = i.produto ?? i.cobranca ?? {};
         const vb = r2(i.qtd * i.preco_unit);
         return {
           numero_item: n + 1, codigo_produto: p.codigo || String(n + 1), descricao: i.nome, codigo_ncm: p.ncm,
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
           pis_situacao_tributaria: p.cst_pis || "07", cofins_situacao_tributaria: p.cst_cofins || "07",
         };
       });
-      const semNcm = its.filter((i: any) => !i.produto?.ncm).map((i: any) => i.nome);
+      const semNcm = its.filter((i: any) => !(i.produto ?? i.cobranca)?.ncm).map((i: any) => i.nome);
       if (semNcm.length) return json({ error: `Produtos sem NCM: ${[...new Set(semNcm)].join(", ")}` }, 400);
 
       // pagamentos: o fiscal cobre só os itens (serviço/gorjeta fora da nota); distribui proporcionalmente
