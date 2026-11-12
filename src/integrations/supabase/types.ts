@@ -701,6 +701,7 @@ export type Database = {
           monthly_budget: number | null
           name: string
           parent_id: string | null
+          personal_key: string | null
           type: string | null
         }
         Insert: {
@@ -716,6 +717,7 @@ export type Database = {
           monthly_budget?: number | null
           name: string
           parent_id?: string | null
+          personal_key?: string | null
           type?: string | null
         }
         Update: {
@@ -731,6 +733,7 @@ export type Database = {
           monthly_budget?: number | null
           name?: string
           parent_id?: string | null
+          personal_key?: string | null
           type?: string | null
         }
         Relationships: [
@@ -1139,6 +1142,7 @@ export type Database = {
           status: string | null
           trial_ends_at: string | null
           updated_at: string | null
+          usage_mode: string
           zip_code: string | null
         }
         Insert: {
@@ -1165,6 +1169,7 @@ export type Database = {
           status?: string | null
           trial_ends_at?: string | null
           updated_at?: string | null
+          usage_mode?: string
           zip_code?: string | null
         }
         Update: {
@@ -1191,6 +1196,7 @@ export type Database = {
           status?: string | null
           trial_ends_at?: string | null
           updated_at?: string | null
+          usage_mode?: string
           zip_code?: string | null
         }
         Relationships: [
@@ -2657,6 +2663,8 @@ export type Database = {
         Row: {
           account_id: string | null
           amount: number
+          amount_is_estimate: boolean
+          amount_original: number | null
           approval_status: string | null
           attachment_url: string | null
           bank_account_id: string | null
@@ -2709,6 +2717,8 @@ export type Database = {
         Insert: {
           account_id?: string | null
           amount: number
+          amount_is_estimate?: boolean
+          amount_original?: number | null
           approval_status?: string | null
           attachment_url?: string | null
           bank_account_id?: string | null
@@ -2761,6 +2771,8 @@ export type Database = {
         Update: {
           account_id?: string | null
           amount?: number
+          amount_is_estimate?: boolean
+          amount_original?: number | null
           approval_status?: string | null
           attachment_url?: string | null
           bank_account_id?: string | null
@@ -3171,6 +3183,10 @@ export type Database = {
         Returns: boolean
       }
       can_apply_import_review: { Args: never; Returns: boolean }
+      ensure_personal_categories: {
+        Args: { p_company: string }
+        Returns: number
+      }
       has_page_permission: {
         Args: { p_need_edit?: boolean; p_page_key: string }
         Returns: boolean
