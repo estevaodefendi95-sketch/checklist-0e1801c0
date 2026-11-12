@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { db, supabase } from '../lib/supabase'
 import { usePermissoes } from '../context/PermissoesContext'
 import { reais, lerNumero } from '../lib/formato'
-import { noHorario, num } from '../lib/pdv'
+import { noHorarios, num, type Faixa } from '../lib/pdv'
 import { Icone } from './Icone'
 
 interface Msg { de: 'eu' | 'bot'; texto: string; links?: { to: string; rotulo: string }[]; acao?: { rotulo: string; fazer: () => Promise<string> } }
@@ -118,9 +118,9 @@ export function Assistente() {
       return { de: 'bot', texto: `${a.count ?? 0} insumo(s) sem preço. ${alto.length ? 'Fichas acima da meta de CMV: ' + alto.map((f: { nome: string }) => f.nome).join(', ') + '.' : 'Nenhuma ficha acima da meta de CMV.'}`, links: [{ to: '/relatorio/estoque', rotulo: 'Estoque' }, { to: '/insumos', rotulo: 'Insumos' }, { to: '/compras', rotulo: 'Lançar NF de compra' }] }
     }
     if (tem('cardapio', 'tablet', 'qr', 'horario')) {
-      const [c, p] = await Promise.all([db.from('pdv_categorias').select('id,nome,visivel_tablet,horario_inicio,horario_fim,dias_semana').eq('ativo', true), db.from('pdv_produtos').select('categoria_id,visivel_tablet,disponivel,horario_inicio,horario_fim,dias_semana').eq('ativo', true)])
-      const catOk = new Map((c.data ?? []).filter((x: { visivel_tablet: boolean; horario_inicio: string | null; horario_fim: string | null; dias_semana: number[] | null }) => x.visivel_tablet && noHorario(x.horario_inicio, x.horario_fim, x.dias_semana)).map((x: { id: string; nome: string }) => [x.id, x.nome]))
-      const vis = (p.data ?? []).filter((x: { categoria_id: string | null; visivel_tablet: boolean; disponivel: boolean; horario_inicio: string | null; horario_fim: string | null; dias_semana: number[] | null }) => x.visivel_tablet && x.disponivel && (!x.categoria_id || catOk.has(x.categoria_id)) && noHorario(x.horario_inicio, x.horario_fim, x.dias_semana))
+      const [c, p] = await Promise.all([db.from('pdv_categorias').select('id,nome,visivel_tablet,horarios').eq('ativo', true), db.from('pdv_produtos').select('categoria_id,visivel_tablet,disponivel,horarios').eq('ativo', true)])
+      const catOk = new Map((c.data ?? []).filter((x: { visivel_tablet: boolean; horarios: Faixa[] | null }) => x.visivel_tablet && noHorarios(x.horarios)).map((x: { id: string; nome: string }) => [x.id, x.nome]))
+      const vis = (p.data ?? []).filter((x: { categoria_id: string | null; visivel_tablet: boolean; disponivel: boolean; horarios: Faixa[] | null }) => x.visivel_tablet && x.disponivel && (!x.categoria_id || catOk.has(x.categoria_id)) && noHorarios(x.horarios))
       const fora = [...(c.data ?? [])].filter((x: { id: string }) => !catOk.has(x.id)).map((x: { nome: string }) => x.nome)
       return { de: 'bot', texto: `Agora o tablet mostra ${vis.length} produto(s) em ${catOk.size} categoria(s).${fora.length ? ` Fora do ar neste horário: ${fora.join(', ')}.` : ''}`, links: [{ to: '/pdv/config', rotulo: 'Cardápio, horários e preços' }] }
     }

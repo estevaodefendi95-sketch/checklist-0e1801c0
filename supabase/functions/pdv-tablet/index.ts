@@ -18,15 +18,12 @@ function agoraSP() {
   const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(g("weekday"));
   return { dow, min: (Number(g("hour")) % 24) * 60 + Number(g("minute")) };
 }
-const toMin = (t: string | null) => (t ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) : null);
-function noHorario(ini: string | null, fim: string | null, dias: number[] | null) {
+function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
+  if (!h?.length) return true;
   const { dow, min } = agoraSP();
   const ontem = (dow + 6) % 7;
-  const okH = !dias?.length || dias.includes(dow), okO = !dias?.length || dias.includes(ontem);
-  const a = toMin(ini), b = toMin(fim);
-  if (a == null || b == null) return okH;
-  if (a <= b) return okH && min >= a && min < b;
-  return (okH && min >= a) || (okO && min < b);
+  const m = (x: string) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5));
+  return h.some((f) => { const a = m(f.inicio), b = m(f.fim); return a <= b ? f.dia === dow && min >= a && min < b : (f.dia === dow && min >= a) || (f.dia === ontem && min < b); });
 }
 
 Deno.serve(async (req) => {
@@ -47,15 +44,15 @@ Deno.serve(async (req) => {
 
     if (acao === "menu") {
       const [cats, prods, its, grp, pg, ops] = await Promise.all([
-        db.from("pdv_categorias").select("id,nome,visivel_tablet,horario_inicio,horario_fim,dias_semana").eq("ativo", true).order("ordem"),
-        db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,horario_inicio,horario_fim,dias_semana").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
+        db.from("pdv_categorias").select("id,nome,visivel_tablet,horarios").eq("ativo", true).order("ordem"),
+        db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,horarios").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
         com ? db.from("pdv_pedido_itens").select("nome,qtd,preco_unit,status,opcoes").eq("comanda_id", com.id).neq("status", "cancelado").order("criado_em") : Promise.resolve({ data: [] }),
         db.from("pdv_grupos_opcoes").select("id,nome,tipo,min_escolhas,max_escolhas").eq("ativo", true).order("ordem"),
         db.from("pdv_produto_grupos").select("produto_id,grupo_id,ordem").order("ordem"),
         db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true).order("ordem"),
       ]);
-      const catOk = new Map((cats.data ?? []).filter((c: any) => c.visivel_tablet && noHorario(c.horario_inicio, c.horario_fim, c.dias_semana)).map((c: any) => [c.id, c]));
-      const produtos = (prods.data ?? []).filter((p: any) => p.visivel_tablet && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorario(p.horario_inicio, p.horario_fim, p.dias_semana))
+      const catOk = new Map((cats.data ?? []).filter((c: any) => c.visivel_tablet && noHorario(c.horarios)).map((c: any) => [c.id, c]));
+      const produtos = (prods.data ?? []).filter((p: any) => p.visivel_tablet && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorario(p.horarios))
         .map((p: any) => ({
           id: p.id, nome: p.nome, descricao: p.descricao, preco: p.preco, categoria_id: p.categoria_id, foto_url: p.foto_url,
           grupos: (pg.data ?? []).filter((x: any) => x.produto_id === p.id).map((x: any) => (grp.data ?? []).find((g: any) => g.id === x.grupo_id)).filter(Boolean)
@@ -88,8 +85,8 @@ Deno.serve(async (req) => {
       if (!Array.isArray(itens) || !itens.length || itens.length > 40) return json({ erro: "Pedido vazio." });
       const ids = itens.map((i: any) => i.produto_id);
       const [{ data: prods }, { data: cats }, { data: pg }, { data: grp }, { data: ops }] = await Promise.all([
-        db.from("pdv_produtos").select("id,nome,preco,destino,categoria_id,visivel_tablet,horario_inicio,horario_fim,dias_semana").in("id", ids).eq("ativo", true).eq("disponivel", true),
-        db.from("pdv_categorias").select("id,visivel_tablet,horario_inicio,horario_fim,dias_semana"),
+        db.from("pdv_produtos").select("id,nome,preco,destino,categoria_id,visivel_tablet,horarios").in("id", ids).eq("ativo", true).eq("disponivel", true),
+        db.from("pdv_categorias").select("id,visivel_tablet,horarios"),
         db.from("pdv_produto_grupos").select("produto_id,grupo_id").in("produto_id", ids),
         db.from("pdv_grupos_opcoes").select("id,nome,min_escolhas,max_escolhas").eq("ativo", true),
         db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true),
@@ -100,7 +97,7 @@ Deno.serve(async (req) => {
         const p: any = mapa.get(i.produto_id);
         const q = Math.min(20, Math.max(1, Math.floor(Number(i.qtd) || 0)));
         const c: any = (cats ?? []).find((k: any) => k.id === p?.categoria_id);
-        if (!p || !p.visivel_tablet || !noHorario(p.horario_inicio, p.horario_fim, p.dias_semana) || (c && (!c.visivel_tablet || !noHorario(c.horario_inicio, c.horario_fim, c.dias_semana))))
+        if (!p || !p.visivel_tablet || !noHorario(p.horarios) || (c && (!c.visivel_tablet || !noHorario(c.horarios))))
           return json({ erro: "Um dos itens não está disponível neste horário." });
         // opções escolhidas: valida grupos do produto, mínimo/máximo e recalcula o preço no servidor
         const escolhidas: any[] = (Array.isArray(i.opcoes) ? i.opcoes : []).map((id: string) => (ops ?? []).find((o: any) => o.id === id));

@@ -20,7 +20,8 @@ export interface Mesa {
   forma: 'quadrada' | 'redonda' | 'retangular'
   pos_x: number; pos_y: number; largura: number; altura: number; qr_token: string; ativo: boolean
 }
-export interface Horario { horario_inicio: string | null; horario_fim: string | null; dias_semana: number[] | null }
+export interface Faixa { dia: number; inicio: string; fim: string }
+export interface Horario { horarios: Faixa[] | null }
 export interface Categoria extends Horario { id: string; nome: string; ordem: number; destino_padrao: Destino; ativo: boolean; visivel_tablet: boolean }
 export interface Produto extends Horario {
   visivel_tablet: boolean; foto_url?: string | null;
@@ -93,14 +94,10 @@ export async function enfileirar(
   return { erro: error?.message }
 }
 
-/** Mesma regra do banco (pdv_no_horario): vale no fuso do navegador (Brasília). dias: 0=dom..6=sáb. */
-export function noHorario(ini: string | null, fim: string | null, dias: number[] | null, d = new Date()) {
-  const min = d.getHours() * 60 + d.getMinutes()
-  const hoje = d.getDay(), ontem = (hoje + 6) % 7
-  const okH = !dias?.length || dias.includes(hoje), okO = !dias?.length || dias.includes(ontem)
-  const t = (x: string | null) => (x ? Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5)) : null)
-  const a = t(ini), b = t(fim)
-  if (a == null || b == null) return okH
-  if (a <= b) return okH && min >= a && min < b
-  return (okH && min >= a) || (okO && min < b)
+/** Sem faixas = sempre visível; com faixas = só dentro de alguma. Faixa com fim < início vira a madrugada do dia seguinte. */
+export function noHorarios(h: Faixa[] | null | undefined, d = new Date()) {
+  if (!h?.length) return true
+  const min = d.getHours() * 60 + d.getMinutes(), hoje = d.getDay(), ontem = (hoje + 6) % 7
+  const m = (x: string) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5))
+  return h.some((f) => { const a = m(f.inicio), b = m(f.fim); return a <= b ? f.dia === hoje && min >= a && min < b : (f.dia === hoje && min >= a) || (f.dia === ontem && min < b) })
 }

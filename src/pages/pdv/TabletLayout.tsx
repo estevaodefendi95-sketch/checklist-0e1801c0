@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { db } from '../../lib/supabase'
 import { Carregando, btnCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
-import { noHorario } from '../../lib/pdv'
+import { noHorarios, type Faixa } from '../../lib/pdv'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 import { DIAS, Grupo, Opcao } from './ConfigCardapio'
 
@@ -13,8 +13,8 @@ const PRESETS: { nome: string; t: Partial<Tema> }[] = [
   { nome: 'Verde oliva', t: { primaria: '#3f5b3a', fundo: '#f6f3ea', texto: '#222222', destaque: '#b08d3c' } },
 ]
 const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-interface Cat { id: string; nome: string; visivel_tablet: boolean; horario_inicio: string | null; horario_fim: string | null; dias_semana: number[] | null }
-interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; visivel_tablet: boolean; disponivel: boolean; horario_inicio: string | null; horario_fim: string | null; dias_semana: number[] | null }
+interface Cat { id: string; nome: string; visivel_tablet: boolean; horarios: Faixa[] | null }
+interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; visivel_tablet: boolean; disponivel: boolean; horarios: Faixa[] | null }
 
 /** Aba "Layout do tablet": prévia fiel do que o cliente vê + ajustes de cor/título. */
 export function TabletLayout() {
@@ -35,8 +35,8 @@ export function TabletLayout() {
   const carregar = useCallback(async () => {
     const [cfg, c, p, g, o, pg] = await Promise.all([
       db.from('pdv_config').select('tablet_tema,tablet_mensagem_boas_vindas').single(),
-      db.from('pdv_categorias').select('id,nome,visivel_tablet,horario_inicio,horario_fim,dias_semana').eq('ativo', true).order('ordem'),
-      db.from('pdv_produtos').select('id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,disponivel,horario_inicio,horario_fim,dias_semana').eq('ativo', true).order('ordem').order('nome'),
+      db.from('pdv_categorias').select('id,nome,visivel_tablet,horarios').eq('ativo', true).order('ordem'),
+      db.from('pdv_produtos').select('id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,disponivel,horarios').eq('ativo', true).order('ordem').order('nome'),
       db.from('pdv_grupos_opcoes').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_opcoes').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_produto_grupos').select('produto_id,grupo_id'),
@@ -53,8 +53,8 @@ export function TabletLayout() {
     if (agora) return new Date()
     const d = new Date(); d.setDate(d.getDate() + ((dia - d.getDay() + 7) % 7)); const [h, m] = hora.split(':').map(Number); d.setHours(h || 0, m || 0, 0, 0); return d
   }, [agora, dia, hora])
-  const catOk = useMemo(() => new Map(cats.filter((c) => c.visivel_tablet && noHorario(c.horario_inicio, c.horario_fim, c.dias_semana, quando)).map((c) => [c.id, c])), [cats, quando])
-  const visiveis = useMemo(() => prods.filter((p) => p.visivel_tablet && p.disponivel && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorario(p.horario_inicio, p.horario_fim, p.dias_semana, quando)), [prods, catOk, quando])
+  const catOk = useMemo(() => new Map(cats.filter((c) => c.visivel_tablet && noHorarios(c.horarios, quando)).map((c) => [c.id, c])), [cats, quando])
+  const visiveis = useMemo(() => prods.filter((p) => p.visivel_tablet && p.disponivel && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorarios(p.horarios, quando)), [prods, catOk, quando])
   const catsVis = [...catOk.values()].filter((c) => visiveis.some((p) => p.categoria_id === c.id))
   const catAtiva = catsVis.find((c) => c.id === cat)?.id ?? catsVis[0]?.id ?? ''
   const lista = visiveis.filter((p) => p.categoria_id === catAtiva)

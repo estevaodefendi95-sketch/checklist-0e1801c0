@@ -11,7 +11,7 @@ import { Checkin } from './ConfigCheckin'
 import { Fiscal, Tef } from './ConfigFiscal'
 import { TabletLayout } from './TabletLayout'
 import { ReimprimirCupons } from './FiscalRapido'
-import { GruposDoProduto, HorarioCampos, Opcoes, rotuloHorario } from './ConfigCardapio'
+import { GruposDoProduto, HorarioCampos, Opcoes, Pilula, RelogioHorario, rotuloHorario } from './ConfigCardapio'
 
 type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'layout' | 'impressoras' | 'tablet' | 'fiscal' | 'pagamentos'
 const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
@@ -192,7 +192,7 @@ function Produtos() {
   async function salvar() {
     if (!ed?.nome?.trim()) return s.falha('Informe o nome.')
     const { id, ...resto } = ed
-    const dados = { ...resto, nome: ed.nome.trim(), preco: Number(ed.preco ?? 0), dias_semana: resto.dias_semana?.length ? resto.dias_semana : null }
+    const dados = { ...resto, nome: ed.nome.trim(), preco: Number(ed.preco ?? 0), horarios: resto.horarios?.length ? resto.horarios : null, horario_inicio: null, horario_fim: null, dias_semana: null }
     const { error } = id ? await db.from('pdv_produtos').update(dados).eq('id', id) : await db.from('pdv_produtos').insert(dados)
     if (error) return s.falha(error.message)
     setEd(null); s.ok(); carregar()
@@ -214,7 +214,7 @@ function Produtos() {
   async function salvarCat() {
     if (!edCat) return
     const { id, ...resto } = edCat
-    const { error } = await db.from('pdv_categorias').update({ nome: resto.nome.trim() || 'Categoria', visivel_tablet: resto.visivel_tablet !== false, horario_inicio: resto.horario_inicio, horario_fim: resto.horario_fim, dias_semana: resto.dias_semana?.length ? resto.dias_semana : null }).eq('id', id)
+    const { error } = await db.from('pdv_categorias').update({ nome: resto.nome.trim() || 'Categoria', visivel_tablet: resto.visivel_tablet !== false, horarios: resto.horarios?.length ? resto.horarios : null, horario_inicio: null, horario_fim: null, dias_semana: null }).eq('id', id)
     if (error) return s.falha(error.message)
     setEdCat(null); s.ok('Categoria salva.'); carregar()
   }
@@ -253,15 +253,15 @@ function Produtos() {
         return (
           <section key={c.id || 'sem'} className={`${cartaoCls} overflow-hidden`}>
             <header className="flex flex-wrap items-center justify-between gap-2 bg-brand-soft px-3 py-2 text-sm">
-              <span><b>{c.nome}</b> <span className="text-ink-soft">{c.id && rotuloHorario(cc.horario_inicio, cc.horario_fim, cc.dias_semana) ? `· ${rotuloHorario(cc.horario_inicio, cc.horario_fim, cc.dias_semana)}` : ''}{c.id && cc.visivel_tablet === false ? ' · oculta no tablet' : ''}</span></span>
-              {c.id && <button className="text-brand underline" onClick={() => setEdCat(cc)}>horário / visibilidade</button>}
+              <span><b>{c.nome}</b> <span className="text-ink-soft">{c.id && rotuloHorario(cc.horarios) ? `· ${rotuloHorario(cc.horarios)}` : ''}{c.id && cc.visivel_tablet === false ? ' · oculta no tablet' : ''}</span></span>
+              {c.id && <span className="flex items-center gap-2"><button className="text-brand underline" onClick={() => setEdCat(cc)}>editar</button><RelogioHorario horarios={cc.horarios} onClick={() => setEdCat(cc)} /></span>}
             </header>
             <ul className="divide-y divide-line">
               {lista.map((p) => (
                 <li key={p.id} className={`flex flex-wrap items-center justify-between gap-2 p-3 text-sm ${p.ativo ? '' : 'opacity-50'}`}>
                   <button className="min-w-0 flex-1 text-left" onClick={() => setEd(p)}>
                     <b>{p.nome}</b>
-                    <span className="block text-xs text-ink-soft">{p.destino}{!p.ncm && ' · sem NCM'}{rotuloHorario(p.horario_inicio, p.horario_fim, p.dias_semana) ? ` · ${rotuloHorario(p.horario_inicio, p.horario_fim, p.dias_semana)}` : ''}</span>
+                    <span className="block text-xs text-ink-soft">{p.destino}{!p.ncm && ' · sem NCM'}{rotuloHorario(p.horarios) ? ` · ${rotuloHorario(p.horarios)}` : ''}</span>
                   </button>
                   <span className="flex flex-wrap items-center gap-3">
                     <label className="flex items-center gap-1">R$
@@ -269,8 +269,9 @@ function Produtos() {
                         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                         onBlur={(e) => alterarPreco(p, e.target.value)} title="Enter ou sair do campo salva na hora" />
                     </label>
-                    <label className="flex items-center gap-1 text-xs" title="Aparece no tablet / QR Code"><input type="checkbox" checked={p.visivel_tablet !== false} onChange={(e) => patch(p, { visivel_tablet: e.target.checked })} />tablet</label>
-                    <label className="flex items-center gap-1 text-xs" title="Desmarque para marcar como esgotado/pausado (some do PDV e do tablet)"><input type="checkbox" checked={p.disponivel} onChange={(e) => patch(p, { disponivel: e.target.checked })} />disponível</label>
+                    <Pilula on={p.visivel_tablet !== false} onChange={(v) => patch(p, { visivel_tablet: v })} sim="Visível" nao="Invisível" titulo="Aparece no tablet / QR Code" />
+                    <Pilula on={p.disponivel} onChange={(v) => patch(p, { disponivel: v })} sim="Disponível" nao="Esgotado" titulo="Esgotado some do PDV e do tablet" />
+                    <RelogioHorario horarios={p.horarios} onClick={() => setEd(p)} />
                   </span>
                 </li>
               ))}
@@ -282,7 +283,7 @@ function Produtos() {
         <Modal titulo={`Categoria · ${edCat.nome}`} fechar={() => setEdCat(null)}>
           <Campo r="Nome"><input className={inputCls} value={edCat.nome} onChange={(e) => setEdCat({ ...edCat, nome: e.target.value })} /></Campo>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edCat.visivel_tablet !== false} onChange={(e) => setEdCat({ ...edCat, visivel_tablet: e.target.checked })} />Visível no tablet / QR Code</label>
-          <HorarioCampos v={edCat} onChange={(h) => setEdCat({ ...edCat, ...h })} />
+          <HorarioCampos v={edCat.horarios} onChange={(h) => setEdCat({ ...edCat, horarios: h })} />
           <button className={btnCls} onClick={salvarCat}>Salvar</button>
         </Modal>
       )}
@@ -306,7 +307,7 @@ function Produtos() {
           </div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.ativo ?? true} onChange={(e) => set({ ativo: e.target.checked })} />Ativo no cardápio do PDV</label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.visivel_tablet !== false} onChange={(e) => set({ visivel_tablet: e.target.checked })} />Visível no tablet / QR Code</label>
-          <HorarioCampos v={ed} onChange={(h) => set(h)} />
+          <HorarioCampos v={ed.horarios} onChange={(h) => set({ horarios: h })} />
           {ed.id ? <GruposDoProduto produtoId={ed.id} /> : <p className="text-xs text-ink-soft">Salve o produto para vincular opções (ponto, acompanhamentos, combos).</p>}
           <button className={btnCls} onClick={salvar}>Salvar</button>
         </Modal>

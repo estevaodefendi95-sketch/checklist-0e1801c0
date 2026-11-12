@@ -4,6 +4,7 @@ import { Carregando, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls
 import { reais, lerNumero } from '../../lib/formato'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 import { Modal } from './PdvCaixa'
+import type { Faixa } from '../../lib/pdv'
 
 export const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 export interface Grupo { id: string; nome: string; tipo: 'acompanhamento' | 'combo' | 'informacao'; min_escolhas: number; max_escolhas: number; ativo: boolean; ordem: number }
@@ -11,36 +12,85 @@ export interface Opcao { id: string; grupo_id: string; nome: string; preco_adici
 const TIPO: Record<Grupo['tipo'], string> = { acompanhamento: 'Acompanhamento', combo: 'Combo', informacao: 'Informação (ponto, gelo…)' }
 
 export const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : '')
-export function rotuloHorario(ini: string | null, fim: string | null, dias: number[] | null) {
-  const d = dias?.length && dias.length < 7 ? [...dias].sort().map((x) => DIAS[x]).join(' ') : ''
-  const h = ini && fim ? `${hhmm(ini)}–${hhmm(fim)}` : ''
-  return [d, h].filter(Boolean).join(' · ')
+const ORDEM_DIAS = [1, 2, 3, 4, 5, 6, 0]
+const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
+
+/** Resumo curto: agrupa os dias que têm as mesmas faixas. Vazio = sempre visível. */
+export function rotuloHorario(h: Faixa[] | null | undefined) {
+  if (!h?.length) return ''
+  const porDia = new Map<number, string>()
+  for (const d of ORDEM_DIAS) {
+    const f = h.filter((x) => x.dia === d).sort((a, b) => a.inicio.localeCompare(b.inicio))
+    if (f.length) porDia.set(d, f.map((x) => `${x.inicio}–${x.fim}`).join(', '))
+  }
+  const grupos = new Map<string, number[]>()
+  porDia.forEach((s, d) => grupos.set(s, [...(grupos.get(s) ?? []), d]))
+  return [...grupos].map(([s, ds]) => `${ds.length === 7 ? 'todos os dias' : ds.map((d) => DIAS[d]).join(' ')} ${s}`).join(' · ')
 }
 
-/** Horário em que o item/categoria aparece no tablet (vazio = sempre). */
-export function HorarioCampos({ v, onChange }: {
-  v: { horario_inicio?: string | null; horario_fim?: string | null; dias_semana?: number[] | null }
-  onChange: (p: { horario_inicio: string | null; horario_fim: string | null; dias_semana: number[] | null }) => void
-}) {
-  const dias = v.dias_semana ?? []
-  const emit = (p: Partial<{ horario_inicio: string | null; horario_fim: string | null; dias_semana: number[] | null }>) =>
-    onChange({ horario_inicio: v.horario_inicio ?? null, horario_fim: v.horario_fim ?? null, dias_semana: v.dias_semana ?? null, ...p })
+/** Editor por dia da semana, com mais de uma faixa por dia (como no Goomer). */
+export function HorarioCampos({ v, onChange }: { v: Faixa[] | null | undefined; onChange: (h: Faixa[] | null) => void }) {
+  const lista = v ?? []
+  const emit = (n: Faixa[]) => onChange(n.length ? n : null)
+  const add = (dia: number) => emit([...lista, { dia, inicio: '18:00', fim: '23:00' }])
+  const mudar = (f: Faixa, p: Partial<Faixa>) => emit(lista.map((x) => (x === f ? { ...x, ...p } : x)))
+  const tirar = (f: Faixa) => emit(lista.filter((x) => x !== f))
+  const copiar = (dia: number) => {
+    const base = lista.filter((x) => x.dia === dia)
+    emit([...lista.filter((x) => x.dia === dia), ...ORDEM_DIAS.filter((d) => d !== dia).flatMap((d) => base.map((x) => ({ ...x, dia: d })))])
+  }
   return (
     <div className="space-y-2 rounded-xl bg-surface p-3">
-      <b className="text-sm">Horário no tablet / QR</b>
-      <div className="grid grid-cols-2 gap-2">
-        <Campo r="Das"><input type="time" className={inputCls} value={hhmm(v.horario_inicio)} onChange={(e) => emit({ horario_inicio: e.target.value || null })} /></Campo>
-        <Campo r="Até"><input type="time" className={inputCls} value={hhmm(v.horario_fim)} onChange={(e) => emit({ horario_fim: e.target.value || null })} /></Campo>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {DIAS.map((d, i) => {
-          const on = dias.includes(i)
-          return <button key={d} type="button" className={on ? btnCls + ' !min-h-[36px] !px-3' : btnSecCls + ' !min-h-[36px] !px-3'} onClick={() => emit({ dias_semana: on ? dias.filter((x) => x !== i) : [...dias, i] })}>{d}</button>
-        })}
-      </div>
-      <p className="text-xs text-ink-soft">Sem horário e sem dias marcados = aparece sempre. Se "Até" for menor que "Das", vale pela madrugada (ex.: 18:00–02:00). Fuso de Brasília.</p>
-      {(v.horario_inicio || v.horario_fim || dias.length > 0) && <button type="button" className="text-xs text-alert" onClick={() => onChange({ horario_inicio: null, horario_fim: null, dias_semana: null })}>limpar horário</button>}
+      <p className={`rounded-lg px-3 py-2 text-xs ${lista.length ? 'bg-amber-50 text-amber-900' : 'bg-brand-soft text-ink-soft'}`}>
+        {lista.length ? 'Com horário definido, fica visível apenas nos períodos abaixo (fuso de Brasília).' : 'Sem horário definido, fica sempre visível. Toque em + para limitar a certos dias e horas.'}
+      </p>
+      {ORDEM_DIAS.map((dia) => {
+        const f = lista.filter((x) => x.dia === dia).sort((a, b) => a.inicio.localeCompare(b.inicio))
+        return (
+          <div key={dia} className="flex flex-wrap items-start gap-2 border-b border-line pb-2 last:border-0">
+            <span className="w-20 pt-2 text-sm font-medium">{NOMES_DIAS[dia]}</span>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              {!f.length && <span className="block pt-2 text-xs text-ink-soft">{lista.length ? 'não aparece neste dia' : '—'}</span>}
+              {f.map((x, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <input type="time" className={inputCls + ' !min-h-[36px] !w-28'} value={x.inicio} onChange={(e) => mudar(x, { inicio: e.target.value || '00:00' })} />
+                  <span className="text-xs">até</span>
+                  <input type="time" className={inputCls + ' !min-h-[36px] !w-28'} value={x.fim} onChange={(e) => mudar(x, { fim: e.target.value || '23:59' })} />
+                  <button type="button" className="px-2 text-alert" title="Remover faixa" onClick={() => tirar(x)}>✕</button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <button type="button" className={btnSecCls + ' !min-h-[36px] !px-3'} title="Adicionar outra faixa neste dia" onClick={() => add(dia)}>+</button>
+              {f.length > 0 && <button type="button" className={btnSecCls + ' !min-h-[36px] !px-2 text-xs'} title="Copiar estas faixas para todos os dias" onClick={() => copiar(dia)}>copiar p/ todos</button>}
+            </div>
+          </div>
+        )
+      })}
+      <p className="text-xs text-ink-soft">Se "até" for menor que o início, a faixa vale pela madrugada (ex.: 18:00 até 02:00).</p>
+      {lista.length > 0 && <button type="button" className="text-xs text-alert" onClick={() => onChange(null)}>limpar (voltar a ficar sempre visível)</button>}
     </div>
+  )
+}
+
+/** Relógio de acesso rápido: cinza = sem horário (sempre visível); âmbar = tem horário. */
+export function RelogioHorario({ horarios, onClick }: { horarios: Faixa[] | null | undefined; onClick: () => void }) {
+  const tem = !!horarios?.length
+  return (
+    <button type="button" onClick={onClick} title={tem ? `Visível só: ${rotuloHorario(horarios)}` : 'Sem horário: sempre visível. Toque para definir.'}
+      className={`inline-flex h-9 w-9 items-center justify-center rounded-full border ${tem ? 'border-amber-400 bg-amber-100 text-amber-800' : 'border-line bg-white text-ink-soft'}`}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+    </button>
+  )
+}
+
+/** Interruptor tipo pílula (Visível/Invisível, Disponível/Indisponível). */
+export function Pilula({ on, onChange, sim, nao, titulo }: { on: boolean; onChange: (v: boolean) => void; sim: string; nao: string; titulo?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} title={titulo} onClick={() => onChange(!on)}
+      className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 text-xs font-medium ${on ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-line bg-surface text-ink-soft'}`}>
+      <span className={`h-2.5 w-2.5 rounded-full ${on ? 'bg-emerald-500' : 'bg-gray-400'}`} />{on ? sim : nao}
+    </button>
   )
 }
 
