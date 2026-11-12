@@ -26,6 +26,8 @@ import { PdvConfig } from './pages/pdv/PdvConfig'
 import { MesaPublica } from './pages/pdv/MesaPublica'
 import { Compras } from './pages/Compras'
 import { Eventos } from './pages/pdv/Eventos'
+import { Comandas } from './pages/pdv/Comandas'
+import { Crm } from './pages/pdv/Crm'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
 
 function Protected({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
@@ -58,6 +60,8 @@ const router = createBrowserRouter([
   { path: '/mesa/:token', element: <MesaPublica /> },
   { path: '/pdv', element: <Protected><PdvSalao /></Protected> },
   { path: '/pdv/comanda/:id', element: <Protected><Comanda /></Protected> },
+  { path: '/pdv/comandas', element: <Protected><Comandas /></Protected> },
+  { path: '/pdv/crm', element: <Protected><Crm /></Protected> },
   { path: '/pdv/caixa', element: <Protected><PdvCaixa /></Protected> },
   { path: '/pdv/relatorios', element: <Protected><PdvRelatorios /></Protected> },
   { path: '/compras', element: <Protected><Compras /></Protected> },

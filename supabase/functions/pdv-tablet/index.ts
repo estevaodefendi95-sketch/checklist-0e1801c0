@@ -29,7 +29,7 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { token, acao, itens, nome, pessoas } = await req.json();
+    const { token, acao, itens, nome, pessoas, telefone, nascimento } = await req.json();
     if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return json({ erro: "QR Code inválido." });
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
@@ -72,8 +72,16 @@ Deno.serve(async (req) => {
     if (acao === "checkin") {
       if (cfg.tablet_exige_checkin) return json({ erro: "O check-in é feito na recepção." });
       if (com) return json({ ok: true });
+      let tel = String(telefone ?? "").replace(/\D/g, "");
+      if (tel.length > 11 && tel.startsWith("55")) tel = tel.slice(2);
+      const nm = String(nome ?? "").trim().slice(0, 60);
+      if (!nm) return json({ erro: "Informe seu nome." });
+      if (tel.length < 10 || tel.length > 11) return json({ erro: "Informe seu telefone com DDD." });
+      const nasc = /^\d{4}-\d{2}-\d{2}$/.test(String(nascimento ?? "")) ? String(nascimento) : null;
+      const { data: cli } = await db.from("pdv_clientes").upsert(
+        nasc ? { telefone: tel, nome: nm, nascimento: nasc } : { telefone: tel, nome: nm }, { onConflict: "telefone" }).select("id").single();
       const { error } = await db.from("pdv_comandas").insert({
-        mesa_id: mesa.id, nome_cliente: String(nome ?? "").slice(0, 60) || null, pessoas: Math.min(30, Math.max(1, Number(pessoas) || 1)),
+        mesa_id: mesa.id, nome_cliente: nm, telefone: tel, cliente_id: cli?.id ?? null, pessoas: Math.min(30, Math.max(1, Number(pessoas) || 1)),
         origem: "tablet", taxa_servico_pct: cfg.taxa_servico_pct,
       });
       return error ? json({ erro: "Não foi possível abrir a mesa." }) : json({ ok: true });

@@ -16,6 +16,7 @@ const PATHS: Record<string, string> = {
   caixa: 'M3 8h18v12H3zM7 8V5h10v3M12 12v4M9.5 14h5',
   impressora: 'M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z',
   mais: 'M4 6h16M4 12h16M4 18h16',
+  crm: 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z',
   sino: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5',
   nota: 'M6 2h12v20l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4',

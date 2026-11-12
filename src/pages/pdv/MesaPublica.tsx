@@ -30,6 +30,8 @@ export function MesaPublica() {
   const [env, setEnv] = useState(false)
   const [nome, setNome] = useState('')
   const [pessoas, setPessoas] = useState('2')
+  const [tel, setTel] = useState('')
+  const [nasc, setNasc] = useState('')
 
   const chamar = useCallback(async (acao: string, extra: Record<string, unknown> = {}) => {
     const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao, ...extra } })
@@ -80,7 +82,9 @@ export function MesaPublica() {
     setMsg(r.erro ?? texto)
   }
   async function checkin() {
-    const r = await chamar('checkin', { nome, pessoas: Number(pessoas) || 1 })
+    if (!nome.trim()) return setMsg('Informe seu nome.')
+    if (tel.replace(/\D/g, '').length < 10) return setMsg('Informe seu telefone com DDD.')
+    const r = await chamar('checkin', { nome, telefone: tel, nascimento: nasc || undefined, pessoas: Number(pessoas) || 1 })
     if (r.erro) setMsg(r.erro); else carregar()
   }
 
@@ -141,8 +145,11 @@ export function MesaPublica() {
         <p>{e.exige_checkin ? 'Sua mesa ainda não foi aberta. Peça à recepção para fazer o check-in e volte aqui.' : 'Abra sua mesa para começar:'}</p>
         {!e.exige_checkin && (
           <>
-            <input className="w-full rounded-xl border p-3" placeholder="Seu nome" value={nome} onChange={(x) => setNome(x.target.value)} />
-            <input className="w-full rounded-xl border p-3" inputMode="numeric" placeholder="Pessoas" value={pessoas} onChange={(x) => setPessoas(x.target.value)} />
+            <input className="w-full rounded-xl border p-3" placeholder="Seu nome *" value={nome} onChange={(x) => setNome(x.target.value)} />
+            <input className="w-full rounded-xl border p-3" inputMode="tel" placeholder="Telefone (WhatsApp) *" value={tel} onChange={(x) => setTel(x.target.value)} />
+            <label className="block text-xs opacity-70">Data de nascimento (opcional)<input type="date" className="mt-1 w-full rounded-xl border p-3 text-base" value={nasc} onChange={(x) => setNasc(x.target.value)} /></label>
+            <input className="w-full rounded-xl border p-3" inputMode="numeric" placeholder="Quantas pessoas" value={pessoas} onChange={(x) => setPessoas(x.target.value)} />
+            {msg && <p className="text-sm text-[var(--p)]">{msg}</p>}
             <button className={btn} onClick={checkin}>Abrir mesa</button>
           </>
         )}

@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { db, supabase } from '../../lib/supabase'
+import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
 import { Comanda, Mesa, Sala, Totais, minutosDesde, num, useAoVivo } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
-import { PerfisCheckin, usePerfisCobrancas } from './PerfisCheckin'
+import { CheckinModal } from './CheckinRapido'
 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
@@ -25,10 +25,7 @@ export function PdvSalao() {
   const [erro, setErro] = useState('')
   const [pronto, setPronto] = useState(false)
   const [novaMesa, setNovaMesa] = useState<Mesa | null>(null)
-  const [qtds, setQtds] = useState<Record<string, number>>({})
-  const { perfis, cobrancas, exige } = usePerfisCobrancas()
-  const [cliente, setCliente] = useState('')
-  const [tel, setTel] = useState('')
+  const [busca, setBusca] = useState('')
 
   const carregar = useCallback(async () => {
     const [s, m, c, t] = await Promise.all([
@@ -54,39 +51,11 @@ export function PdvSalao() {
   const abertas = comandas.length
   const aberto = comandas.reduce((s, c) => s + num(totais[c.id]?.total), 0)
 
-  async function abrir(mesa: Mesa | null) {
-    setErro('')
-    const pessoas = Object.values(qtds).reduce((a, n) => a + n, 0)
-    if (perfis.length && exige && pessoas === 0) return setErro('Informe quantas pessoas de cada perfil (adulto, criança…).')
-    const { data, error } = await db
-      .from('pdv_comandas')
-      .insert({
-        mesa_id: mesa?.id ?? null,
-        pessoas: pessoas || 1,
-        nome_cliente: cliente.trim() || null,
-        telefone: tel.trim() || null,
-        origem: 'sistema',
-        aberta_por: (await supabase.auth.getUser()).data.user?.id,
-        taxa_servico_pct: (await db.from('pdv_config').select('taxa_servico_pct').single()).data?.taxa_servico_pct ?? 10,
-      })
-      .select('id')
-      .single()
-    if (error) return setErro(error.code === '23505' ? 'Essa mesa já tem comanda aberta.' : error.message)
-    if (pessoas > 0) {
-      const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: data.id, p_perfis: Object.entries(qtds).map(([perfil_id, qtd]) => ({ perfil_id, qtd })) })
-      if (r.error) setErro('Comanda aberta, mas não consegui lançar couvert/rodízio: ' + r.error.message)
-    }
-    nav(`/pdv/comanda/${data.id}`)
-  }
-
   function clicar(m: Mesa) {
     const c = porMesa.get(m.id)
     if (c) nav(`/pdv/comanda/${c.id}`)
     else {
       setNovaMesa(m)
-      setQtds({})
-      setCliente('')
-      setTel('')
     }
   }
 
@@ -97,11 +66,16 @@ export function PdvSalao() {
         titulo="Salão"
         subtitulo={`${abertas} comanda(s) aberta(s) · ${reais(aberto)} em consumo`}
         acoes={
-          <button className={btnSecCls} onClick={() => { setNovaMesa({ id: '', numero: 'Balcão' } as Mesa); setCliente(''); setTel(''); setQtds({}) }}>
-            Comanda sem mesa
-          </button>
+          <>
+            <button className={btnCls} onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)}>Check-in rápido</button>
+            <button className={btnSecCls} onClick={() => nav('/pdv/comandas')}>Todas as comandas</button>
+          </>
         }
       />
+      <form className="mb-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); nav(`/pdv/comandas?q=${encodeURIComponent(busca)}`) }}>
+        <input className={inputCls} placeholder="Buscar comanda por nº, nome, telefone ou mesa…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <button className={btnSecCls}>Buscar</button>
+      </form>
       {erro && <Erro texto={erro} />}
       {salas.length > 1 && (
         <div className="mb-4 flex gap-2 overflow-x-auto">
@@ -157,19 +131,7 @@ export function PdvSalao() {
         </section>
       )}
       {novaMesa && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={() => setNovaMesa(null)}>
-          <div className={`${cartaoCls} max-h-[90vh] w-full max-w-sm space-y-3 overflow-y-auto p-5`} onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold">Check-in · {novaMesa.id ? `mesa ${novaMesa.numero}` : 'sem mesa'}</h3>
-            <PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={qtds} onChange={setQtds} />
-            <label className="block text-sm">Nome (opcional)<input className={inputCls} value={cliente} onChange={(e) => setCliente(e.target.value)} /></label>
-            <label className="block text-sm">Telefone (opcional)<input className={inputCls} inputMode="tel" value={tel} onChange={(e) => setTel(e.target.value)} /></label>
-            <div className="flex gap-2">
-              <button className={btnCls} onClick={() => abrir(novaMesa.id ? novaMesa : null)}>Abrir comanda</button>
-              <button className={btnSecCls} onClick={() => setNovaMesa(null)}>Cancelar</button>
-            </div>
-            <p className="text-xs text-ink-soft">Com o check-in feito, o cliente já pode pedir pelo tablet/QR Code da mesa.</p>
-          </div>
-        </div>
+        <CheckinModal mesas={mesas.filter((m) => !porMesa.has(m.id))} mesaInicial={novaMesa.id ? novaMesa : null} onClose={() => setNovaMesa(null)} onAberta={(id) => nav(`/pdv/comanda/${id}`)} />
       )}
     </div>
   )

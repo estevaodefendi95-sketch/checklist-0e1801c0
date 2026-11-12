@@ -36,7 +36,7 @@ function ativo(to: string, pathname: string) {
   if (to === '/') return pathname === '/'
   // /relatorio não pode ficar aceso dentro de /relatorio/estoque (e vice-versa)
   if (to === '/relatorio') return pathname === '/relatorio'
-  if (to === '/pdv') return pathname === '/pdv' || pathname.startsWith('/pdv/comanda')
+  if (to === '/pdv') return pathname === '/pdv' || pathname.startsWith('/pdv/comanda/')
   return pathname === to || pathname.startsWith(to + '/')
 }
 
@@ -54,6 +54,12 @@ export function Layout({ children }: { children: ReactNode }) {
     ...(pode('pdv_operar')
       ? [
           { to: '/pdv', rotulo: 'Salão e mesas', curto: 'Salão', icone: 'pdv', grupo: 'atendimento' } as Item,
+        ]
+      : []),
+    ...(pode('pdv_operar')
+      ? [
+          { to: '/pdv/comandas', rotulo: 'Comandas', curto: 'Comandas', icone: 'nota', grupo: 'atendimento' } as Item,
+          { to: '/pdv/crm', rotulo: 'Clientes e CRM', curto: 'CRM', icone: 'crm', grupo: 'atendimento' } as Item,
         ]
       : []),
     ...(pode('pdv_caixa') ? [{ to: '/pdv/caixa', rotulo: 'Caixa', icone: 'caixa', grupo: 'atendimento' } as Item] : []),

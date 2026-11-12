@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { db } from '../../lib/supabase'
 import { reais } from '../../lib/formato'
-import { btnSecCls } from '../../components/Estado'
 
 export interface Perfil { id: string; nome: string; percentual: number; ordem: number; ativo: boolean }
 export interface Cobranca { id: string; nome: string; tipo: 'couvert' | 'rodizio'; valor: number; dias_semana: number[]; ativo: boolean }
@@ -45,23 +44,38 @@ export function PerfisCheckin({
 }: { perfis: Perfil[]; cobrancas: Cobranca[]; qtds: Record<string, number>; onChange: (q: Record<string, number>) => void }) {
   const { linhas, total } = useMemo(() => calcularCobranca(perfis, cobrancas, qtds), [perfis, cobrancas, qtds])
   const pessoas = Object.values(qtds).reduce((s, n) => s + n, 0)
+  const mudar = (id: string, d: number) => onChange({ ...qtds, [id]: Math.max(0, (qtds[id] ?? 0) + d) })
   return (
-    <div className="space-y-2">
-      <div className="text-sm font-medium">Quem chegou ({pessoas})</div>
-      {perfis.map((p) => (
-        <div key={p.id} className="flex items-center justify-between rounded-xl border border-line px-3 py-2">
-          <span className="text-sm">{p.nome}{p.percentual < 100 && <em className="ml-1 text-xs text-ink-soft">({p.percentual === 0 ? 'não paga' : `paga ${p.percentual}%`})</em>}</span>
-          <span className="flex items-center gap-2">
-            <button type="button" className={btnSecCls + ' !min-h-[40px] !w-10 !px-0'} onClick={() => onChange({ ...qtds, [p.id]: Math.max(0, (qtds[p.id] ?? 0) - 1) })}>−</button>
-            <b className="w-6 text-center">{qtds[p.id] ?? 0}</b>
-            <button type="button" className={btnSecCls + ' !min-h-[40px] !w-10 !px-0'} onClick={() => onChange({ ...qtds, [p.id]: (qtds[p.id] ?? 0) + 1 })}>+</button>
-          </span>
-        </div>
-      ))}
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold">Quem chegou</span>
+        <span className="rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold text-brand">{pessoas} {pessoas === 1 ? 'pessoa' : 'pessoas'}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {perfis.map((p) => {
+          const q = qtds[p.id] ?? 0
+          return (
+            <div key={p.id} className={`relative flex flex-col items-center rounded-2xl border-2 p-3 text-center transition-colors ${q > 0 ? 'border-brand bg-brand-soft' : 'border-line bg-surface'}`}>
+              <button type="button" onClick={() => mudar(p.id, 1)} className="w-full">
+                <span className="block text-base font-semibold leading-tight">{p.nome}</span>
+                <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${p.percentual === 0 ? 'bg-emerald-100 text-emerald-800' : p.percentual < 100 ? 'bg-amber-100 text-amber-800' : 'bg-surface text-ink-soft ring-1 ring-line'}`}>
+                  {p.percentual === 0 ? 'não paga' : p.percentual < 100 ? `paga ${p.percentual}%` : 'paga inteiro'}
+                </span>
+                <span className="mt-2 block text-4xl font-bold leading-none">{q}</span>
+              </button>
+              <div className="mt-3 flex w-full gap-2">
+                <button type="button" aria-label={`Menos ${p.nome}`} disabled={q === 0} className="min-h-[48px] flex-1 rounded-xl border border-line bg-white text-2xl disabled:opacity-30" onClick={() => mudar(p.id, -1)}>−</button>
+                <button type="button" aria-label={`Mais ${p.nome}`} className="min-h-[48px] flex-1 rounded-xl bg-brand text-2xl text-brand-ink" onClick={() => mudar(p.id, 1)}>+</button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
       {linhas.length > 0 ? (
         <div className="rounded-xl bg-brand-soft p-3 text-sm">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-soft">Entra na comanda</div>
           {linhas.map((l, i) => <div key={i} className="flex justify-between"><span>{l.qtd}× {l.nome}</span><span>{reais(l.qtd * l.unit)}</span></div>)}
-          <div className="mt-1 flex justify-between border-t border-brand/20 pt-1 font-semibold"><span>Entra na comanda</span><span>{reais(total)}</span></div>
+          <div className="mt-1 flex justify-between border-t border-brand/20 pt-1 font-semibold"><span>Total de couvert/rodízio</span><span>{reais(total)}</span></div>
         </div>
       ) : (
         <p className="text-xs text-ink-soft">Sem couvert ou rodízio hoje (configure valores e dias em Configurações do PDV › Check-in).</p>
