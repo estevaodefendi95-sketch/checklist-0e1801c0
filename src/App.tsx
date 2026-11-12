@@ -24,6 +24,8 @@ import { PdvCaixa } from './pages/pdv/PdvCaixa'
 import { PdvRelatorios } from './pages/pdv/PdvRelatorios'
 import { PdvConfig } from './pages/pdv/PdvConfig'
 import { MesaPublica } from './pages/pdv/MesaPublica'
+import { Compras } from './pages/Compras'
+import { Eventos } from './pages/pdv/Eventos'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
 
 function Protected({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
@@ -58,6 +60,8 @@ const router = createBrowserRouter([
   { path: '/pdv/comanda/:id', element: <Protected><Comanda /></Protected> },
   { path: '/pdv/caixa', element: <Protected><PdvCaixa /></Protected> },
   { path: '/pdv/relatorios', element: <Protected><PdvRelatorios /></Protected> },
+  { path: '/compras', element: <Protected><Compras /></Protected> },
+  { path: '/pdv/eventos', element: <Protected><Eventos /></Protected> },
   { path: '/pdv/config', element: <Protected><PdvConfig /></Protected> },
   { path: '/admin/templates', element: <Protected admin><AdminTemplates /></Protected> },
   // só o administrador master (a própria tela confere eh_master e volta ao início se não for)

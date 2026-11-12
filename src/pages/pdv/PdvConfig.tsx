@@ -9,13 +9,18 @@ import { Modal } from './PdvCaixa'
 import { Tablet } from './ConfigTablet'
 import { Checkin } from './ConfigCheckin'
 import { Fiscal, Tef } from './ConfigFiscal'
+import { TabletLayout } from './TabletLayout'
+import { ReimprimirCupons } from './FiscalRapido'
+import { GruposDoProduto, HorarioCampos, Opcoes, rotuloHorario } from './ConfigCardapio'
 
-type Aba = 'salao' | 'checkin' | 'produtos' | 'impressoras' | 'tablet' | 'fiscal' | 'pagamentos'
+type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'layout' | 'impressoras' | 'tablet' | 'fiscal' | 'pagamentos'
 const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
   { v: 'salao', r: 'Salão e mesas', perm: 'pdv_gerir' },
   { v: 'checkin', r: 'Check-in: couvert e rodízio', perm: 'pdv_gerir' },
-  { v: 'produtos', r: 'Produtos', perm: 'pdv_gerir' },
+  { v: 'produtos', r: 'Cardápio e preços', perm: 'pdv_gerir' },
+  { v: 'opcoes', r: 'Opções e combos', perm: 'pdv_gerir' },
   { v: 'impressoras', r: 'Impressoras', perm: 'pdv_gerir' },
+  { v: 'layout', r: 'Layout do tablet', perm: 'pdv_gerir' },
   { v: 'tablet', r: 'Tablet e QR Code', perm: 'pdv_gerir' },
   { v: 'fiscal', r: 'Fiscal (NFC-e)', perm: 'pdv_fiscal' },
   { v: 'pagamentos', r: 'Pagamentos / TEF', perm: 'pdv_gerir' },
@@ -34,7 +39,9 @@ export function PdvConfig() {
       {aba === 'salao' && <Salao />}
       {aba === 'checkin' && <Checkin />}
       {aba === 'produtos' && <Produtos />}
+      {aba === 'opcoes' && <Opcoes />}
       {aba === 'impressoras' && <Impressoras />}
+      {aba === 'layout' && <TabletLayout />}
       {aba === 'tablet' && <Tablet />}
       {aba === 'fiscal' && <Fiscal />}
       {aba === 'pagamentos' && <Tef />}
@@ -168,6 +175,8 @@ function Produtos() {
   const [nc, setNc] = useState('')
   const [ncDest, setNcDest] = useState<Destino>('cozinha')
   const [pronto, setPronto] = useState(false)
+  const [edCat, setEdCat] = useState<Categoria | null>(null)
+  const [busca, setBusca] = useState('')
   const s = useSalvarMsg()
   const carregar = useCallback(async () => {
     const [a, b] = await Promise.all([db.from('pdv_categorias').select('*').order('ordem'), db.from('pdv_produtos').select('*').order('nome')])
@@ -183,10 +192,31 @@ function Produtos() {
   async function salvar() {
     if (!ed?.nome?.trim()) return s.falha('Informe o nome.')
     const { id, ...resto } = ed
-    const dados = { ...resto, nome: ed.nome.trim(), preco: Number(ed.preco ?? 0) }
+    const dados = { ...resto, nome: ed.nome.trim(), preco: Number(ed.preco ?? 0), dias_semana: resto.dias_semana?.length ? resto.dias_semana : null }
     const { error } = id ? await db.from('pdv_produtos').update(dados).eq('id', id) : await db.from('pdv_produtos').insert(dados)
     if (error) return s.falha(error.message)
     setEd(null); s.ok(); carregar()
+  }
+  async function patch(p: Produto, dados: Partial<Produto>) {
+    setProds((x) => x.map((k) => (k.id === p.id ? { ...k, ...dados } : k)))
+    const { error } = await db.from('pdv_produtos').update(dados).eq('id', p.id)
+    if (error) { s.falha(error.message); carregar() }
+  }
+  async function alterarPreco(p: Produto, txt: string) {
+    const v = lerNumero(txt)
+    if (v == null || v < 0) return s.falha('Preço inválido.')
+    if (v === Number(p.preco)) return
+    const { error } = await db.from('pdv_produtos').update({ preco: v }).eq('id', p.id)
+    if (error) return s.falha(error.message)
+    setProds((x) => x.map((k) => (k.id === p.id ? { ...k, preco: v } : k)))
+    s.ok(`${p.nome}: ${reais(Number(p.preco))} → ${reais(v)}. Já vale no PDV e no tablet (o tablet atualiza em até 10 s).`)
+  }
+  async function salvarCat() {
+    if (!edCat) return
+    const { id, ...resto } = edCat
+    const { error } = await db.from('pdv_categorias').update({ nome: resto.nome.trim() || 'Categoria', visivel_tablet: resto.visivel_tablet !== false, horario_inicio: resto.horario_inicio, horario_fim: resto.horario_fim, dias_semana: resto.dias_semana?.length ? resto.dias_semana : null }).eq('id', id)
+    if (error) return s.falha(error.message)
+    setEdCat(null); s.ok('Categoria salva.'); carregar()
   }
   async function importarFichas() {
     const { data: f, error } = await db.from('fichas').select('id,nome,preco_venda,foto_url,tipo').eq('ativo', true).gt('preco_venda', 0)
@@ -215,20 +245,46 @@ function Produtos() {
         <button className={btnCls} onClick={() => setEd({ destino: 'cozinha', ativo: true, disponivel: true, preco: 0, cfop: '5102', unidade: 'UN', origem: 0 })}>Novo produto</button>
         <button className={btnSecCls} onClick={importarFichas}>Importar das fichas técnicas</button>
       </div>
-      {!prods.length ? <Vazio texto="Nenhum produto no PDV." /> : (
-        <ul className={`${cartaoCls} divide-y divide-line`}>
-          {prods.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-3 p-3 text-sm">
-              <button className="text-left" onClick={() => setEd(p)}>
-                <b>{p.nome}</b> <span className="text-ink-soft">· {cats.find((c) => c.id === p.categoria_id)?.nome ?? 'sem categoria'} · {p.destino}{!p.ncm && ' · sem NCM'}</span>
-              </button>
-              <span className="flex items-center gap-3">
-                {reais(p.preco)}
-                <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={p.disponivel} onChange={async (e) => { await db.from('pdv_produtos').update({ disponivel: e.target.checked }).eq('id', p.id); carregar() }} />disp.</label>
-              </span>
-            </li>
-          ))}
-        </ul>
+      <input className={inputCls} placeholder="Buscar produto…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+      {!prods.length ? <Vazio texto="Nenhum produto no PDV." /> : [...cats, { id: '', nome: 'Sem categoria' } as Categoria].map((c) => {
+        const lista = prods.filter((p) => (p.categoria_id ?? '') === c.id && (!busca || p.nome.toLowerCase().includes(busca.toLowerCase())))
+        if (!lista.length) return null
+        const cc = c as Categoria
+        return (
+          <section key={c.id || 'sem'} className={`${cartaoCls} overflow-hidden`}>
+            <header className="flex flex-wrap items-center justify-between gap-2 bg-brand-soft px-3 py-2 text-sm">
+              <span><b>{c.nome}</b> <span className="text-ink-soft">{c.id && rotuloHorario(cc.horario_inicio, cc.horario_fim, cc.dias_semana) ? `· ${rotuloHorario(cc.horario_inicio, cc.horario_fim, cc.dias_semana)}` : ''}{c.id && cc.visivel_tablet === false ? ' · oculta no tablet' : ''}</span></span>
+              {c.id && <button className="text-brand underline" onClick={() => setEdCat(cc)}>horário / visibilidade</button>}
+            </header>
+            <ul className="divide-y divide-line">
+              {lista.map((p) => (
+                <li key={p.id} className={`flex flex-wrap items-center justify-between gap-2 p-3 text-sm ${p.ativo ? '' : 'opacity-50'}`}>
+                  <button className="min-w-0 flex-1 text-left" onClick={() => setEd(p)}>
+                    <b>{p.nome}</b>
+                    <span className="block text-xs text-ink-soft">{p.destino}{!p.ncm && ' · sem NCM'}{rotuloHorario(p.horario_inicio, p.horario_fim, p.dias_semana) ? ` · ${rotuloHorario(p.horario_inicio, p.horario_fim, p.dias_semana)}` : ''}</span>
+                  </button>
+                  <span className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-1">R$
+                      <input className={inputCls + ' !min-h-[36px] !w-24'} inputMode="decimal" defaultValue={String(p.preco).replace('.', ',')} key={p.id + p.preco}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                        onBlur={(e) => alterarPreco(p, e.target.value)} title="Enter ou sair do campo salva na hora" />
+                    </label>
+                    <label className="flex items-center gap-1 text-xs" title="Aparece no tablet / QR Code"><input type="checkbox" checked={p.visivel_tablet !== false} onChange={(e) => patch(p, { visivel_tablet: e.target.checked })} />tablet</label>
+                    <label className="flex items-center gap-1 text-xs" title="Desmarque para marcar como esgotado/pausado (some do PDV e do tablet)"><input type="checkbox" checked={p.disponivel} onChange={(e) => patch(p, { disponivel: e.target.checked })} />disponível</label>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
+      {edCat && (
+        <Modal titulo={`Categoria · ${edCat.nome}`} fechar={() => setEdCat(null)}>
+          <Campo r="Nome"><input className={inputCls} value={edCat.nome} onChange={(e) => setEdCat({ ...edCat, nome: e.target.value })} /></Campo>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edCat.visivel_tablet !== false} onChange={(e) => setEdCat({ ...edCat, visivel_tablet: e.target.checked })} />Visível no tablet / QR Code</label>
+          <HorarioCampos v={edCat} onChange={(h) => setEdCat({ ...edCat, ...h })} />
+          <button className={btnCls} onClick={salvarCat}>Salvar</button>
+        </Modal>
       )}
       {ed && (
         <Modal titulo={ed.id ? 'Editar produto' : 'Novo produto'} fechar={() => setEd(null)}>
@@ -249,6 +305,9 @@ function Produtos() {
             <Campo r="Unidade"><input className={inputCls} value={ed.unidade ?? 'UN'} onChange={(e) => set({ unidade: e.target.value })} /></Campo>
           </div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.ativo ?? true} onChange={(e) => set({ ativo: e.target.checked })} />Ativo no cardápio do PDV</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.visivel_tablet !== false} onChange={(e) => set({ visivel_tablet: e.target.checked })} />Visível no tablet / QR Code</label>
+          <HorarioCampos v={ed} onChange={(h) => set(h)} />
+          {ed.id ? <GruposDoProduto produtoId={ed.id} /> : <p className="text-xs text-ink-soft">Salve o produto para vincular opções (ponto, acompanhamentos, combos).</p>}
           <button className={btnCls} onClick={salvar}>Salvar</button>
         </Modal>
       )}
@@ -258,6 +317,7 @@ function Produtos() {
 
 /* ---------------- Impressoras ---------------- */
 function Impressoras() {
+  const { pode } = usePermissoes()
   const [lista, setLista] = useState<Impressora[]>([])
   const [ed, setEd] = useState<Partial<Impressora> | null>(null)
   const [fila, setFila] = useState<{ status: string; n: number }[]>([])
@@ -283,6 +343,10 @@ function Impressoras() {
     const { error } = await db.from('pdv_fila_impressao').insert({ impressora_id: i.id, tipo: 'teste', conteudo: { texto: `Teste ${i.nome}`, funcao: i.funcao } })
     if (error) s.falha(error.message); else { s.ok('Teste na fila. O agente de impressão imprime em poucos segundos.'); carregar() }
   }
+  async function reenfileirar() {
+    const { error } = await db.from('pdv_fila_impressao').update({ status: 'pendente', tentativas: 0, erro: null }).eq('status', 'erro')
+    if (error) s.falha(error.message); else { s.ok('Impressões com erro voltaram para a fila.'); carregar() }
+  }
   const set = (p: Partial<Impressora>) => setEd((x) => ({ ...x, ...p }))
   return (
     <div className="space-y-4">
@@ -290,7 +354,7 @@ function Impressoras() {
       <p className="rounded-xl bg-brand-soft p-3 text-sm">
         O navegador não fala direto com impressora de rede. O <b>agente de impressão</b> (pasta <code>agente-impressao</code> do projeto) roda num PC/mini-PC
         ligado na mesma rede das impressoras, lê a fila e imprime em ESC/POS pela porta 9100. Tablet, celular do garçom e sistema só enfileiram.
-        {fila.length > 0 && <b className="block pt-1">Na fila: {fila.map((f) => `${f.n} ${f.status}`).join(', ')}</b>}
+        {fila.length > 0 && <b className="block pt-1">Na fila: {fila.map((f) => `${f.n} ${f.status}`).join(', ')}{fila.some((f) => f.status === 'erro') && <button className="ml-2 underline" onClick={reenfileirar}>reenfileirar erros</button>}</b>}
       </p>
       <button className={btnCls} onClick={() => setEd({ funcao: 'cozinha', porta: 9100, colunas: 48, codepage: 'CP860', corta_papel: true, ativo: true, via_extra: 0 })}>Nova impressora</button>
       {!lista.length ? <Vazio texto="Nenhuma impressora. Cadastre as 3: caixa, bar e cozinha." /> : (
@@ -303,6 +367,7 @@ function Impressoras() {
           ))}
         </ul>
       )}
+      {pode('pdv_caixa') && <ReimprimirCupons />}
       {ed && (
         <Modal titulo={ed.id ? 'Editar impressora' : 'Nova impressora'} fechar={() => setEd(null)}>
           <Campo r="Nome"><input className={inputCls} value={ed.nome ?? ''} onChange={(e) => set({ nome: e.target.value })} /></Campo>

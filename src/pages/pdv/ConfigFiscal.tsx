@@ -3,7 +3,7 @@ import { db, supabase } from '../../lib/supabase'
 import { Carregando, Vazio, btnCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 
-interface Fisc { ambiente: string; razao_social: string | null; nome_fantasia: string | null; cnpj: string | null; inscricao_estadual: string | null; inscricao_municipal: string | null; regime_tributario: string | null; cep: string | null; logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; municipio: string | null; uf: string | null; codigo_municipio_ibge: string | null; telefone: string | null; csc_id: string | null; serie_nfce: number; emitir_automatico: boolean; ativo: boolean }
+interface Fisc { ambiente: string; razao_social: string | null; nome_fantasia: string | null; cnpj: string | null; inscricao_estadual: string | null; inscricao_municipal: string | null; regime_tributario: string | null; cep: string | null; logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; municipio: string | null; uf: string | null; codigo_municipio_ibge: string | null; telefone: string | null; csc_id: string | null; serie_nfce: number; emitir_automatico: boolean; ativo: boolean; item_lista_servico: string | null; codigo_tributario_municipio: string | null; aliquota_iss: number | null }
 interface Nota { id: string; referencia: string; status: string; numero: number | null; mensagem: string | null; danfe_url: string | null; criado_em: string }
 
 export function Fiscal() {
@@ -55,7 +55,12 @@ export function Fiscal() {
           <Campo r="Ambiente"><select className={inputCls} value={f.ambiente} onChange={(e) => set({ ambiente: e.target.value })}><option value="homologacao">Homologação (testes)</option><option value="producao">Produção</option></select></Campo>
           <Campo r="Série da NFC-e"><input className={inputCls} value={f.serie_nfce} onChange={(e) => set({ serie_nfce: Number(e.target.value) || 1 })} /></Campo>
         </div>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.emitir_automatico} onChange={(e) => set({ emitir_automatico: e.target.checked })} />Emitir NFC-e automaticamente ao fechar a comanda</label>
+        <p className="text-sm text-ink-soft">Ao fechar a comanda o sistema abre a emissão rápida do cupom (CPF/CNPJ do cliente ou sem identificação).</p>
+        <h2 className="pt-2 font-semibold">Serviços (NFS-e de eventos)</h2>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {T('item_lista_servico', 'Item da lista de serviço', 'ex.: 17.11')}{T('codigo_tributario_municipio', 'Cód. tributário do município')}
+          <Campo r="Alíquota de ISS (%)"><input className={inputCls} inputMode="decimal" value={String(f.aliquota_iss ?? 0)} onChange={(e) => set({ aliquota_iss: Number(e.target.value.replace(',', '.')) || 0 })} /></Campo>
+        </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.ativo} onChange={(e) => set({ ativo: e.target.checked })} />Módulo fiscal ativo</label>
         <div className="flex gap-2"><button className={btnCls} onClick={salvar}>Salvar</button><button className={btnSecCls} onClick={testar}>Testar conexão</button></div>
       </section>

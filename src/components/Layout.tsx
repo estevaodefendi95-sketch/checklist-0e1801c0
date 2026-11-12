@@ -6,6 +6,8 @@ import { applyTheme } from '../lib/theme'
 import { ler, gravar } from '../lib/armazenamento'
 import { Icone, NomeIcone } from './Icone'
 import { LinhaVersao } from './AvisoAtualizacao'
+import { Sino } from './Avisos'
+import { Assistente } from './Assistente'
 
 const roleLabel: Record<string, string> = {
   admin: 'Administrador',
@@ -66,9 +68,13 @@ export function Layout({ children }: { children: ReactNode }) {
     { to: '/fichas', rotulo: 'Fichas técnicas', curto: 'Fichas', icone: 'fichas', grupo: 'cardapio' },
     { to: '/cardapios', rotulo: 'Cardápios', icone: 'cardapios', grupo: 'cardapio' },
     { to: '/insumos', rotulo: 'Insumos', icone: 'insumos', grupo: 'cardapio' },
-    ...(pode('editar_precos') || pode('lancar_estoque')
-      ? [{ to: '/fornecedores', rotulo: 'Fornecedores', icone: 'fornecedores', grupo: 'cardapio' } as Item]
+    ...(pode('editar_precos') || pode('lancar_estoque') || pode('pdv_gerir')
+      ? [
+          { to: '/compras', rotulo: 'Notas de compra', curto: 'Compras', icone: 'nota', grupo: 'cardapio' } as Item,
+          { to: '/fornecedores', rotulo: 'Fornecedores', icone: 'fornecedores', grupo: 'cardapio' } as Item,
+        ]
       : []),
+    ...(pode('pdv_fiscal') || pode('pdv_caixa') ? [{ to: '/pdv/eventos', rotulo: 'Notas de eventos', curto: 'Eventos', icone: 'evento', grupo: 'admin' } as Item] : []),
     ...(pode('pdv_gerir') || pode('pdv_fiscal')
       ? [{ to: '/pdv/config', rotulo: 'Configurações do PDV', curto: 'Config.', icone: 'impressora', grupo: 'admin' } as Item]
       : []),
@@ -110,6 +116,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </Link>
         </div>
 
+        <div className="px-3.5"><Sino className="w-full hover:bg-brand-ink/10" rotulo={!recolhido} /></div>
         <nav className="flex-1 overflow-y-auto px-3.5">
           {(['atendimento', 'operacao', 'cardapio', 'admin'] as const).map((g) => {
             const doGrupo = itens.filter((i) => i.grupo === g)
@@ -161,8 +168,9 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* ---------- conteúdo ---------- */}
       <div className={`transition-[padding] duration-200 ${recuo}`}>
         {/* celular/tablet retrato: só a marca; o título fica na própria página */}
-        <div className="px-4 pt-[calc(14px+env(safe-area-inset-top))] text-xs uppercase tracking-[0.08em] text-ink-soft md:px-6 lg:hidden">
-          Paggio Operação
+        <div className="flex items-center justify-between px-4 pt-[calc(14px+env(safe-area-inset-top))] text-xs uppercase tracking-[0.08em] text-ink-soft md:px-6 lg:hidden">
+          <span>Paggio Operação</span>
+          <Sino className="text-brand" />
         </div>
         <main className="mx-auto max-w-6xl px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-3 md:px-6 lg:px-8 lg:pb-12 lg:pt-8">
           {children}
@@ -170,6 +178,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
       </div>
 
+      <Assistente />
       {/* ---------- barra inferior (< 1024 px) ---------- */}
       <nav
         className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-surface px-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1.5 lg:hidden"

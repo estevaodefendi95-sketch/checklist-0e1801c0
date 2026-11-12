@@ -72,7 +72,16 @@ export function PdvRelatorios() {
     const couvert = soTipo('couvert')
     const rodizio = soTipo('rodizio')
     const cancel = itens.filter((i) => i.status === 'cancelado')
-    return { maq, couvert, rodizio, fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
+    const totC = (c: Comanda) => Math.max(0, bruto(c.id) * (1 + c.taxa_servico_pct / 100) - c.desconto)
+    const faixas: Record<string, { n: number; v: number; p: number }> = {}
+    const dias: Record<string, { n: number; v: number; p: number }> = {}
+    const ORD = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
+    fechadas.forEach((c) => {
+      const f = c.pessoas <= 1 ? '1 pessoa' : c.pessoas === 2 ? '2 pessoas' : c.pessoas <= 4 ? '3 a 4 pessoas' : c.pessoas <= 8 ? '5 a 8 pessoas' : '9+ pessoas'
+      const d = ORD[new Date(c.aberta_em).getDay()]
+      for (const [m, k] of [[faixas, f], [dias, d]] as const) { m[k] ??= { n: 0, v: 0, p: 0 }; m[k].n++; m[k].v += totC(c); m[k].p += c.pessoas }
+    })
+    return { faixas, dias, ORD, mediaPessoas: fechadas.length ? pessoas / fechadas.length : 0, maq, couvert, rodizio, fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
   }, [comandas, itens, pags, catDe])
 
   function csv() {
@@ -103,6 +112,7 @@ export function PdvRelatorios() {
             <Kpi t="Comandas fechadas" v={String(r.fechadas.length)} />
             <Kpi t="Ticket médio" v={reais(r.fechadas.length ? r.fat / r.fechadas.length : 0)} />
             <Kpi t="Por pessoa" v={reais(r.pessoas ? r.fat / r.pessoas : 0)} />
+            <Kpi t="Pessoas por comanda" v={r.mediaPessoas.toFixed(1).replace('.', ',')} />
             <Kpi t="Serviço (taxa)" v={reais(r.servico)} />
             <Kpi t="Couvert artístico" v={reais(r.couvert)} />
             <Kpi t="Rodízio" v={reais(r.rodizio)} />
@@ -118,6 +128,14 @@ export function PdvRelatorios() {
               {Object.entries(r.maq).sort().map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}
               {!Object.keys(r.maq).length && <p className="text-sm text-ink-soft">Sem pagamentos em cartão.</p>}
             </Bloco>
+            <Bloco t="Ticket médio por tamanho do grupo">
+              {Object.entries(r.faixas).sort().map(([k, v]) => <Linha key={k} a={`${k} · ${v.n} comanda(s)`} b={`${reais(v.v / v.n)} · ${reais(v.v / Math.max(1, v.p))}/pessoa`} />)}
+              {!Object.keys(r.faixas).length && <p className="text-sm text-ink-soft">Sem comandas fechadas.</p>}
+            </Bloco>
+            <Bloco t="Ticket médio por dia da semana">
+              {r.ORD.filter((d) => r.dias[d]).map((d) => <Linha key={d} a={`${d} · ${r.dias[d].n} comanda(s)`} b={`${reais(r.dias[d].v / r.dias[d].n)} · ${reais(r.dias[d].v / Math.max(1, r.dias[d].p))}/pessoa`} />)}
+              {!Object.keys(r.dias).length && <p className="text-sm text-ink-soft">Sem comandas fechadas.</p>}
+            </Bloco>
             <Bloco t="Por categoria">
               {Object.entries(r.cat).sort((a, b) => b[1] - a[1]).map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}
               {!Object.keys(r.cat).length && <p className="text-sm text-ink-soft">Sem vendas no período.</p>}
@@ -128,7 +146,7 @@ export function PdvRelatorios() {
             </Bloco>
             <Bloco t="Comandas do período">
               {!comandas.length ? <Vazio texto="Nenhuma comanda." /> : comandas.slice().reverse().slice(0, 40).map((c) => (
-                <Linha key={c.id} a={`#${c.numero} · ${c.mesa_id ? 'mesa ' + (mesas[c.mesa_id]?.numero ?? '?') : 'balcão'} · ${hora(c.aberta_em)} · ${c.status}`} b={reais(r.bruto(c.id) * (1 + c.taxa_servico_pct / 100) - c.desconto)} />
+                <Linha key={c.id} a={`#${c.numero} · ${c.mesa_id ? 'mesa ' + (mesas[c.mesa_id]?.numero ?? '?') : 'balcão'} · ${c.pessoas} pes. · ${hora(c.aberta_em)} · ${c.status}`} b={reais(r.bruto(c.id) * (1 + c.taxa_servico_pct / 100) - c.desconto)} />
               ))}
             </Bloco>
             {r.cancel.length > 0 && (

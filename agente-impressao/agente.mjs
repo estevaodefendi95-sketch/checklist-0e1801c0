@@ -59,6 +59,26 @@ function monta(job) {
     k.par('Fundo', brl(c.fundo)).par('Suprimentos', brl(c.suprimentos)).par('Sangrias', brl(c.sangrias)).linha()
     for (const [f, v] of Object.entries(c.esperado ?? {})) k.par(`Esperado ${f}`, brl(v)).par(`Contado ${f}`, brl((c.contado ?? {})[f] ?? 0))
     k.linha().negrito(true).par('Diferenca dinheiro', brl(c.diferenca_dinheiro)).par('Total vendido', brl(c.total_vendas)).negrito(false)
+  } else if (job.tipo === 'cupom') {
+    // 2ª via do cupom fiscal (NFC-e) — DANFE simplificado + QR Code de consulta
+    k.centro(true).negrito(true).txt(c.emitente ?? '').negrito(false)
+    if (c.cnpj) k.txt('CNPJ ' + c.cnpj)
+    k.txt('DANFE NFC-e - Documento Auxiliar da Nota Fiscal de Consumidor Eletronica').txt(c.via2 ? '*** 2a VIA ***' : '').centro(false).linha()
+    for (const i of c.itens ?? []) k.par(`${i.qtd}x ${i.nome}`, brl(i.qtd * i.preco))
+    k.linha().negrito(true).par('TOTAL', brl(c.total)).negrito(false)
+    for (const p of c.pagamentos ?? []) k.par(p.forma, brl(p.valor))
+    k.linha().centro(true).txt(`NFC-e n ${c.numero ?? '-'}  Serie ${c.serie ?? '-'}`)
+    if (c.chave) k.txt('Chave de acesso:').txt(String(c.chave).replace(/(\d{4})/g, '$1 ').trim())
+    if (c.protocolo) k.txt('Protocolo: ' + c.protocolo)
+    k.txt(c.consumidor ? 'Consumidor: ' + c.consumidor : 'CONSUMIDOR NAO IDENTIFICADO')
+    if (c.qrcode) {
+      const d = Buffer.from(String(c.qrcode)), n = d.length + 3
+      k.raw(GS, 0x28, 0x6b, 4, 0, 0x31, 0x41, 0x32, 0).raw(GS, 0x28, 0x6b, 3, 0, 0x31, 0x43, 6).raw(GS, 0x28, 0x6b, 3, 0, 0x31, 0x45, 0x31)
+      k.b.push(Buffer.from([GS, 0x28, 0x6b, n & 255, n >> 8, 0x31, 0x50, 0x30]), d)
+      k.raw(GS, 0x28, 0x6b, 3, 0, 0x31, 0x51, 0x30).txt('')
+    }
+    if (c.url_consulta) k.txt('Consulte em: ' + c.url_consulta)
+    k.centro(false)
   } else {
     k.txt(JSON.stringify(c).slice(0, 400))
   }

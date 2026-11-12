@@ -10,6 +10,25 @@ const cors = {
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
+
+// Horário de funcionamento do item/categoria (fuso de Brasília). dias: 0=dom..6=sáb; fim < início = vira a noite.
+function agoraSP() {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+  const g = (t: string) => f.find((x) => x.type === t)!.value;
+  const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(g("weekday"));
+  return { dow, min: (Number(g("hour")) % 24) * 60 + Number(g("minute")) };
+}
+const toMin = (t: string | null) => (t ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) : null);
+function noHorario(ini: string | null, fim: string | null, dias: number[] | null) {
+  const { dow, min } = agoraSP();
+  const ontem = (dow + 6) % 7;
+  const okH = !dias?.length || dias.includes(dow), okO = !dias?.length || dias.includes(ontem);
+  const a = toMin(ini), b = toMin(fim);
+  if (a == null || b == null) return okH;
+  if (a <= b) return okH && min >= a && min < b;
+  return (okH && min >= a) || (okO && min < b);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -21,24 +40,35 @@ Deno.serve(async (req) => {
     const { data: mesa } = await db.from("pdv_mesas").select("id,numero").eq("qr_token", token).eq("ativo", true).maybeSingle();
     if (!mesa) return json({ erro: "Mesa não encontrada." });
     const { data: cfg } = await db.from("pdv_config").select("*").eq("id", 1).single();
-    if (!cfg.tablet_qr_ativo) return json({ mesa: mesa.numero, qr_ativo: false, boas_vindas: cfg.tablet_mensagem_boas_vindas });
+    if (!cfg.tablet_qr_ativo) return json({ mesa: mesa.numero, qr_ativo: false, boas_vindas: cfg.tablet_mensagem_boas_vindas, tema: cfg.tablet_tema });
 
     const { data: com } = await db.from("pdv_comandas").select("id,nome_cliente,status,taxa_servico_pct,desconto")
       .eq("mesa_id", mesa.id).in("status", ["aberta", "pedindo_conta"]).maybeSingle();
 
     if (acao === "menu") {
-      const [cats, prods, its] = await Promise.all([
-        db.from("pdv_categorias").select("id,nome").eq("ativo", true).order("ordem"),
-        db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
-        com ? db.from("pdv_pedido_itens").select("nome,qtd,preco_unit,status").eq("comanda_id", com.id).neq("status", "cancelado").order("criado_em") : Promise.resolve({ data: [] }),
+      const [cats, prods, its, grp, pg, ops] = await Promise.all([
+        db.from("pdv_categorias").select("id,nome,visivel_tablet,horario_inicio,horario_fim,dias_semana").eq("ativo", true).order("ordem"),
+        db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,horario_inicio,horario_fim,dias_semana").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
+        com ? db.from("pdv_pedido_itens").select("nome,qtd,preco_unit,status,opcoes").eq("comanda_id", com.id).neq("status", "cancelado").order("criado_em") : Promise.resolve({ data: [] }),
+        db.from("pdv_grupos_opcoes").select("id,nome,tipo,min_escolhas,max_escolhas").eq("ativo", true).order("ordem"),
+        db.from("pdv_produto_grupos").select("produto_id,grupo_id,ordem").order("ordem"),
+        db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true).order("ordem"),
       ]);
+      const catOk = new Map((cats.data ?? []).filter((c: any) => c.visivel_tablet && noHorario(c.horario_inicio, c.horario_fim, c.dias_semana)).map((c: any) => [c.id, c]));
+      const produtos = (prods.data ?? []).filter((p: any) => p.visivel_tablet && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorario(p.horario_inicio, p.horario_fim, p.dias_semana))
+        .map((p: any) => ({
+          id: p.id, nome: p.nome, descricao: p.descricao, preco: p.preco, categoria_id: p.categoria_id, foto_url: p.foto_url,
+          grupos: (pg.data ?? []).filter((x: any) => x.produto_id === p.id).map((x: any) => (grp.data ?? []).find((g: any) => g.id === x.grupo_id)).filter(Boolean)
+            .map((g: any) => ({ ...g, opcoes: (ops.data ?? []).filter((o: any) => o.grupo_id === g.id) })),
+        }));
+      const categorias = [...catOk.values()].filter((c: any) => produtos.some((p: any) => p.categoria_id === c.id)).map((c: any) => ({ id: c.id, nome: c.nome }));
       const sub = (its.data ?? []).reduce((s: number, i: any) => s + i.qtd * i.preco_unit, 0);
       const total = Math.max(0, sub * (1 + (com?.taxa_servico_pct ?? 0) / 100) - (com?.desconto ?? 0));
       return json({
-        mesa: mesa.numero, qr_ativo: true, boas_vindas: cfg.tablet_mensagem_boas_vindas, exige_checkin: cfg.tablet_exige_checkin,
+        mesa: mesa.numero, qr_ativo: true, tema: cfg.tablet_tema, boas_vindas: cfg.tablet_mensagem_boas_vindas, exige_checkin: cfg.tablet_exige_checkin,
         pode_chamar: cfg.tablet_pode_chamar_garcom, pode_conta: cfg.tablet_pode_pedir_conta,
         comanda: com ? { id: com.id, nome_cliente: com.nome_cliente, status: com.status, total } : null,
-        itens: its.data ?? [], categorias: cats.data ?? [], produtos: prods.data ?? [],
+        itens: its.data ?? [], categorias, produtos,
       });
     }
 
@@ -57,14 +87,37 @@ Deno.serve(async (req) => {
     if (acao === "pedir") {
       if (!Array.isArray(itens) || !itens.length || itens.length > 40) return json({ erro: "Pedido vazio." });
       const ids = itens.map((i: any) => i.produto_id);
-      const { data: prods } = await db.from("pdv_produtos").select("id,nome,preco,destino").in("id", ids).eq("ativo", true).eq("disponivel", true);
+      const [{ data: prods }, { data: cats }, { data: pg }, { data: grp }, { data: ops }] = await Promise.all([
+        db.from("pdv_produtos").select("id,nome,preco,destino,categoria_id,visivel_tablet,horario_inicio,horario_fim,dias_semana").in("id", ids).eq("ativo", true).eq("disponivel", true),
+        db.from("pdv_categorias").select("id,visivel_tablet,horario_inicio,horario_fim,dias_semana"),
+        db.from("pdv_produto_grupos").select("produto_id,grupo_id").in("produto_id", ids),
+        db.from("pdv_grupos_opcoes").select("id,nome,min_escolhas,max_escolhas").eq("ativo", true),
+        db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true),
+      ]);
       const mapa = new Map((prods ?? []).map((p: any) => [p.id, p]));
       const linhas = [];
       for (const i of itens) {
         const p: any = mapa.get(i.produto_id);
         const q = Math.min(20, Math.max(1, Math.floor(Number(i.qtd) || 0)));
-        if (!p) return json({ erro: "Um dos itens não está mais disponível." });
-        linhas.push({ comanda_id: com.id, produto_id: p.id, nome: p.nome, qtd: q, preco_unit: p.preco, obs: String(i.obs ?? "").slice(0, 120) || null, destino: p.destino, origem: "tablet" });
+        const c: any = (cats ?? []).find((k: any) => k.id === p?.categoria_id);
+        if (!p || !p.visivel_tablet || !noHorario(p.horario_inicio, p.horario_fim, p.dias_semana) || (c && (!c.visivel_tablet || !noHorario(c.horario_inicio, c.horario_fim, c.dias_semana))))
+          return json({ erro: "Um dos itens não está disponível neste horário." });
+        // opções escolhidas: valida grupos do produto, mínimo/máximo e recalcula o preço no servidor
+        const escolhidas: any[] = (Array.isArray(i.opcoes) ? i.opcoes : []).map((id: string) => (ops ?? []).find((o: any) => o.id === id));
+        if (escolhidas.some((o) => !o)) return json({ erro: "Uma das opções não está mais disponível." });
+        const gruposDoProduto = (pg ?? []).filter((x: any) => x.produto_id === p.id).map((x: any) => (grp ?? []).find((g: any) => g.id === x.grupo_id)).filter(Boolean);
+        for (const o of escolhidas) if (!gruposDoProduto.some((g: any) => g.id === o.grupo_id)) return json({ erro: "Opção inválida para o item." });
+        for (const g of gruposDoProduto as any[]) {
+          const n = escolhidas.filter((o) => o.grupo_id === g.id).length;
+          if (n < g.min_escolhas) return json({ erro: `Escolha "${g.nome}" em ${p.nome}.` });
+          if (n > g.max_escolhas) return json({ erro: `Em "${g.nome}" escolha no máximo ${g.max_escolhas}.` });
+        }
+        const adic = escolhidas.reduce((s, o) => s + Number(o.preco_adicional), 0);
+        linhas.push({
+          comanda_id: com.id, produto_id: p.id, nome: p.nome, qtd: q, preco_unit: Number(p.preco) + adic,
+          opcoes: escolhidas.map((o) => ({ id: o.id, nome: o.nome, preco: Number(o.preco_adicional) })),
+          obs: String(i.obs ?? "").slice(0, 120) || null, destino: p.destino, origem: "tablet",
+        });
       }
       const { error } = await db.from("pdv_pedido_itens").insert(linhas); // o gatilho já enfileira a impressão
       return error ? json({ erro: "Não foi possível enviar. Chame o garçom." }) : json({ ok: true });

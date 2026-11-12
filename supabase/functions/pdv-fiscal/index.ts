@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
 
     const { data: podeFiscal } = await user.schema("checklist").rpc("pdv_pode", { p: "pdv_fiscal" });
     const { data: podeCaixa } = await user.schema("checklist").rpc("pdv_pode", { p: "pdv_caixa" });
-    if (!(podeFiscal === true || (acao === "emitir" && podeCaixa === true))) return json({ error: "Sem permissão fiscal." }, 403);
+    if (!(podeFiscal === true || (["emitir", "consultar", "emitir_evento", "consultar_evento"].includes(acao) && podeCaixa === true))) return json({ error: "Sem permissão fiscal." }, 403);
 
     const db = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!).schema("checklist");
     const { data: cfg } = await db.from("pdv_fiscal_config").select("*").eq("id", 1).single();
@@ -100,6 +100,49 @@ Deno.serve(async (req) => {
       const st = r.ok ? (resp.status === "autorizado" ? "autorizada" : "processando") : "erro";
       await db.from("pdv_notas").update({ status: st, resposta: resp, mensagem: resp.mensagem ?? resp.mensagem_sefaz ?? null, atualizado_em: new Date().toISOString() }).eq("referencia", ref);
       return json({ mensagem: r.ok ? "NFC-e enviada. Consulte o status em instantes." : (resp.mensagem ?? "Erro ao enviar."), referencia: ref }, r.ok ? 200 : 400);
+    }
+
+    if (acao === "emitir_evento" || acao === "consultar_evento") {
+      // NFS-e de eventos (serviço) pela Focus NFe. Cada município pode exigir campos próprios: valide em homologação.
+      const { data: ev } = await db.from("pdv_eventos").select("*").eq("id", body.evento_id).single();
+      if (!ev) return json({ error: "Evento não encontrado." }, 404);
+      const mapa: Record<string, string> = { autorizado: "autorizada", cancelado: "cancelada", erro_autorizacao: "rejeitada", processando_autorizacao: "processando", rejeitado: "rejeitada" };
+      const atualizar = async (resp: any, ok: boolean) => {
+        const st = mapa[resp.status] ?? (ok ? "processando" : "erro");
+        await db.from("pdv_eventos").update({
+          status: st, resposta: resp, mensagem: resp.mensagem ?? resp.erros?.[0]?.mensagem ?? null, numero_nota: resp.numero ? String(resp.numero) : ev.numero_nota,
+          nota_url: resp.url ?? resp.url_danfse ?? null, atualizado_em: new Date().toISOString(),
+        }).eq("id", ev.id);
+        return st;
+      };
+      if (acao === "consultar_evento") {
+        if (!ev.referencia) return json({ error: "Evento ainda não enviado." }, 400);
+        const r = await fetch(`${base}/v2/nfse/${ev.referencia}`, { headers: hdr });
+        const resp = await r.json().catch(() => ({}));
+        return json({ mensagem: `Status: ${await atualizar(resp, r.ok)}` });
+      }
+      if (["processando", "autorizada", "manual"].includes(ev.status)) return json({ error: "Este evento já tem nota em andamento ou emitida." }, 409);
+      if (!cfg.cnpj || !cfg.inscricao_municipal || !cfg.codigo_municipio_ibge) return json({ error: "Complete CNPJ, inscrição municipal e código IBGE do emitente (Configurações › Fiscal)." }, 400);
+      if (!cfg.item_lista_servico) return json({ error: "Informe o item da lista de serviço (Configurações › Fiscal)." }, 400);
+      const doc = String(ev.tomador_doc).replace(/\D/g, "");
+      const ref = `evento-${ev.id.slice(0, 8)}-${Date.now()}`;
+      const payload: Record<string, unknown> = {
+        data_emissao: new Date().toISOString(),
+        prestador: { cnpj: String(cfg.cnpj).replace(/\D/g, ""), inscricao_municipal: String(cfg.inscricao_municipal).replace(/\D/g, ""), codigo_municipio: cfg.codigo_municipio_ibge },
+        tomador: {
+          ...(doc.length === 14 ? { cnpj: doc } : { cpf: doc }), razao_social: ev.tomador_nome, email: ev.tomador_email ?? undefined,
+          endereco: ev.tomador_logradouro ? { logradouro: ev.tomador_logradouro, numero: ev.tomador_numero || "S/N", bairro: ev.tomador_bairro, codigo_municipio: ev.tomador_codigo_municipio, uf: ev.tomador_uf, cep: ev.tomador_cep } : undefined,
+        },
+        servico: {
+          aliquota: Number(cfg.aliquota_iss ?? 0), discriminacao: `${ev.descricao_servico}${ev.data_evento ? ` — evento em ${ev.data_evento}` : ""}`, iss_retido: false,
+          item_lista_servico: cfg.item_lista_servico, codigo_tributario_municipio: cfg.codigo_tributario_municipio ?? undefined, valor_servicos: Number(ev.valor),
+        },
+      };
+      await db.from("pdv_eventos").update({ referencia: ref, status: "processando", mensagem: null }).eq("id", ev.id);
+      const r = await fetch(`${base}/v2/nfse?ref=${ref}`, { method: "POST", headers: hdr, body: JSON.stringify(payload) });
+      const resp = await r.json().catch(() => ({}));
+      const st = await atualizar(resp, r.ok);
+      return json({ mensagem: r.ok ? `NFS-e enviada (${st}). Consulte o status em instantes.` : (resp.mensagem ?? "Erro ao enviar.") }, r.ok ? 200 : 400);
     }
 
     if (acao === "consultar" || acao === "cancelar") {

@@ -20,8 +20,10 @@ export interface Mesa {
   forma: 'quadrada' | 'redonda' | 'retangular'
   pos_x: number; pos_y: number; largura: number; altura: number; qr_token: string; ativo: boolean
 }
-export interface Categoria { id: string; nome: string; ordem: number; destino_padrao: Destino; ativo: boolean }
-export interface Produto {
+export interface Horario { horario_inicio: string | null; horario_fim: string | null; dias_semana: number[] | null }
+export interface Categoria extends Horario { id: string; nome: string; ordem: number; destino_padrao: Destino; ativo: boolean; visivel_tablet: boolean }
+export interface Produto extends Horario {
+  visivel_tablet: boolean; foto_url?: string | null;
   id: string; categoria_id: string | null; ficha_id: string | null; codigo: string | null; nome: string
   descricao: string | null; preco: number; destino: Destino; ativo: boolean; disponivel: boolean; ordem: number
   ncm: string | null; cest: string | null; cfop: string | null; unidade: string | null; origem: number | null
@@ -38,6 +40,7 @@ export interface Item {
   obs: string | null; destino: Destino; origem: string
   status: 'enviado' | 'preparando' | 'pronto' | 'entregue' | 'cancelado'; criado_em: string
   tipo: 'produto' | 'couvert' | 'rodizio'
+  opcoes?: { id?: string; nome: string; preco: number }[]
 }
 export interface Totais { comanda_id: string; subtotal: number; servico: number; total: number; pago: number }
 export interface Impressora {
@@ -88,4 +91,16 @@ export async function enfileirar(
     .from('pdv_fila_impressao')
     .insert({ impressora_id: imp[0].id, tipo, conteudo, comanda_id: comandaId ?? null })
   return { erro: error?.message }
+}
+
+/** Mesma regra do banco (pdv_no_horario): vale no fuso do navegador (Brasília). dias: 0=dom..6=sáb. */
+export function noHorario(ini: string | null, fim: string | null, dias: number[] | null, d = new Date()) {
+  const min = d.getHours() * 60 + d.getMinutes()
+  const hoje = d.getDay(), ontem = (hoje + 6) % 7
+  const okH = !dias?.length || dias.includes(hoje), okO = !dias?.length || dias.includes(ontem)
+  const t = (x: string | null) => (x ? Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5)) : null)
+  const a = t(ini), b = t(fim)
+  if (a == null || b == null) return okH
+  if (a <= b) return okH && min >= a && min < b
+  return (okH && min >= a) || (okO && min < b)
 }

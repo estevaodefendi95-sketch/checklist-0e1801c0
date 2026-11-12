@@ -1,0 +1,1 @@
+alter table checklist.pdv_config add column if not exists tablet_tema jsonb not null default '{"primaria":"#7a1f2b","fundo":"#faf7f2","texto":"#222222","destaque":"#c9a24b","titulo":"Paggio","subtitulo":"","colunas":1,"mostrar_fotos":true}'::jsonb;

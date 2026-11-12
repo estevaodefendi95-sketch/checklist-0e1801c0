@@ -10,6 +10,8 @@ import {
 import { usePermissoes } from '../../context/PermissoesContext'
 import { PerfisCheckin, usePerfisCobrancas } from './PerfisCheckin'
 import { Modal } from './PdvCaixa'
+import { Grupo, Opcao } from './ConfigCardapio'
+import { EmitirFiscal } from './FiscalRapido'
 
 interface Pag { tef_provedor: string | null; id: string; forma: string; valor: number; troco: number; tef_status: string | null; tef_nsu: string | null; estornado: boolean; criado_em: string }
 
@@ -35,7 +37,11 @@ export function Comanda() {
   const [erro, setErro] = useState('')
   const [msg, setMsg] = useState('')
   const [fim, setFim] = useState(false)
-  const [carrinho, setCarrinho] = useState<{ p: Produto; qtd: number; obs: string }[]>([])
+  const [carrinho, setCarrinho] = useState<{ p: Produto; qtd: number; obs: string; opcoes: Opcao[] }[]>([])
+  const [grupos, setGrupos] = useState<(Grupo & { opcoes: Opcao[]; produtos: string[] })[]>([])
+  const [esc, setEsc] = useState<{ p: Produto; sel: Record<string, string[]> } | null>(null)
+  const [pessoasEd, setPessoasEd] = useState<string | null>(null)
+  const [fiscalFim, setFiscalFim] = useState(false)
   const [aba, setAba] = useState<'pedido' | 'pagamento'>('pedido')
   const [forma, setForma] = useState<string>('credito')
   const [valor, setValor] = useState('')
@@ -47,7 +53,7 @@ export function Comanda() {
 
   const carregar = useCallback(async () => {
     if (!id) return
-    const [cm, it, pg, tt, ct, pr, ss] = await Promise.all([
+    const [cm, it, pg, tt, ct, pr, ss, gr, op, pgr] = await Promise.all([
       db.from('pdv_comandas').select('*').eq('id', id).single(),
       db.from('pdv_pedido_itens').select('*').eq('comanda_id', id).order('criado_em'),
       db.from('pdv_pagamentos').select('*').eq('comanda_id', id).order('criado_em'),
@@ -55,6 +61,9 @@ export function Comanda() {
       db.from('pdv_categorias').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_produtos').select('*').eq('ativo', true).order('ordem').order('nome'),
       db.from('pdv_caixa_sessoes').select('*').eq('status', 'aberto').limit(1),
+      db.from('pdv_grupos_opcoes').select('*').eq('ativo', true).order('ordem'),
+      db.from('pdv_opcoes').select('*').eq('ativo', true).order('ordem'),
+      db.from('pdv_produto_grupos').select('produto_id,grupo_id,ordem').order('ordem'),
     ])
     if (cm.error) return setErro(cm.error.message)
     const cmd = cm.data as TComanda
@@ -66,6 +75,10 @@ export function Comanda() {
     setCats((ct.data ?? []) as Categoria[])
     setProds((pr.data ?? []) as Produto[])
     setSessao((ss.data?.[0] as Sessao) ?? null)
+    setGrupos(((gr.data ?? []) as Grupo[]).map((g) => ({
+      ...g, opcoes: ((op.data ?? []) as Opcao[]).filter((o) => o.grupo_id === g.id),
+      produtos: ((pgr.data ?? []) as { produto_id: string; grupo_id: string }[]).filter((x) => x.grupo_id === g.id).map((x) => x.produto_id),
+    })))
     setFim(true)
   }, [id])
   useAoVivo(['pdv_pedido_itens', 'pdv_pagamentos', 'pdv_comandas'], carregar, 10000)
@@ -82,21 +95,39 @@ export function Comanda() {
     )
   }, [prods, cat, busca])
 
+  const gruposDe = (p: Produto) => grupos.filter((g) => g.produtos.includes(p.id) && g.opcoes.length)
   function add(p: Produto) {
+    if (gruposDe(p).length) return setEsc({ p, sel: {} })
     setCarrinho((cs) => {
-      const i = cs.findIndex((x) => x.p.id === p.id && !x.obs)
+      const i = cs.findIndex((x) => x.p.id === p.id && !x.obs && !x.opcoes.length)
       if (i >= 0) return cs.map((x, k) => (k === i ? { ...x, qtd: x.qtd + 1 } : x))
-      return [...cs, { p, qtd: 1, obs: '' }]
+      return [...cs, { p, qtd: 1, obs: '', opcoes: [] }]
     })
   }
+  function toggleOpc(g: Grupo & { opcoes: Opcao[] }, o: Opcao) {
+    setEsc((x) => {
+      if (!x) return x
+      const at = x.sel[g.id] ?? []
+      const novo = at.includes(o.id) ? at.filter((i) => i !== o.id) : g.max_escolhas === 1 ? [o.id] : at.length < g.max_escolhas ? [...at, o.id] : at
+      return { ...x, sel: { ...x.sel, [g.id]: novo } }
+    })
+  }
+  function confirmarEsc() {
+    if (!esc) return
+    for (const g of gruposDe(esc.p)) if ((esc.sel[g.id]?.length ?? 0) < g.min_escolhas) return setErro(`Escolha "${g.nome}" (mínimo ${g.min_escolhas}).`)
+    const ops = gruposDe(esc.p).flatMap((g) => g.opcoes.filter((o) => (esc.sel[g.id] ?? []).includes(o.id)))
+    setCarrinho((cs) => [...cs, { p: esc.p, qtd: 1, obs: '', opcoes: ops }])
+    setEsc(null); setErro('')
+  }
+  const precoLinha = (x: { p: Produto; opcoes: Opcao[] }) => Number(x.p.preco) + x.opcoes.reduce((s, o) => s + Number(o.preco_adicional), 0)
   async function enviar() {
     if (!c || !carrinho.length) return
     setErro('')
     const uid = (await supabase.auth.getUser()).data.user?.id
     const { error } = await db.from('pdv_pedido_itens').insert(
       carrinho.map((x) => ({
-        comanda_id: c.id, produto_id: x.p.id, nome: x.p.nome, qtd: x.qtd, preco_unit: x.p.preco,
-        obs: x.obs.trim() || null, destino: x.p.destino, origem: 'sistema', criado_por: uid,
+        comanda_id: c.id, produto_id: x.p.id, nome: x.p.nome, qtd: x.qtd, preco_unit: precoLinha(x),
+        opcoes: x.opcoes.map((o) => ({ id: o.id, nome: o.nome, preco: Number(o.preco_adicional) })), obs: x.obs.trim() || null, destino: x.p.destino, origem: 'sistema', criado_por: uid,
       }))
     )
     if (error) return setErro(error.message)
@@ -164,9 +195,9 @@ export function Comanda() {
     if (itens.some((i) => i.status !== 'cancelado') === false && !window.confirm('Comanda sem itens. Fechar mesmo assim?')) return
     const { error } = await db.from('pdv_comandas').update({ status: 'fechada', fechada_em: new Date().toISOString(), sessao_id: sessao?.id ?? null }).eq('id', c.id)
     if (error) return setErro(error.message)
-    // NFC-e automática se configurada
-    const { data: fc } = await db.from('pdv_fiscal_config').select('ativo,emitir_automatico').maybeSingle()
-    if (fc?.ativo && fc?.emitir_automatico) await supabase.functions.invoke('pdv-fiscal', { body: { acao: 'emitir', comanda_id: c.id } })
+    // Conta fechada: abre a emissão rápida do cupom fiscal (CPF/CNPJ do cliente ou sem identificação)
+    const { data: fc } = await db.from('pdv_fiscal_config').select('ativo').maybeSingle()
+    if (fc?.ativo && pode('pdv_caixa')) { setFiscalFim(true); carregar(); return }
     nav('/pdv')
   }
   async function cancelarComanda() {
@@ -175,6 +206,13 @@ export function Comanda() {
     await db.from('pdv_pedido_itens').update({ status: 'cancelado', cancelado_motivo: 'comanda cancelada' }).eq('comanda_id', c.id)
     await db.from('pdv_comandas').update({ status: 'cancelada', fechada_em: new Date().toISOString() }).eq('id', c.id)
     nav('/pdv')
+  }
+  async function salvarPessoas() {
+    if (!c || pessoasEd == null) return
+    const n = Math.min(500, Math.max(1, Math.floor(Number(pessoasEd) || 0)))
+    const { error } = await db.from('pdv_comandas').update({ pessoas: n }).eq('id', c.id)
+    if (error) return setErro(error.message)
+    setPessoasEd(null); setErro(''); carregar()
   }
   async function abrirPerfis() {
     const { data } = await db.from('pdv_comanda_perfis').select('perfil_id,qtd').eq('comanda_id', id)
@@ -198,14 +236,14 @@ export function Comanda() {
   if (!fim) return erro ? <Erro texto={erro} /> : <Carregando />
   if (!c) return <Vazio texto="Comanda não encontrada." />
   const qtdCarrinho = carrinho.reduce((s, x) => s + x.qtd, 0)
-  const totCarrinho = carrinho.reduce((s, x) => s + x.qtd * x.p.preco, 0)
+  const totCarrinho = carrinho.reduce((s, x) => s + x.qtd * precoLinha(x), 0)
 
   return (
     <div>
       <Cabecalho
         voltar={{ para: '/pdv', rotulo: 'Salão' }}
         titulo={`${mesa ? `Mesa ${mesa.numero}` : 'Balcão'} · #${c.numero}`}
-        subtitulo={`${c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s) · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
+        subtitulo={`${c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
       />
       {erro && <Erro texto={erro} />}
       {msg && <p className="mb-3 rounded-xl bg-brand-soft px-4 py-2 text-sm text-brand" onClick={() => setMsg('')}>{msg}</p>}
@@ -233,7 +271,7 @@ export function Comanda() {
                   <button key={p.id} onClick={() => add(p)} className={`${cartaoCls} min-h-[84px] p-3 text-left active:scale-[0.98]`}>
                     <div className="text-sm font-semibold leading-tight">{p.nome}</div>
                     <div className="mt-1 text-sm text-brand">{reais(p.preco)}</div>
-                    <div className="text-[11px] uppercase text-ink-soft">{p.destino}</div>
+                    <div className="text-[11px] uppercase text-ink-soft">{p.destino}{gruposDe(p).length ? ' · opções' : ''}</div>
                   </button>
                 ))}
               </div>
@@ -289,6 +327,7 @@ export function Comanda() {
                 ))}
               </ul>
             )}
+            {(pode('pdv_caixa') || pode('pdv_fiscal')) && <div className="border-t border-line pt-3"><EmitirFiscal comandaId={c.id} docInicial={c.cpf_cnpj_nota} compacto /></div>}
           </section>
         ) : (
           <Vazio texto="Comanda encerrada." />
@@ -301,7 +340,7 @@ export function Comanda() {
               {carrinho.map((x, i) => (
                 <div key={i} className="text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span>{x.qtd}× {x.p.nome}</span>
+                    <span>{x.qtd}× {x.p.nome}{x.opcoes.length ? <em className="block text-xs text-ink-soft">{x.opcoes.map((o) => o.nome).join(', ')}</em> : null}</span>
                     <span className="flex gap-1">
                       <button className={btnSecCls + ' !min-h-[32px] !px-2'} onClick={() => setCarrinho((cs) => cs.map((k, j) => (j === i ? { ...k, qtd: Math.max(0, k.qtd - 1) } : k)).filter((k) => k.qtd > 0))}>−</button>
                       <button className={btnSecCls + ' !min-h-[32px] !px-2'} onClick={() => setCarrinho((cs) => cs.map((k, j) => (j === i ? { ...k, qtd: k.qtd + 1 } : k)))}>+</button>
@@ -319,7 +358,7 @@ export function Comanda() {
               {itens.map((i) => (
                 <li key={i.id} className="py-2">
                   <div className="flex justify-between gap-2">
-                    <span className={i.status === 'cancelado' ? 'line-through opacity-60' : ''}>{i.qtd}× {i.nome}{i.obs ? <em className="block text-xs text-ink-soft">{i.obs}</em> : null}</span>
+                    <span className={i.status === 'cancelado' ? 'line-through opacity-60' : ''}>{i.qtd}× {i.nome}{i.opcoes?.length ? <em className="block text-xs text-ink-soft">{i.opcoes.map((o) => o.nome).join(', ')}</em> : null}{i.obs ? <em className="block text-xs text-ink-soft">{i.obs}</em> : null}</span>
                     <span>{reais(i.qtd * i.preco_unit)}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
@@ -338,9 +377,11 @@ export function Comanda() {
             <div className="flex justify-between"><dt>Serviço {c.taxa_servico_pct}%{aberta && <button className="ml-1 text-brand" onClick={() => ajusteConta('taxa_servico_pct')}>alterar</button>}</dt><dd>{reais(num(tot?.servico))}</dd></div>
             <div className="flex justify-between"><dt>Desconto{aberta && pode('pdv_caixa') && <button className="ml-1 text-brand" onClick={() => ajusteConta('desconto')}>alterar</button>}</dt><dd>−{reais(c.desconto)}</dd></div>
             <div className="flex justify-between text-base font-semibold"><dt>Total</dt><dd>{reais(num(tot?.total))}</dd></div>
+            <div className="flex items-center justify-between text-ink-soft"><dt>{c.pessoas} pessoa(s){aberta && <button className="ml-1 text-brand" onClick={() => setPessoasEd(String(c.pessoas))}>alterar</button>}</dt><dd>{reais(num(tot?.total) / Math.max(1, c.pessoas))} / pessoa</dd></div>
             <div className="flex justify-between"><dt>Pago</dt><dd>{reais(num(tot?.pago))}</dd></div>
             <div className="flex justify-between font-semibold"><dt>Restante</dt><dd>{reais(restante)}</dd></div>
           </dl>
+          {!aberta && c.status === 'fechada' && (pode('pdv_caixa') || pode('pdv_fiscal')) && <button className={btnSecCls + ' w-full'} onClick={() => setAba('pagamento')}>Cupom fiscal desta comanda</button>}
           {aberta && (
             <div className="flex flex-wrap gap-2">
               <button className={btnSecCls} onClick={abrirPerfis}>Pessoas e perfis</button>
@@ -351,6 +392,35 @@ export function Comanda() {
           )}
         </aside>
       </div>
+      {esc && (
+        <Modal titulo={esc.p.nome} fechar={() => setEsc(null)}>
+          {gruposDe(esc.p).map((g) => (
+            <fieldset key={g.id} className="space-y-1">
+              <legend className="font-medium">{g.nome} <span className="text-xs text-ink-soft">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
+              <div className="grid grid-cols-2 gap-2">
+                {g.opcoes.map((o) => {
+                  const on = (esc.sel[g.id] ?? []).includes(o.id)
+                  return <button key={o.id} type="button" className={on ? btnCls : btnSecCls} onClick={() => toggleOpc(g, o)}>{o.nome}{Number(o.preco_adicional) > 0 ? ` +${reais(Number(o.preco_adicional))}` : ''}</button>
+                })}
+              </div>
+            </fieldset>
+          ))}
+          <button className={btnCls + ' w-full'} onClick={confirmarEsc}>Adicionar ao pedido</button>
+        </Modal>
+      )}
+      {pessoasEd != null && (
+        <Modal titulo="Quantas pessoas na comanda?" fechar={() => setPessoasEd(null)}>
+          <input className={inputCls} inputMode="numeric" autoFocus value={pessoasEd} onChange={(e) => setPessoasEd(e.target.value)} />
+          <p className="text-xs text-ink-soft">Usado no ticket médio por pessoa e na divisão da conta. Para recalcular couvert/rodízio, use "Pessoas e perfis".</p>
+          <button className={btnCls} onClick={salvarPessoas}>Salvar</button>
+        </Modal>
+      )}
+      {fiscalFim && (
+        <Modal titulo="Comanda fechada · cupom fiscal" fechar={() => nav('/pdv')}>
+          <EmitirFiscal comandaId={c.id} docInicial={c.cpf_cnpj_nota} compacto />
+          <button className={btnSecCls + ' w-full'} onClick={() => nav('/pdv')}>Concluir e voltar ao salão</button>
+        </Modal>
+      )}
       {editPerfis && (
         <Modal titulo="Pessoas e perfis (couvert / rodízio)" fechar={() => setEditPerfis(null)}>
           <PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={editPerfis} onChange={setEditPerfis} />
