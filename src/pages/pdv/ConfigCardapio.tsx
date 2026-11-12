@@ -47,23 +47,22 @@ export function HorarioCampos({ v, onChange }: { v: Faixa[] | null | undefined; 
       {ORDEM_DIAS.map((dia) => {
         const f = lista.filter((x) => x.dia === dia).sort((a, b) => a.inicio.localeCompare(b.inicio))
         return (
-          <div key={dia} className="flex flex-wrap items-start gap-2 border-b border-line pb-2 last:border-0">
-            <span className="w-20 pt-2 text-sm font-medium">{NOMES_DIAS[dia]}</span>
-            <div className="min-w-0 flex-1 space-y-1.5">
-              {!f.length && <span className="block pt-2 text-xs text-ink-soft">{lista.length ? 'não aparece neste dia' : '—'}</span>}
-              {f.map((x, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <input type="time" className={inputCls + ' !min-h-[36px] !w-28'} value={x.inicio} onChange={(e) => mudar(x, { inicio: e.target.value || '00:00' })} />
-                  <span className="text-xs">até</span>
-                  <input type="time" className={inputCls + ' !min-h-[36px] !w-28'} value={x.fim} onChange={(e) => mudar(x, { fim: e.target.value || '23:59' })} />
-                  <button type="button" className="px-2 text-alert" title="Remover faixa" onClick={() => tirar(x)}>✕</button>
-                </div>
-              ))}
+          <div key={dia} className="space-y-1.5 border-b border-line pb-2 last:border-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">{NOMES_DIAS[dia]}{!f.length && <span className="ml-2 text-xs font-normal text-ink-soft">{lista.length ? 'não aparece' : 'sempre'}</span>}</span>
+              <span className="flex items-center gap-1.5">
+                {f.length > 0 && <button type="button" className="text-xs text-brand underline" title="Copiar estas faixas para todos os dias" onClick={() => copiar(dia)}>copiar p/ todos</button>}
+                <button type="button" className={btnSecCls + ' !min-h-[36px] !min-w-[36px] !px-0'} title="Adicionar faixa neste dia" onClick={() => add(dia)}>+</button>
+              </span>
             </div>
-            <div className="flex gap-1">
-              <button type="button" className={btnSecCls + ' !min-h-[36px] !px-3'} title="Adicionar outra faixa neste dia" onClick={() => add(dia)}>+</button>
-              {f.length > 0 && <button type="button" className={btnSecCls + ' !min-h-[36px] !px-2 text-xs'} title="Copiar estas faixas para todos os dias" onClick={() => copiar(dia)}>copiar p/ todos</button>}
-            </div>
+            {f.map((x, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input type="time" className={inputCls + ' !min-h-[36px] min-w-0 flex-1 !px-2'} value={x.inicio} onChange={(e) => mudar(x, { inicio: e.target.value || '00:00' })} />
+                <span className="text-xs text-ink-soft">até</span>
+                <input type="time" className={inputCls + ' !min-h-[36px] min-w-0 flex-1 !px-2'} value={x.fim} onChange={(e) => mudar(x, { fim: e.target.value || '23:59' })} />
+                <button type="button" className="h-9 w-9 shrink-0 rounded-full text-alert hover:bg-red-50" title="Remover faixa" onClick={() => tirar(x)}>✕</button>
+              </div>
+            ))}
           </div>
         )
       })}
