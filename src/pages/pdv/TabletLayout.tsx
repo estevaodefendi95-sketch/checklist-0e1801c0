@@ -4,9 +4,10 @@ import { Carregando, btnCls, btnSecCls, cartaoCls, inputCls } from '../../compon
 import { noHorarios, type Faixa } from '../../lib/pdv'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 import { DIAS, Grupo, Opcao } from './ConfigCardapio'
+import { CardapioCliente } from '../../components/CardapioCliente'
 
 interface Tema { primaria: string; fundo: string; texto: string; destaque: string; titulo: string; subtitulo: string; colunas: 1 | 2; mostrar_fotos: boolean }
-const PADRAO: Tema = { primaria: '#7a1f2b', fundo: '#faf7f2', texto: '#222222', destaque: '#c9a24b', titulo: 'Paggio', subtitulo: '', colunas: 1, mostrar_fotos: true }
+const PADRAO: Tema = { primaria: '#7a1f2b', fundo: '#faf7f2', texto: '#222222', destaque: '#c9a24b', titulo: 'Paggio', subtitulo: '', colunas: 2, mostrar_fotos: true }
 const PRESETS: { nome: string; t: Partial<Tema> }[] = [
   { nome: 'Paggio (bordô e creme)', t: { primaria: '#7a1f2b', fundo: '#faf7f2', texto: '#222222', destaque: '#c9a24b' } },
   { nome: 'Noite (escuro)', t: { primaria: '#c9a24b', fundo: '#1b1416', texto: '#f3ece4', destaque: '#c9a24b' } },
@@ -27,7 +28,6 @@ export function TabletLayout() {
   const [dia, setDia] = useState<number>(new Date().getDay())
   const [hora, setHora] = useState(() => new Date().toTimeString().slice(0, 5))
   const [agora, setAgora] = useState(true)
-  const [cat, setCat] = useState('')
   const [aberto, setAberto] = useState<Prod | null>(null)
   const [larg, setLarg] = useState<'tablet' | 'celular'>('tablet')
   const s = useSalvarMsg()
@@ -56,8 +56,6 @@ export function TabletLayout() {
   const catOk = useMemo(() => new Map(cats.filter((c) => c.visivel_tablet && noHorarios(c.horarios, quando)).map((c) => [c.id, c])), [cats, quando])
   const visiveis = useMemo(() => prods.filter((p) => p.visivel_tablet && p.disponivel && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorarios(p.horarios, quando)), [prods, catOk, quando])
   const catsVis = [...catOk.values()].filter((c) => visiveis.some((p) => p.categoria_id === c.id))
-  const catAtiva = catsVis.find((c) => c.id === cat)?.id ?? catsVis[0]?.id ?? ''
-  const lista = visiveis.filter((p) => p.categoria_id === catAtiva)
   const gruposDe = (p: Prod) => grupos.filter((g) => g.produtos.includes(p.id) && g.opcoes.length)
 
   async function salvar() {
@@ -67,7 +65,6 @@ export function TabletLayout() {
   const set = (p: Partial<Tema>) => setTema((t) => ({ ...t, ...p }))
   if (!pronto) return <Carregando />
 
-  const vars = { ['--p' as string]: tema.primaria, ['--f' as string]: tema.fundo, ['--t' as string]: tema.texto, ['--d' as string]: tema.destaque }
   return (
     <div className="grid gap-4 xl:grid-cols-[340px_1fr]">
       <div className="space-y-3">
@@ -105,58 +102,29 @@ export function TabletLayout() {
 
       <div className="flex justify-center overflow-auto rounded-[14px] bg-paper-dim p-4">
         <div className="rounded-[34px] bg-[#111] p-3 shadow-2xl" style={{ width: larg === 'tablet' ? 760 : 380, maxWidth: '100%' }}>
-          <div className="relative overflow-hidden rounded-[24px]" style={{ ...vars, background: 'var(--f)', color: 'var(--t)', height: larg === 'tablet' ? 640 : 700 }}>
-            <div className="h-full overflow-y-auto pb-28">
-              <header className="px-5 pb-4 pt-6" style={{ background: 'var(--p)', color: '#fff' }}>
-                <div className="text-xs uppercase tracking-[0.2em] opacity-80">Mesa 12</div>
-                <h1 className="font-display text-3xl font-semibold">{tema.titulo || 'Paggio'}</h1>
-                <p className="mt-1 text-sm opacity-85">{boasVindas || 'Faça seu pedido pelo tablet. Nós levamos até a sua mesa.'}</p>
-                <div className="mt-3 h-[3px] w-16 rounded-full" style={{ background: 'var(--d)' }} />
-              </header>
-              <nav className="sticky top-0 z-10 flex gap-2 overflow-x-auto px-4 py-3 shadow-sm" style={{ background: 'var(--f)' }}>
-                {catsVis.map((c) => (
-                  <button key={c.id} onClick={() => setCat(c.id)} className="shrink-0 rounded-full px-4 py-2 text-sm font-medium" style={c.id === catAtiva ? { background: 'var(--p)', color: '#fff' } : { background: '#ffffff', color: 'var(--t)' }}>{c.nome}</button>
-                ))}
-                {!catsVis.length && <span className="text-sm opacity-70">Nenhuma categoria disponível neste horário.</span>}
-              </nav>
-              <ul className={`grid gap-3 px-4 pt-1 ${tema.colunas === 2 && larg === 'tablet' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {lista.map((p) => (
-                  <li key={p.id}>
-                    <button onClick={() => setAberto(p)} className="flex w-full items-stretch gap-3 rounded-2xl bg-white p-3 text-left shadow">
-                      <span className="min-w-0 flex-1">
-                        <b className="block leading-tight">{p.nome}</b>
-                        {p.descricao && <span className="mt-1 line-clamp-2 block text-xs opacity-70">{p.descricao}</span>}
-                        <span className="mt-2 block font-semibold" style={{ color: 'var(--p)' }}>{brl(Number(p.preco))}</span>
-                        {gruposDe(p).length > 0 && <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px]" style={{ background: 'var(--d)', color: '#fff' }}>personalize</span>}
-                      </span>
-                      {tema.mostrar_fotos && (p.foto_url ? <img src={p.foto_url} alt="" className="h-24 w-24 shrink-0 rounded-xl object-cover" /> : <span className="grid h-24 w-24 shrink-0 place-items-center rounded-xl text-2xl opacity-40" style={{ background: 'var(--f)' }}>🍽</span>)}
-                      <span className="grid h-9 w-9 shrink-0 place-items-center self-end rounded-full text-lg text-white" style={{ background: 'var(--p)' }}>+</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 space-y-2 border-t bg-white p-3">
-              <div className="flex gap-2 text-sm">
-                <span className="flex-1 rounded-xl border p-2 text-center">Chamar garçom</span>
-                <span className="flex-1 rounded-xl border p-2 text-center">Pedir a conta</span>
-              </div>
-            </div>
-            {aberto && (
-              <div className="absolute inset-0 z-20 flex items-end bg-black/50" onClick={() => setAberto(null)}>
-                <div className="max-h-[85%] w-full space-y-3 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" onClick={(e) => e.stopPropagation()}>
-                  <h2 className="text-lg font-semibold">{aberto.nome}</h2>
-                  {aberto.descricao && <p className="text-sm opacity-70">{aberto.descricao}</p>}
-                  {gruposDe(aberto).map((g) => (
-                    <fieldset key={g.id} className="space-y-1">
-                      <legend className="font-medium">{g.nome} <span className="text-xs opacity-60">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
-                      {g.opcoes.map((o) => <div key={o.id} className="flex justify-between rounded-xl border p-3 text-sm"><span>○ {o.nome}</span>{Number(o.preco_adicional) > 0 && <span className="opacity-70">+ {brl(Number(o.preco_adicional))}</span>}</div>)}
-                    </fieldset>
-                  ))}
-                  <div className="rounded-xl py-3 text-center font-semibold text-white" style={{ background: tema.primaria }}>Adicionar · {brl(Number(aberto.preco))}</div>
+          <div className="relative overflow-hidden rounded-[24px]" style={{ height: larg === 'tablet' ? 640 : 700 }}>
+            <CardapioCliente
+              tema={tema} mesa="12" boasVindas={boasVindas || 'Faça seu pedido pelo tablet. Nós levamos até a sua mesa.'}
+              categorias={catsVis.map((c) => ({ id: c.id, nome: c.nome }))}
+              produtos={visiveis.map((p) => ({ id: p.id, nome: p.nome, descricao: p.descricao, preco: Number(p.preco), categoria_id: p.categoria_id, foto_url: p.foto_url, personalizavel: gruposDe(p).length > 0 }))}
+              lateral={larg === 'tablet'} qtdDe={(id) => (id === aberto?.id ? 0 : 0)} onAdd={(c) => setAberto(prods.find((x) => x.id === c.id) ?? null)} onMenos={() => {}}
+              acoes={<><span className="rounded-full border border-white/60 px-3 py-1.5 text-xs">Chamar garçom</span><span className="rounded-full border border-white/60 px-3 py-1.5 text-xs">Pedir a conta</span></>}
+              sobrepor={aberto && (
+                <div className="absolute inset-0 z-20 flex items-end bg-black/50" onClick={() => setAberto(null)}>
+                  <div className="max-h-[85%] w-full space-y-3 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" onClick={(e) => e.stopPropagation()}>
+                    <h2 className="text-lg font-semibold">{aberto.nome}</h2>
+                    {aberto.descricao && <p className="text-sm opacity-70">{aberto.descricao}</p>}
+                    {gruposDe(aberto).map((g) => (
+                      <fieldset key={g.id} className="space-y-1">
+                        <legend className="font-medium">{g.nome} <span className="text-xs opacity-60">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
+                        {g.opcoes.map((o) => <div key={o.id} className="flex justify-between rounded-xl border p-3 text-sm"><span>○ {o.nome}</span>{Number(o.preco_adicional) > 0 && <span className="opacity-70">+ {brl(Number(o.preco_adicional))}</span>}</div>)}
+                      </fieldset>
+                    ))}
+                    <div className="rounded-xl py-3 text-center font-semibold text-white" style={{ background: tema.primaria }}>Adicionar · {brl(Number(aberto.preco))}</div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            />
           </div>
         </div>
       </div>
