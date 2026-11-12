@@ -14,6 +14,10 @@ const SEM_PERMS: Perms = {
   editar_precos: false,
   lancar_vendas: false,
   lancar_estoque: false,
+  pdv_operar: false,
+  pdv_caixa: false,
+  pdv_gerir: false,
+  pdv_fiscal: false,
 }
 const PAPEIS: { v: UserRole; rotulo: string }[] = [
   { v: 'admin', rotulo: 'Administrador' },

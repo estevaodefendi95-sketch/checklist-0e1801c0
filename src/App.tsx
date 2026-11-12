@@ -18,6 +18,12 @@ import { Fichas } from './pages/Fichas'
 import { FichaDetalhe } from './pages/FichaDetalhe'
 import { FichaEditor } from './pages/FichaEditor'
 import { FichaCozinha } from './pages/FichaCozinha'
+import { PdvSalao } from './pages/pdv/PdvSalao'
+import { Comanda } from './pages/pdv/Comanda'
+import { PdvCaixa } from './pages/pdv/PdvCaixa'
+import { PdvRelatorios } from './pages/pdv/PdvRelatorios'
+import { PdvConfig } from './pages/pdv/PdvConfig'
+import { MesaPublica } from './pages/pdv/MesaPublica'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
 
 function Protected({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
@@ -47,6 +53,12 @@ const router = createBrowserRouter([
   { path: '/fichas/:id/editar', element: <Protected><FichaEditor /></Protected> },
   // modo cozinha: tela cheia, sem menu
   { path: '/fichas/:id/cozinha', element: <ProtectedRoute><FichaCozinha /></ProtectedRoute> },
+  { path: '/mesa/:token', element: <MesaPublica /> },
+  { path: '/pdv', element: <Protected><PdvSalao /></Protected> },
+  { path: '/pdv/comanda/:id', element: <Protected><Comanda /></Protected> },
+  { path: '/pdv/caixa', element: <Protected><PdvCaixa /></Protected> },
+  { path: '/pdv/relatorios', element: <Protected><PdvRelatorios /></Protected> },
+  { path: '/pdv/config', element: <Protected><PdvConfig /></Protected> },
   { path: '/admin/templates', element: <Protected admin><AdminTemplates /></Protected> },
   // só o administrador master (a própria tela confere eh_master e volta ao início se não for)
   { path: '/usuarios', element: <Protected><Usuarios /></Protected> },

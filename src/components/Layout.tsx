@@ -18,7 +18,7 @@ interface Item {
   rotulo: string
   curto?: string // rótulo da barra inferior
   icone: NomeIcone
-  grupo: 'operacao' | 'breve' | 'admin'
+  grupo: 'operacao' | 'pdv' | 'breve' | 'admin'
   emBreve?: boolean
 }
 
@@ -55,6 +55,16 @@ export function Layout({ children }: { children: ReactNode }) {
       : []),
     ...(pode('lancar_estoque')
       ? [{ to: '#estoque', rotulo: 'Estoque', icone: 'estoque', grupo: 'breve', emBreve: true } as Item]
+      : []),
+    ...(pode('pdv_operar')
+      ? [
+          { to: '/pdv', rotulo: 'PDV · Salão', curto: 'PDV', icone: 'pdv', grupo: 'pdv' } as Item,
+          { to: '/pdv/relatorios', rotulo: 'PDV · Relatórios', icone: 'relatorio', grupo: 'pdv' } as Item,
+        ]
+      : []),
+    ...(pode('pdv_caixa') ? [{ to: '/pdv/caixa', rotulo: 'PDV · Caixa', icone: 'caixa', grupo: 'pdv' } as Item] : []),
+    ...(pode('pdv_gerir') || pode('pdv_fiscal')
+      ? [{ to: '/pdv/config', rotulo: 'PDV · Configurações', icone: 'impressora', grupo: 'pdv' } as Item]
       : []),
     ...(master ? [{ to: '/usuarios', rotulo: 'Usuários', icone: 'usuarios', grupo: 'admin' } as Item] : []),
     ...(admin
@@ -94,14 +104,14 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3.5">
-          {(['operacao', 'breve', 'admin'] as const).map((g) => {
+          {(['operacao', 'pdv', 'breve', 'admin'] as const).map((g) => {
             const doGrupo = itens.filter((i) => i.grupo === g)
             if (!doGrupo.length) return null
             return (
               <div key={g} className="mb-2">
                 {!recolhido && (
                   <div className="px-2.5 pb-1.5 pt-3.5 text-[11px] uppercase tracking-[0.08em] opacity-60">
-                    {g === 'operacao' ? 'Operação' : g === 'breve' ? 'Em breve' : 'Admin'}
+                    {g === 'operacao' ? 'Operação' : g === 'pdv' ? 'PDV' : g === 'breve' ? 'Em breve' : 'Admin'}
                   </div>
                 )}
                 {recolhido && g !== 'operacao' && <hr className="mx-3 my-2 border-brand-ink/20" />}

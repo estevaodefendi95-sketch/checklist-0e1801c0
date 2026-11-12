@@ -8,6 +8,10 @@ export const PERMISSOES = [
   { key: 'editar_precos', label: 'Alterar preços de insumos' },
   { key: 'lancar_vendas', label: 'Lançar vendas' },
   { key: 'lancar_estoque', label: 'Lançar estoque e compras' },
+  { key: 'pdv_operar', label: 'PDV: operar salão e comandas' },
+  { key: 'pdv_caixa', label: 'PDV: caixa e pagamentos' },
+  { key: 'pdv_gerir', label: 'PDV: configurar (mesas, produtos, impressoras)' },
+  { key: 'pdv_fiscal', label: 'PDV: fiscal (NFC-e)' },
 ] as const
 
 export type Permissao = (typeof PERMISSOES)[number]['key']
@@ -19,6 +23,10 @@ const vazio: Mapa = {
   editar_precos: false,
   lancar_vendas: false,
   lancar_estoque: false,
+  pdv_operar: false,
+  pdv_caixa: false,
+  pdv_gerir: false,
+  pdv_fiscal: false,
 }
 
 const Ctx = createContext<{ pode: (p: Permissao) => boolean; master: boolean; carregado: boolean }>({
@@ -45,7 +53,7 @@ export function PermissoesProvider({ children }: { children: ReactNode }) {
     Promise.all([
       Promise.all(
         PERMISSOES.map(async ({ key }) => {
-          const { data } = await db.rpc('tem_permissao', { p: key })
+          const { data } = await (key.startsWith('pdv_') ? db.rpc('pdv_pode', { p: key }) : db.rpc('tem_permissao', { p: key }))
           return [key, data === true] as const
         })
       ),
