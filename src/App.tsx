@@ -36,8 +36,20 @@ import { WhatsApp } from './pages/pdv/WhatsApp'
 import { CardapioPublico, ReservarPublico } from './pages/pdv/PaginasPublicas'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
 import { Permissao, usePermissoes } from './context/PermissoesContext'
+import { ler } from './lib/armazenamento'
 import { AvisoOffline } from './components/AvisoOffline'
 import { AprovacoesAdmin } from './components/AprovacoesAdmin'
+
+/** Ao abrir o app no celular em modo Atendimento, a primeira tela é o Salão (e não o painel de gestão). */
+function Abertura() {
+  const { pode, carregado } = usePermissoes()
+  if (!carregado) return null
+  let jaAbriu = true
+  try { jaAbriu = sessionStorage.getItem('paggio-abriu') === '1'; sessionStorage.setItem('paggio-abriu', '1') } catch { /* sem armazenamento */ }
+  const celular = window.matchMedia('(max-width: 1023px)').matches
+  if (!jaAbriu && celular && pode('pdv_operar') && ler<string>('paggio-modo-mobile', 'atendimento') === 'atendimento') return <Navigate to="/pdv" replace />
+  return <Dashboard modo="hoje" />
+}
 
 function SemAcesso() {
   return <div className="p-8 text-center text-ink-soft">Você não tem acesso a esta tela. Peça ao administrador.</div>
@@ -60,7 +72,7 @@ function Protected({ children, admin }: { children: React.ReactNode; admin?: boo
 // alterações não salvas antes de trocar de tela (useBlocker).
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
-  { path: '/', element: <Protected><Dashboard modo="hoje" /></Protected> },
+  { path: '/', element: <Protected><Abertura /></Protected> },
   { path: '/areas', element: <Protected><Dashboard modo="areas" /></Protected> },
   { path: '/checklist/:templateId', element: <Protected><ChecklistExecucao /></Protected> },
   { path: '/historico', element: <Protected><Historico /></Protected> },
