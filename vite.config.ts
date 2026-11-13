@@ -36,6 +36,8 @@ export default defineConfig({
         'apple-touch-icon.png',
         'icon-192.png',
         'icon-512.png',
+        'notif-icon-192.png',
+        'notif-badge-96.png',
       ],
       workbox: {
         // arquivos do build (com hash) ficam no precache; dados do Supabase exigem conexão

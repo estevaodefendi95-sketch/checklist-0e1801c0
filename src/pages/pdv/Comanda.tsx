@@ -124,6 +124,8 @@ export function Comanda() {
   const algumDesc = podeDesc || podeServ || podeCouv
   const lancavel = c?.status === 'aberta'   // conta fechada (aguardando recebimento) não recebe produto novo
   const refDesc = useRef<HTMLInputElement | null>(null)
+  const [pedeMesa, setPedeMesa] = useState(false)
+  const balcaoOk = useRef(false)
   const restante = Math.max(0, num(tot?.total) - num(tot?.pago))
   const lista = useMemo(() => {
     const q = busca.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -174,6 +176,8 @@ export function Comanda() {
     if (!c || !carrinho.length) return
     if (c.status !== 'aberta') return setErro('Conta fechada: reabra a comanda para lançar novos produtos.')
     setErro('')
+    // cliente sem mesa: pede para cadastrar a mesa antes de enviar (ou confirmar que é balcão)
+    if (!mesa && !balcaoOk.current && navigator.onLine) { setPedeMesa(true); return abrirMesas() }
     const uid = await idOperador()
     const linhas = carrinho.map((x) => ({
       comanda_id: c.id, produto_id: x.p.id, nome: x.p.nome, qtd: x.qtd, preco_unit: precoLinha(x),
@@ -339,6 +343,7 @@ export function Comanda() {
     if (error) return setErro(error.code === '23505' ? 'Essa mesa já tem outra comanda aberta.' : error.message)
     setEscMesa(null); setErro(''); setMsg(m ? `Comanda vinculada à mesa ${m.numero}.` : 'Comanda sem mesa (balcão).')
     carregar()
+    if (pedeMesa) { balcaoOk.current = true; setPedeMesa(false); setTimeout(() => enviar(), 0) }
   }
   function abrirDescontos() {
     if (semRede()) return
@@ -665,7 +670,7 @@ export function Comanda() {
         </aside>
       </div>
       {escMesa && (
-        <Modal titulo={mesa ? `Trocar a mesa (agora: ${mesa.numero})` : 'Vincular a uma mesa'} fechar={() => setEscMesa(null)}>
+        <Modal titulo={pedeMesa ? 'Em qual mesa o cliente está?' : mesa ? `Trocar a mesa (agora: ${mesa.numero})` : 'Vincular a uma mesa'} fechar={() => { setEscMesa(null); setPedeMesa(false) }}>
           {escMesa.salas.length > 1 && (
             <div className="flex flex-wrap gap-2">
               {[{ id: '', nome: 'Todas' }, ...escMesa.salas].map((x) => <button key={x.id} className={escMesa.sala === x.id ? btnCls : btnSecCls} onClick={() => setEscMesa({ ...escMesa, sala: x.id })}>{x.nome}</button>)}
@@ -681,7 +686,7 @@ export function Comanda() {
             })}
           </div>
           <p className="text-xs text-ink-soft">Mesas apagadas já têm comanda aberta. Itens já enviados continuam com o aviso que saiu na cozinha; os próximos saem com a mesa nova.</p>
-          {mesa && <button className={btnSecCls + ' w-full'} onClick={() => vincularMesa(null)}>Tirar da mesa (balcão)</button>}
+          {(mesa || pedeMesa) && <button className={btnSecCls + ' w-full'} onClick={() => vincularMesa(null)}>{pedeMesa ? 'Sem mesa (balcão) · enviar assim mesmo' : 'Tirar da mesa (balcão)'}</button>}
         </Modal>
       )}
       {descAberto && <DescontosComanda perm={{ desconto: podeDesc, servico: podeServ, couvert: podeCouv }} c={c} itens={itens} onFechar={() => setDescAberto(false)} onSalvo={() => { setDescAberto(false); setMsg('Desconto aplicado.'); carregar() }} />}

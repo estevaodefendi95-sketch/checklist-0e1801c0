@@ -39,6 +39,7 @@ export function MesaPublica() {
   useEffect(() => { const f = () => setLateral(window.innerWidth >= 768); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f) }, [])
   const [msg, setMsg] = useState('')
   const [env, setEnv] = useState(false)
+  const [pendMesa, setPendMesa] = useState<null | { ct: string; mesa: string; comanda: number }>(null)
   // Totem: no navegador, o primeiro toque na tela liga a tela cheia (esconde abas e barra de endereço). Instalado como app, já abre em tela cheia.
   useEffect(() => {
     const instalado = window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches
@@ -170,8 +171,9 @@ export function MesaPublica() {
     setEnv(true)
     if (modo === 'pedido') {
       const itens = car.map((l) => ({ produto_id: l.p.id, qtd: l.qtd, opcoes: l.opcoes, obs: l.obs }))
-      const r = await chamar('pedir', { itens, comanda_token: ct }) as Estado & { comanda?: number }
+      const r = await chamar('pedir', { itens, comanda_token: ct }) as Estado & { comanda?: number; precisa_mesa?: boolean }
       setEnv(false)
+      if (r.precisa_mesa) return setPendMesa({ ct, mesa: String(r.mesa ?? e?.mesa ?? ''), comanda: r.comanda ?? 0 })
       if (r.erro) return setMsg(r.erro)
       setCar([]); setMsg(`Pedido enviado para a comanda ${r.comanda}! Já está sendo preparado e será levado até você.`)
     } else if (modo === 'conta') {
@@ -226,6 +228,26 @@ export function MesaPublica() {
           <button key={k} className="block w-full rounded-2xl border border-black/10 px-4 py-4 text-left text-base font-medium active:bg-black/5" onClick={() => { setMenuEquipe(false); setAcesso(k as 'trocar' | 'sair' | 'reservar') }}>{t}</button>
         ))}
         <button className="block w-full rounded-2xl px-4 py-3 text-center text-sm opacity-60" onClick={() => setMenuEquipe(false)}>Cancelar</button>
+      </div>
+    </div>
+  )
+  async function confirmarMesa() {
+    const p = pendMesa; if (!p) return
+    setPendMesa(null); setEnv(true)
+    const itens = car.map((l) => ({ produto_id: l.p.id, qtd: l.qtd, opcoes: l.opcoes, obs: l.obs }))
+    const r = await chamar('pedir', { itens, comanda_token: p.ct, vincular_mesa: true }) as Estado & { comanda?: number }
+    setEnv(false)
+    if (r.erro) return setMsg(r.erro)
+    setCar([]); setMsg(`Pedido enviado para a comanda ${r.comanda}! Já está sendo preparado e será levado até você.`)
+  }
+  const dialogoMesa = pendMesa && (
+    <div className="fixed inset-0 z-[58] flex items-center justify-center bg-black/60 p-4" onClick={() => setPendMesa(null)}>
+      <div className="w-full max-w-md space-y-3 rounded-3xl bg-white p-6 text-center text-[#222] shadow-2xl" onClick={(x) => x.stopPropagation()}>
+        <p className="text-sm uppercase tracking-widest opacity-60">Sua comanda ainda não tem mesa</p>
+        <p className="text-2xl font-semibold">Você está na mesa {pendMesa.mesa}?</p>
+        <p className="text-sm opacity-70">Vamos cadastrar a mesa na sua comanda para o pedido chegar até você.</p>
+        <button className={btn + ' w-full min-h-[56px] text-lg'} onClick={confirmarMesa}>Sim, cadastrar a mesa {pendMesa.mesa} e enviar</button>
+        <button className="w-full rounded-xl px-4 py-3 text-sm opacity-70" onClick={() => setPendMesa(null)}>Cancelar</button>
       </div>
     </div>
   )
@@ -327,7 +349,7 @@ export function MesaPublica() {
             </div>
           ) : null}
         </>}
-        sobrepor={<>{dialogoAcesso}{dialogoEquipe}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr camera="user" titulo="Mostre o QR Code do cartão da sua comanda para a câmera da frente" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
+        sobrepor={<>{dialogoAcesso}{dialogoEquipe}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{dialogoMesa}{leitor && <LeitorQr camera="user" titulo="Mostre o QR Code do cartão da sua comanda para a câmera da frente" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setMinha(null)}>
             <div className="max-h-[88dvh] w-full max-w-2xl space-y-2 overflow-y-auto rounded-3xl bg-white p-6 text-[#222] shadow-2xl" onClick={(x) => x.stopPropagation()}>
               <h2 className="text-lg font-semibold">Comanda {minha.numero}{minha.nome ? ` · ${minha.nome}` : ''}</h2>

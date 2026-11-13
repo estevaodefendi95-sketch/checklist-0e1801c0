@@ -29,7 +29,7 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token, aparelho, nivel, carregando, hora } = await req.json();
+    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token, aparelho, nivel, carregando, hora, vincular_mesa } = await req.json();
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
     const uuidOk = (x: unknown) => /^[0-9a-f-]{36}$/i.test(String(x ?? ""));
@@ -157,6 +157,12 @@ Deno.serve(async (req) => {
       const com = rc.com;
       if (com.status !== "aberta") return json({ erro: "Essa conta já foi pedida. Chame o atendente." });
       if (!Array.isArray(itens) || !itens.length || itens.length > 40) return json({ erro: "Pedido vazio." });
+      // comanda sem mesa: pede para cadastrar a mesa deste tablet antes de enviar
+      if (!com.mesa_id) {
+        if (!vincular_mesa) return json({ precisa_mesa: true, mesa: mesa.numero, comanda: com.numero });
+        const v = await db.from("pdv_comandas").update({ mesa_id: mesa.id }).eq("id", com.id);
+        if (v.error) return json({ erro: v.error.code === "23505" ? "Esta mesa já tem outra comanda aberta. Chame o atendente." : "Não foi possível vincular a mesa. Chame o atendente." });
+      }
       const ids = itens.map((i: any) => i.produto_id);
       const [{ data: prods }, { data: cats }, { data: pg }, { data: grp }, { data: ops }, { data: menusP }] = await Promise.all([
         db.from("pdv_produtos").select("id,nome,preco,destino,categoria_id,visivel_tablet,horarios").in("id", ids).eq("ativo", true).eq("disponivel", true),

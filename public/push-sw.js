@@ -6,8 +6,8 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(d.title || 'Paggio', {
       body: d.body || '',
       tag: d.tag || 'paggio',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: '/notif-icon-192.png',
+      badge: '/notif-badge-96.png',
       requireInteraction: true,
       data: { url: d.url || '/' },
     })
