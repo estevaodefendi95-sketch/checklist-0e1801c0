@@ -1,4 +1,4 @@
-// Aprovação de administrador para cancelar item, cancelar comanda e estornar pagamento.
+// Aprovação de administrador para cancelar item, cancelar comanda, estornar pagamento, lançar "a receber" e consumo interno (cortesia).
 // Dois caminhos: (1) o administrador digita e-mail e senha no aparelho de quem pediu;
 // (2) quem pediu "solicita" e o administrador recebe uma notificação push e decide no app dele.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -10,11 +10,52 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const json = (b: unknown) => new Response(JSON.stringify(b), { headers: { ...cors, "Content-Type": "application/json" } });
-const ACOES = ["cancelar_item", "cancelar_comanda", "estornar"];
-const ROTULO: Record<string, string> = { cancelar_item: "Cancelar item", cancelar_comanda: "Cancelar comanda", estornar: "Estornar pagamento" };
+const ACOES = ["cancelar_item", "cancelar_comanda", "estornar", "a_receber", "cortesia"];
+const ROTULO: Record<string, string> = { cancelar_item: "Cancelar item", cancelar_comanda: "Cancelar comanda", estornar: "Estornar pagamento", a_receber: "Conta a receber", cortesia: "Consumo interno (sem cobrança)" };
 
 // Executa a ação já aprovada.
-async function executar(db: any, acao: string, id: string, mot: string, solicitante: string, aprovador: string): Promise<{ ok?: true; erro?: string }> {
+const reais = (n: number) => "R$ " + n.toFixed(2).replace(".", ",");
+
+// Valida e limpa os dados do "a receber".
+function limparDados(acao: string, d: any): { dados?: Record<string, unknown>; erro?: string } {
+  if (acao !== "a_receber") return { dados: {} };
+  const nome = String(d?.nome ?? "").trim().slice(0, 80);
+  const tel = String(d?.telefone ?? "").replace(/\D/g, "");
+  if (nome.length < 2) return { erro: "Informe o nome do cliente." };
+  if (tel.length < 10 || tel.length > 13) return { erro: "Informe o telefone do cliente com DDD." };
+  const venc = /^\d{4}-\d{2}-\d{2}$/.test(String(d?.vencimento ?? "")) ? String(d.vencimento) : null;
+  return { dados: { nome, telefone: tel, vencimento: venc, observacao: String(d?.observacao ?? "").trim().slice(0, 200) || null } };
+}
+
+// Fecha a comanda liberando o restante: "a receber" (cobrança depois) ou "cortesia" (consumo interno).
+async function liberarComanda(db: any, acao: "a_receber" | "cortesia", id: string, mot: string, dados: any, solicitante: string, aprovador: string): Promise<{ ok?: true; erro?: string }> {
+  const { data: c } = await db.from("pdv_comandas").select("id,numero,status").eq("id", id).maybeSingle();
+  if (!c) return { erro: "Comanda não encontrada." };
+  if (!["aberta", "pedindo_conta"].includes(c.status)) return { erro: "A comanda não está aberta." };
+  const { data: t } = await db.from("pdv_comanda_totais").select("total,pago").eq("comanda_id", id).maybeSingle();
+  const restante = Math.round((Number(t?.total ?? 0) - Number(t?.pago ?? 0)) * 100) / 100;
+  if (restante <= 0.004) return { erro: "Não há valor restante nesta comanda." };
+  const { data: ses } = await db.from("pdv_caixa_sessoes").select("id").eq("status", "aberto").eq("aberto_por", solicitante).maybeSingle();
+  const { data: pg, error: e1 } = await db.from("pdv_pagamentos").insert({ comanda_id: id, sessao_id: ses?.id ?? null, forma: acao, valor: restante, troco: 0, user_id: solicitante }).select("id").single();
+  if (e1) return { erro: e1.message };
+  if (acao === "a_receber") {
+    const { error } = await db.from("pdv_a_receber").insert({
+      comanda_id: id, pagamento_id: pg.id, cliente_nome: dados.nome, telefone: dados.telefone, valor: restante,
+      vencimento: dados.vencimento ?? null, observacao: dados.observacao ?? null, criado_por: solicitante, aprovado_por: aprovador,
+    });
+    if (error) { await db.from("pdv_pagamentos").delete().eq("id", pg.id); return { erro: error.message }; }
+  }
+  const { error: e3 } = await db.from("pdv_comandas").update({ status: "fechada", fechada_em: new Date().toISOString(), sessao_id: ses?.id ?? null }).eq("id", id);
+  if (e3) return { erro: e3.message };
+  await db.from("pdv_aprovacoes").insert({
+    acao, comanda_id: id, pagamento_id: pg.id, motivo: mot || null, solicitado_por: solicitante, aprovado_por: aprovador,
+    detalhe: acao === "a_receber" ? `Comanda ${c.numero} · ${reais(restante)} · ${dados.nome} ${dados.telefone}` : `Comanda ${c.numero} · ${reais(restante)} liberado sem cobrança`,
+  });
+  return { ok: true };
+}
+
+async function executar(db: any, acao: string, id: string, mot: string, solicitante: string, aprovador: string, dados: any = {}): Promise<{ ok?: true; erro?: string }> {
+  if (acao === "a_receber" || acao === "cortesia") return liberarComanda(db, acao, id, mot, dados, solicitante, aprovador);
   const log = (x: Record<string, unknown>) => db.from("pdv_aprovacoes").insert({ acao, motivo: mot || null, solicitado_por: solicitante, aprovado_por: aprovador, ...x });
   if (acao === "cancelar_item") {
     const { data: it } = await db.from("pdv_pedido_itens").select("id,nome,qtd,comanda_id,status").eq("id", id).maybeSingle();
@@ -69,7 +110,7 @@ async function avisarAdmins(db: any, payload: Record<string, unknown>) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { acao, tipo, id, motivo, email, senha, pedido_id, decisao } = await req.json();
+    const { acao, tipo, id, motivo, email, senha, pedido_id, decisao, dados } = await req.json();
     const url = Deno.env.get("SUPABASE_URL")!;
     const sb = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
@@ -96,7 +137,7 @@ Deno.serve(async (req) => {
         await db.from("pdv_aprov_pedidos").update({ status: "recusado", decidido_por: eu, decidido_em: new Date().toISOString() }).eq("id", p.id);
         return json({ ok: true });
       }
-      const r = await executar(db, p.acao, p.alvo_id, p.motivo ?? "", p.solicitado_por, eu);
+      const r = await executar(db, p.acao, p.alvo_id, p.motivo ?? "", p.solicitado_por, eu, p.dados ?? {});
       if (r.erro) {
         await db.from("pdv_aprov_pedidos").update({ status: "recusado", erro: r.erro, decidido_por: eu, decidido_em: new Date().toISOString() }).eq("id", p.id);
         return json({ erro: r.erro });
@@ -108,11 +149,14 @@ Deno.serve(async (req) => {
     // daqui para baixo: cancelar_item | cancelar_comanda | estornar (senha) ou "solicitar" (push)
     const alvoAcao = acao === "solicitar" ? tipo : acao;
     if (!ACOES.includes(alvoAcao)) return json({ erro: "Ação inválida." });
-    const precisa = alvoAcao === "estornar" ? "pdv_caixa" : "pdv_operar";
+    const precisa = ["estornar", "a_receber", "cortesia"].includes(alvoAcao) ? "pdv_caixa" : "pdv_operar";
     if (!souAdmin && !(sperm as any)?.[precisa]) return json({ erro: "Você não tem permissão para isso." });
     if (!/^[0-9a-f-]{36}$/i.test(String(id ?? ""))) return json({ erro: "Registro inválido." });
     const mot = String(motivo ?? "").trim().slice(0, 200);
-    if (alvoAcao !== "estornar" && mot.length < 3) return json({ erro: "Informe o motivo." });
+    if (!["estornar", "a_receber"].includes(alvoAcao) && mot.length < 3) return json({ erro: "Informe o motivo." });
+    const ld = limparDados(alvoAcao, dados);
+    if (ld.erro) return json({ erro: ld.erro });
+    const dadosOk = ld.dados!;
 
     if (acao === "solicitar") {
       const { data: ja } = await db.from("pdv_aprov_pedidos").select("id").eq("alvo_id", id).eq("acao", alvoAcao).eq("status", "pendente").gte("criado_em", new Date(Date.now() - 30 * 60 * 1000).toISOString()).maybeSingle();
@@ -127,6 +171,11 @@ Deno.serve(async (req) => {
         const { data: pg } = await db.from("pdv_pagamentos").select("forma,valor,troco,comanda_id").eq("id", id).maybeSingle();
         if (!pg) return json({ erro: "Pagamento não encontrado." });
         detalhe = `${pg.forma} R$ ${(Number(pg.valor) - Number(pg.troco)).toFixed(2)}`; comanda_id = pg.comanda_id;
+      } else if (alvoAcao === "a_receber" || alvoAcao === "cortesia") {
+        comanda_id = id;
+        const { data: t } = await db.from("pdv_comanda_totais").select("total,pago").eq("comanda_id", id).maybeSingle();
+        const rest = Number(t?.total ?? 0) - Number(t?.pago ?? 0);
+        detalhe = alvoAcao === "a_receber" ? `${reais(rest)} — ${dadosOk.nome}` : `${reais(rest)} sem cobrança`;
       } else comanda_id = id;
       if (comanda_id) {
         const { data: c } = await db.from("pdv_comandas").select("numero,mesa_id").eq("id", comanda_id).maybeSingle();
@@ -134,7 +183,7 @@ Deno.serve(async (req) => {
         onde = c ? `Comanda ${c.numero}${m ? " · mesa " + m.numero : ""}` : "";
         if (alvoAcao === "cancelar_comanda") detalhe = onde;
       }
-      const { data: novo, error } = await db.from("pdv_aprov_pedidos").insert({ acao: alvoAcao, alvo_id: id, comanda_id, detalhe, motivo: mot || null, solicitado_por: eu, solicitante_nome: sp?.nome ?? null }).select("id").single();
+      const { data: novo, error } = await db.from("pdv_aprov_pedidos").insert({ acao: alvoAcao, alvo_id: id, comanda_id, detalhe, motivo: mot || null, solicitado_por: eu, solicitante_nome: sp?.nome ?? null, dados: dadosOk }).select("id").single();
       if (error) return json({ erro: error.message });
       const enviados = await avisarAdmins(db, {
         title: `${ROTULO[alvoAcao]} — aprovar?`,
@@ -156,7 +205,7 @@ Deno.serve(async (req) => {
     if (le || !aprovador) { await db.from("pdv_aprov_falhas").insert({ user_id: eu }); return json({ erro: "E-mail ou senha incorretos." }); }
     const { data: ap } = await db.from("profiles").select("role,is_master").eq("id", aprovador).maybeSingle();
     if (!(ap?.role === "admin" || ap?.is_master)) { await db.from("pdv_aprov_falhas").insert({ user_id: eu }); return json({ erro: "Esse usuário não é administrador." }); }
-    return json(await executar(db, alvoAcao, id, mot, eu, aprovador));
+    return json(await executar(db, alvoAcao, id, mot, eu, aprovador, dadosOk));
   } catch (e) {
     return json({ erro: String((e as Error).message ?? e) });
   }

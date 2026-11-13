@@ -67,7 +67,7 @@ export function Layout({ children }: { children: ReactNode }) {
           { to: '/whatsapp', rotulo: 'WhatsApp', curto: 'WhatsApp', icone: 'chat', grupo: 'atendimento' } as Item,
         ]
       : []),
-    ...(pode('pdv_caixa') ? [{ to: '/pdv/caixa', rotulo: 'Caixa', icone: 'caixa', grupo: 'atendimento' } as Item] : []),
+    ...(pode('pdv_caixa') ? [{ to: '/pdv/caixa', rotulo: 'Caixa', icone: 'caixa', grupo: 'atendimento' } as Item, { to: '/pdv/a-receber', rotulo: 'A receber (fiado)', curto: 'A receber', icone: 'nota', grupo: 'atendimento' } as Item] : []),
     ...(pode('pdv_operar')
       ? [{ to: '/pdv/relatorios', rotulo: 'Relatório de vendas', curto: 'Vendas', icone: 'vendas', grupo: 'atendimento' } as Item]
       : []),

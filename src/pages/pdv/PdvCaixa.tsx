@@ -26,6 +26,7 @@ export function PdvCaixa() {
   const [fechando, setFechando] = useState(false)
   const [contado, setContado] = useState<Record<string, string>>({})
   const [obs, setObs] = useState('')
+  const [naoCobrado, setNaoCobrado] = useState<Record<string, number>>({})
 
   const carregar = useCallback(async () => {
     const uid = (await supabase.auth.getUser()).data.user?.id
@@ -38,7 +39,7 @@ export function PdvCaixa() {
     if (dos.length && pode('pdv_gerir')) {
       const [pn, pg] = await Promise.all([
         db.from('profiles').select('id,nome').in('id', dos.map((x) => x.aberto_por).filter(Boolean) as string[]),
-        db.from('pdv_pagamentos').select('sessao_id,valor,troco').in('sessao_id', dos.map((x) => x.id)).eq('estornado', false).neq('forma', 'folha'),
+        db.from('pdv_pagamentos').select('sessao_id,valor,troco').in('sessao_id', dos.map((x) => x.id)).eq('estornado', false).not('forma', 'in', '(folha,a_receber,cortesia)'),
       ])
       const nomes = Object.fromEntries(((pn.data ?? []) as { id: string; nome: string }[]).map((x) => [x.id, x.nome]))
       setOutros(dos.map((x) => ({ s: x, nome: nomes[x.aberto_por ?? ''] ?? 'Operador', total: ((pg.data ?? []) as { sessao_id: string; valor: number; troco: number }[]).filter((p) => p.sessao_id === x.id).reduce((t, p) => t + num(p.valor) - num(p.troco), 0) })))
@@ -48,11 +49,15 @@ export function PdvCaixa() {
     const rec = await rq
     setRecentes((rec.data ?? []) as Sessao[])
     if (atual) {
-      const [m, p, c] = await Promise.all([
+      const [m, p, c, sc] = await Promise.all([
         db.from('pdv_caixa_movs').select('*').eq('sessao_id', atual.id).order('criado_em'),
-        db.from('pdv_pagamentos').select('forma,valor,troco').eq('sessao_id', atual.id).eq('estornado', false).neq('forma', 'folha'),
+        db.from('pdv_pagamentos').select('forma,valor,troco').eq('sessao_id', atual.id).eq('estornado', false).not('forma', 'in', '(folha,a_receber,cortesia)'),
         db.from('pdv_comandas').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'pedindo_conta']),
+        db.from('pdv_pagamentos').select('forma,valor').eq('sessao_id', atual.id).eq('estornado', false).in('forma', ['a_receber', 'cortesia']),
       ])
+      const nc: Record<string, number> = {}
+      ;(sc.data ?? []).forEach((x: { forma: string; valor: number }) => (nc[x.forma] = (nc[x.forma] ?? 0) + num(x.valor)))
+      setNaoCobrado(nc)
       setMovs((m.data ?? []) as Mov[])
       const acc: Record<string, number> = {}
       ;(p.data ?? []).forEach((x: { forma: string; valor: number; troco: number }) => (acc[x.forma] = (acc[x.forma] ?? 0) + num(x.valor) - num(x.troco)))
@@ -147,7 +152,9 @@ export function PdvCaixa() {
             {FORMAS.map((f) => (
               <li key={f.v} className="flex justify-between py-2"><span>{f.r}</span><b>{reais(porForma[f.v] ?? 0)}</b></li>
             ))}
-            <li className="flex justify-between py-2 text-base"><span>Total vendido</span><b>{reais(totalVendas)}</b></li>
+            <li className="flex justify-between py-2 text-base"><span>Total recebido</span><b>{reais(totalVendas)}</b></li>
+            {(naoCobrado.a_receber ?? 0) > 0 && <li className="flex justify-between py-2 text-amber-700"><span>Deixado a receber (não entrou no caixa)</span><b>{reais(naoCobrado.a_receber)}</b></li>}
+            {(naoCobrado.cortesia ?? 0) > 0 && <li className="flex justify-between py-2 text-amber-700"><span>Consumo interno (liberado sem cobrança)</span><b>{reais(naoCobrado.cortesia)}</b></li>}
           </ul>
         </section>
         <section className={`${cartaoCls} space-y-2 p-4`}>

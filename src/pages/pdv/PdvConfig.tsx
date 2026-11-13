@@ -11,9 +11,10 @@ import { Modal } from './PdvCaixa'
 import { Checkin } from './ConfigCheckin'
 import { Fiscal, Tef } from './ConfigFiscal'
 import { ReimprimirCupons } from './FiscalRapido'
+import { ConfigDescontos } from './ConfigDescontos'
 import { GruposDoProduto, HorarioCampos, Opcoes, Pilula, RelogioHorario, rotuloHorario } from './ConfigCardapio'
 
-type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'fiscal' | 'pagamentos'
+type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'fiscal' | 'pagamentos' | 'descontos'
 const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
   { v: 'salao', r: 'Salão e mesas', perm: 'pdv_gerir' },
   { v: 'checkin', r: 'Check-in: couvert e rodízio', perm: 'pdv_gerir' },
@@ -21,6 +22,7 @@ const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
   { v: 'opcoes', r: 'Opções e combos', perm: 'pdv_gerir' },
   { v: 'impressoras', r: 'Impressoras', perm: 'pdv_gerir' },
   { v: 'fiscal', r: 'Fiscal (NFC-e)', perm: 'pdv_fiscal' },
+  { v: 'descontos', r: 'Descontos', perm: 'pdv_gerir' },
   { v: 'pagamentos', r: 'Pagamentos / TEF', perm: 'pdv_gerir' },
 ]
 
@@ -40,6 +42,7 @@ export function PdvConfig() {
       {aba === 'opcoes' && <Opcoes />}
       {aba === 'impressoras' && <Impressoras />}
       {aba === 'fiscal' && <Fiscal />}
+      {aba === 'descontos' && <ConfigDescontos />}
       {aba === 'pagamentos' && <Tef />}
     </div>
   )

@@ -3,19 +3,26 @@ import { supabase } from '../integrations/supabase/client'
 import { db } from '../lib/supabase'
 import { Modal } from '../pages/pdv/PdvCaixa'
 import { btnCls, btnSecCls, inputCls } from './Estado'
+import { useAuth } from '../context/AuthContext'
 
 const EMAIL_KEY = 'paggio_aprovador_email'
 const lerEmail = () => { try { return localStorage.getItem(EMAIL_KEY) ?? '' } catch { return '' } }
 
-export type AcaoAprovada = 'cancelar_item' | 'cancelar_comanda' | 'estornar'
+export type AcaoAprovada = 'cancelar_item' | 'cancelar_comanda' | 'estornar' | 'a_receber' | 'cortesia'
 
 /** Pede o motivo (quando precisa) e o e-mail e a senha de um administrador; o servidor confere e executa. */
-export function AprovacaoAdmin({ titulo, descricao, acao, id, pedirMotivo = true, onOk, onFechar }: {
-  titulo: string; descricao?: string; acao: AcaoAprovada; id: string; pedirMotivo?: boolean
-  onOk: () => void; onFechar: () => void
+export function AprovacaoAdmin({ titulo, descricao, acao, id, pedirMotivo = true, rotuloMotivo = 'Motivo (obrigatório)', dados, onOk, onFechar }: {
+  titulo: string; descricao?: string; acao: AcaoAprovada; id: string; pedirMotivo?: boolean; rotuloMotivo?: string
+  dados?: Record<string, unknown>; onOk: () => void; onFechar: () => void
 }) {
+  // administrador logado: só a senha dele (o e-mail é o da própria sessão)
+  const { session, profile } = useAuth()
+  const souAdmin = profile?.role === 'admin' || (profile as { is_master?: boolean } | null)?.is_master === true
+  const emailProprio = session?.user?.email ?? ''
+  const rapido = souAdmin && !!emailProprio
   const [motivo, setMotivo] = useState('')
-  const [email, setEmail] = useState(lerEmail)
+  const [emailDigitado, setEmail] = useState(lerEmail)
+  const email = rapido ? emailProprio : emailDigitado
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [carga, setCarga] = useState(false)
@@ -23,16 +30,16 @@ export function AprovacaoAdmin({ titulo, descricao, acao, id, pedirMotivo = true
 
   async function confirmar() {
     setErro(''); setCarga(true)
-    const { data, error } = await supabase.functions.invoke('pdv-aprovar', { body: { acao, id, motivo, email, senha } })
+    const { data, error } = await supabase.functions.invoke('pdv-aprovar', { body: { acao, id, motivo, email, senha, dados } })
     setCarga(false); setSenha('')
     if (error) return setErro('Sem conexão. Esta ação precisa de internet.')
     if (data?.erro) return setErro(data.erro)
-    try { localStorage.setItem(EMAIL_KEY, email.trim()) } catch { /* sem armazenamento */ }
+    if (!rapido) { try { localStorage.setItem(EMAIL_KEY, email.trim()) } catch { /* sem armazenamento */ } }
     onOk()
   }
   async function pedirPush() {
     setErro(''); setCarga(true)
-    const { data, error } = await supabase.functions.invoke('pdv-aprovar', { body: { acao: 'solicitar', tipo: acao, id, motivo } })
+    const { data, error } = await supabase.functions.invoke('pdv-aprovar', { body: { acao: 'solicitar', tipo: acao, id, motivo, dados } })
     setCarga(false)
     if (error) return setErro('Sem conexão. Esta ação precisa de internet.')
     if (data?.erro) return setErro(data.erro)
@@ -64,19 +71,27 @@ export function AprovacaoAdmin({ titulo, descricao, acao, id, pedirMotivo = true
       ) : (
       <>
       {descricao && <p className="text-sm text-ink-soft">{descricao}</p>}
-      {pedirMotivo && <input className={inputCls} placeholder="Motivo (obrigatório)" value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus />}
-      <p className="text-sm text-ink-soft">Aprovação do administrador: e-mail e senha.</p>
-      <input className={inputCls} type="email" autoComplete="username" placeholder="E-mail do administrador" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input className={inputCls} type="password" autoComplete="current-password" placeholder="Senha" value={senha} onChange={(e) => setSenha(e.target.value)}
+      {pedirMotivo && <input className={inputCls} placeholder={rotuloMotivo} value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus />}
+      {rapido ? (
+        <p className="text-sm text-ink-soft">Você é administrador: confirme com a sua senha.</p>
+      ) : (
+        <>
+          <p className="text-sm text-ink-soft">Aprovação do administrador: e-mail e senha dele. Seu usuário sozinho não aprova.</p>
+          <input className={inputCls} type="email" autoComplete="username" placeholder="E-mail do administrador" value={emailDigitado} onChange={(e) => setEmail(e.target.value)} />
+        </>
+      )}
+      <input className={inputCls} type="password" autoComplete="current-password" placeholder={rapido ? 'Sua senha' : 'Senha do administrador'} value={senha} onChange={(e) => setSenha(e.target.value)} autoFocus={rapido && !pedirMotivo}
         onKeyDown={(e) => e.key === 'Enter' && pronto && confirmar()} />
       {erro && <p className="text-sm text-alert">{erro}</p>}
       <div className="flex gap-2">
         <button className={btnSecCls + ' flex-1'} onClick={onFechar}>Voltar</button>
         <button className={btnCls + ' flex-1'} disabled={carga || !pronto} onClick={confirmar}>{carga ? 'Verificando…' : 'Aprovar'}</button>
       </div>
-      <button className={btnSecCls + ' w-full'} disabled={carga || (pedirMotivo && motivo.trim().length < 3)} onClick={pedirPush}>
-        Administrador não está aqui? Pedir aprovação por notificação
-      </button>
+      {!rapido && (
+        <button className={btnSecCls + ' w-full'} disabled={carga || (pedirMotivo && motivo.trim().length < 3)} onClick={pedirPush}>
+          Administrador não está aqui? Pedir aprovação por notificação
+        </button>
+      )}
       </>
       )}
     </Modal>

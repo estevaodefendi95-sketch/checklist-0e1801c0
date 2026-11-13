@@ -13,6 +13,7 @@ import { Modal } from './PdvCaixa'
 import { Grupo, Opcao } from './ConfigCardapio'
 import { EmitirFiscal } from './FiscalRapido'
 import { AprovacaoAdmin, AcaoAprovada } from '../../components/AprovacaoAdmin'
+import { DescontosComanda, DescontoDetalhe } from './DescontosComanda'
 import { cacheGravar, cacheLer, enfileirarPedido, erroDeRede, useFila } from '../../lib/offline'
 
 interface Pag { tef_provedor: string | null; id: string; forma: string; valor: number; troco: number; tef_status: string | null; tef_nsu: string | null; estornado: boolean; criado_em: string }
@@ -56,7 +57,9 @@ export function Comanda() {
   const { perfis, cobrancas } = usePerfisCobrancas()
   const fila = useFila().filter((p) => p.comanda_id === id)
   const [offline, setOffline] = useState(false)
-  const [aprov, setAprov] = useState<{ titulo: string; descricao?: string; acao: AcaoAprovada; id: string; pedirMotivo: boolean; depois?: () => void } | null>(null)
+  const [aprov, setAprov] = useState<{ titulo: string; descricao?: string; acao: AcaoAprovada; id: string; pedirMotivo: boolean; rotuloMotivo?: string; dados?: Record<string, unknown>; depois?: () => void } | null>(null)
+  const [descAberto, setDescAberto] = useState(false)
+  const [arForm, setArForm] = useState<{ nome: string; telefone: string; vencimento: string; observacao: string } | null>(null)
 
   const carregar = useCallback(async () => {
     if (!id) return
@@ -294,13 +297,37 @@ export function Comanda() {
     if (r.error) return setErro(r.error.message)
     setEditPerfis(null); setErro(''); carregar()
   }
-  async function ajusteConta(campo: 'desconto' | 'taxa_servico_pct') {
-    if (!c) return
-    const t = window.prompt(campo === 'desconto' ? 'Desconto em R$:' : 'Serviço em % (0 para retirar):', String(campo === 'desconto' ? c.desconto : c.taxa_servico_pct))
-    const v = t == null ? null : lerNumero(t)
-    if (v == null || v < 0) return
-    await db.from('pdv_comandas').update({ [campo]: v }).eq('id', c.id)
-    carregar()
+  function abrirDescontos() {
+    if (semRede()) return
+    setDescAberto(true)
+  }
+  function abrirAReceber() {
+    if (!c || semRede()) return
+    if (restante <= 0.005) return setErro('Não há valor restante para deixar a receber.')
+    setArForm({ nome: c.nome_cliente ?? '', telefone: c.telefone ?? '', vencimento: '', observacao: '' })
+  }
+  function seguirAReceber() {
+    if (!c || !arForm) return
+    if (arForm.nome.trim().length < 2) return setErro('Informe o nome do cliente.')
+    if (arForm.telefone.replace(/\D/g, '').length < 10) return setErro('Informe o telefone com DDD.')
+    setErro('')
+    setAprov({
+      titulo: `Deixar ${reais(restante)} a receber`,
+      descricao: `${arForm.nome.trim()} · ${arForm.telefone}. A comanda é fechada e a cobrança fica na tela "A receber". Só um administrador pode aprovar.`,
+      acao: 'a_receber', id: c.id, pedirMotivo: false,
+      dados: { nome: arForm.nome, telefone: arForm.telefone, vencimento: arForm.vencimento || null, observacao: arForm.observacao },
+      depois: () => nav('/pdv'),
+    })
+    setArForm(null)
+  }
+  function consumoInterno() {
+    if (!c || semRede()) return
+    if (restante <= 0.005) return setErro('Não há valor restante para liberar.')
+    setAprov({
+      titulo: `Consumo interno · liberar ${reais(restante)}`,
+      descricao: 'Fecha a comanda sem cobrar. Fica registrado quem liberou. Só um administrador pode aprovar.',
+      acao: 'cortesia', id: c.id, pedirMotivo: true, rotuloMotivo: 'Quem consumiu / quem liberou (obrigatório)', depois: () => nav('/pdv'),
+    })
   }
 
   if (!fim) return erro ? <Erro texto={erro} /> : <Carregando />
@@ -324,7 +351,7 @@ export function Comanda() {
       {erro && <Erro texto={erro} />}
       {aprov && (
         <AprovacaoAdmin titulo={aprov.titulo} descricao={aprov.descricao} acao={aprov.acao} id={aprov.id} pedirMotivo={aprov.pedirMotivo}
-          onFechar={() => setAprov(null)} onOk={() => { const d = aprov.depois; setAprov(null); setMsg('Aprovado pelo administrador.'); if (d) d(); else carregar() }} />
+          rotuloMotivo={aprov.rotuloMotivo} dados={aprov.dados} onFechar={() => setAprov(null)} onOk={() => { const d = aprov.depois; setAprov(null); setMsg('Aprovado pelo administrador.'); if (d) d(); else carregar() }} />
       )}
       {offline && <p className="mb-3 rounded-xl bg-amber-100 px-4 py-2 text-sm text-amber-900">Mostrando a última versão salva desta comanda. Você pode lançar pedidos; pagamento e fechamento precisam de internet.</p>}
       {fila.length > 0 && (
@@ -446,6 +473,15 @@ export function Comanda() {
                   </label>
                 )}
                 <button className={btnCls} onClick={() => pagar()}>Registrar pagamento</button>
+                {pode('pdv_caixa') && (
+                  <div className="space-y-2 border-t border-line pt-3">
+                    <p className="text-xs text-ink-soft">Sem pagar agora (precisa da aprovação de um administrador):</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button className={btnSecCls} onClick={abrirAReceber}>Deixar a receber</button>
+                      <button className={btnSecCls} onClick={consumoInterno}>Consumo interno (sem cobrança)</button>
+                    </div>
+                  </div>
+                )}
                 {!sessao && <p className="text-sm text-alert">Caixa fechado: abra em PDV · Caixa para receber.</p>}
               </>
             ) : (
@@ -512,8 +548,8 @@ export function Comanda() {
           )}
           <dl className="space-y-1 border-t border-line pt-3 text-sm">
             <div className="flex justify-between"><dt>Subtotal</dt><dd>{reais(num(tot?.subtotal))}</dd></div>
-            <div className="flex justify-between"><dt>Serviço {c.taxa_servico_pct}%{aberta && <button className="ml-1 text-brand" onClick={() => ajusteConta('taxa_servico_pct')}>alterar</button>}</dt><dd>{reais(num(tot?.servico))}</dd></div>
-            <div className="flex justify-between"><dt>Desconto{aberta && pode('pdv_caixa') && <button className="ml-1 text-brand" onClick={() => ajusteConta('desconto')}>alterar</button>}</dt><dd>−{reais(c.desconto)}</dd></div>
+            <div className="flex justify-between"><dt>Serviço {c.taxa_servico_pct}%{aberta && pode('pdv_caixa') && <button className="ml-1 text-brand" onClick={abrirDescontos}>alterar</button>}</dt><dd>{reais(num(tot?.servico))}</dd></div>
+            <div className="flex justify-between"><dt>Desconto{aberta && pode('pdv_caixa') && <button className="ml-1 text-brand" onClick={abrirDescontos}>{c.desconto > 0 ? 'alterar' : 'aplicar'}</button>}{(c.desconto_detalhe as DescontoDetalhe | null)?.regra_nome ? <em className="block text-xs not-italic text-ink-soft">{(c.desconto_detalhe as DescontoDetalhe).regra_nome}</em> : null}</dt><dd>−{reais(c.desconto)}</dd></div>
             <div className="flex justify-between text-base font-semibold"><dt>Total</dt><dd>{reais(num(tot?.total))}</dd></div>
             <div className="flex items-center justify-between text-ink-soft"><dt>{c.pessoas} pessoa(s){aberta && <button className="ml-1 text-brand" onClick={() => setPessoasEd(String(c.pessoas))}>alterar</button>}</dt><dd>{reais(num(tot?.total) / Math.max(1, c.pessoas))} / pessoa</dd></div>
             <div className="flex justify-between"><dt>Pago</dt><dd>{reais(num(tot?.pago))}</dd></div>
@@ -531,6 +567,22 @@ export function Comanda() {
           )}
         </aside>
       </div>
+      {descAberto && <DescontosComanda c={c} itens={itens} onFechar={() => setDescAberto(false)} onSalvo={() => { setDescAberto(false); setMsg('Desconto aplicado.'); carregar() }} />}
+      {arForm && (
+        <Modal titulo="Deixar a receber" fechar={() => setArForm(null)}>
+          <p className="text-sm text-ink-soft">Valor: <b>{reais(restante)}</b>. A comanda fecha e o cliente fica na tela "A receber" para cobrança.</p>
+          <input className={inputCls} placeholder="Nome do cliente" value={arForm.nome} onChange={(e) => setArForm({ ...arForm, nome: e.target.value })} autoFocus />
+          <input className={inputCls} inputMode="tel" placeholder="Telefone com DDD (WhatsApp)" value={arForm.telefone} onChange={(e) => setArForm({ ...arForm, telefone: e.target.value })} />
+          <label className="block text-sm">Combinou de pagar até (opcional)
+            <input className={inputCls} type="date" value={arForm.vencimento} onChange={(e) => setArForm({ ...arForm, vencimento: e.target.value })} />
+          </label>
+          <input className={inputCls} placeholder="Observação (opcional)" value={arForm.observacao} onChange={(e) => setArForm({ ...arForm, observacao: e.target.value })} />
+          <div className="flex gap-2">
+            <button className={btnSecCls + ' flex-1'} onClick={() => setArForm(null)}>Voltar</button>
+            <button className={btnCls + ' flex-1'} onClick={seguirAReceber}>Pedir aprovação</button>
+          </div>
+        </Modal>
+      )}
       {esc && (
         <Modal titulo={esc.p.nome} fechar={() => setEsc(null)}>
           {gruposDe(esc.p).map((g) => (

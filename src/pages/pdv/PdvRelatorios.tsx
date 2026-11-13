@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom'
 import { numero } from '../../lib/formato'
 import { chipCls } from '../../components/Estado'
 
-interface Pag { comanda_id: string; forma: string; valor: number; troco: number; tef_provedor: string | null; user_id: string | null }
+interface Pag { comanda_id: string; forma: string; valor: number; troco: number; tef_provedor: string | null; user_id: string | null; baixa_de?: string | null }
 interface Aprov { acao: string; comanda_id: string | null; item_id: string | null; detalhe: string | null; motivo: string | null; solicitado_por: string | null; aprovado_por: string | null; criado_em: string }
 interface Cons { insumo_id: string; quantidade: number }
 interface Ins { id: string; nome: string; unidade: string; preco: number | null }
@@ -48,7 +48,7 @@ export function PdvRelatorios() {
     const ids = cs.map((x) => x.id)
     const [i, p, m, pr, ct, cn, ins, cf, pf, ap] = await Promise.all([
       ids.length ? db.from('pdv_pedido_itens').select('*').in('comanda_id', ids) : { data: [] },
-      ids.length ? db.from('pdv_pagamentos').select('comanda_id,forma,valor,troco,tef_provedor,user_id').in('comanda_id', ids).eq('estornado', false) : { data: [] },
+      ids.length ? db.from('pdv_pagamentos').select('comanda_id,forma,valor,troco,tef_provedor,user_id,baixa_de').in('comanda_id', ids).eq('estornado', false) : { data: [] },
       db.from('pdv_mesas').select('*'),
       db.from('pdv_produtos').select('id,categoria_id,ficha_id'),
       db.from('pdv_categorias').select('id,nome'),
@@ -98,7 +98,7 @@ export function PdvRelatorios() {
   }, [comandas, fCliente, fUser, soCancel, cancelPorComanda])
   const idsCF = useMemo(() => new Set(cF.map((c) => c.id)), [cF])
   const itF = useMemo(() => itens.filter((i) => idsCF.has(i.comanda_id)), [itens, idsCF])
-  const pgF = useMemo(() => pags.filter((p) => idsCF.has(p.comanda_id)), [pags, idsCF])
+  const pgF = useMemo(() => pags.filter((p) => idsCF.has(p.comanda_id) && !p.baixa_de), [pags, idsCF])
   const usuariosNoPeriodo = useMemo(() => {
     const ids = new Set<string>()
     comandas.forEach((c) => { const u = (c as unknown as { aberta_por?: string }).aberta_por; if (u) ids.add(u) })
@@ -118,7 +118,7 @@ export function PdvRelatorios() {
     const porForma: Record<string, number> = {}
     pags.filter((p) => idsF.has(p.comanda_id)).forEach((p) => (porForma[p.forma] = (porForma[p.forma] ?? 0) + num(p.valor) - num(p.troco)))
     const oper: Record<string, number> = {}
-    pags.filter((p) => idsF.has(p.comanda_id)).forEach((p) => { const k = operadores[p.user_id ?? ''] ?? 'Sem operador'; oper[k] = (oper[k] ?? 0) + num(p.valor) - num(p.troco) })
+    pags.filter((p) => idsF.has(p.comanda_id) && !['a_receber', 'cortesia', 'folha'].includes(p.forma)).forEach((p) => { const k = operadores[p.user_id ?? ''] ?? 'Sem operador'; oper[k] = (oper[k] ?? 0) + num(p.valor) - num(p.troco) })
     const horas: Record<string, number> = {}
     fechadas.forEach((c) => { const h = String(new Date(c.aberta_em).getHours()).padStart(2, '0') + 'h'; horas[h] = (horas[h] ?? 0) + Math.max(0, bruto(c.id) * (1 + c.taxa_servico_pct / 100) - c.desconto) })
     const vendSemFicha: Record<string, number> = {}
@@ -235,6 +235,7 @@ export function PdvRelatorios() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Bloco t="Por forma de pagamento">
               {FORMAS.map((f) => <Linha key={f.v} a={rotuloForma(f.v)} b={reais(r.porForma[f.v] ?? 0)} />)}
+              {(['a_receber', 'cortesia', 'folha'] as const).filter((k) => (r.porForma[k] ?? 0) > 0).map((k) => <Linha key={k} a={rotuloForma(k)} b={reais(r.porForma[k])} />)}
             </Bloco>
             <Bloco t="Recebido por operador de caixa">
               {Object.entries(r.oper).sort((a, b) => b[1] - a[1]).map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}

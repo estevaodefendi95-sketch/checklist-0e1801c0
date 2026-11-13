@@ -23,6 +23,7 @@ import { Comanda } from './pages/pdv/Comanda'
 import { PdvCaixa } from './pages/pdv/PdvCaixa'
 import { PdvRelatorios } from './pages/pdv/PdvRelatorios'
 import { PdvConfig } from './pages/pdv/PdvConfig'
+import { AReceber } from './pages/pdv/AReceber'
 import { GestaoTablet } from './pages/pdv/GestaoTablet'
 import { MesaPublica } from './pages/pdv/MesaPublica'
 import { Compras } from './pages/Compras'
@@ -99,6 +100,7 @@ const router = createBrowserRouter([
   { path: '/pdv/reservas', element: <Protected><Gate p="pdv_ver_reservas"><Reservas /></Gate></Protected> },
   { path: '/whatsapp', element: <Protected><Gate p="pdv_ver_whatsapp"><WhatsApp /></Gate></Protected> },
   { path: '/pdv/caixa', element: <Protected><PdvCaixa /></Protected> },
+  { path: '/pdv/a-receber', element: <Protected><AReceber /></Protected> },
   { path: '/pdv/relatorios', element: <Protected><Gate p="pdv_ver_vendas"><PdvRelatorios /></Gate></Protected> },
   { path: '/compras', element: <Protected><Compras /></Protected> },
   { path: '/pdv/eventos', element: <Protected><Eventos /></Protected> },

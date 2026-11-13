@@ -12,7 +12,8 @@ export const FORMAS = [
   { v: 'voucher', r: 'Voucher' },
   { v: 'outros', r: 'Outros' },
 ] as const
-export const rotuloForma = (v: string) => FORMAS.find((f) => f.v === v)?.r ?? v
+const EXTRAS: Record<string, string> = { folha: 'Folha', a_receber: 'A receber', cortesia: 'Consumo interno' }
+export const rotuloForma = (v: string) => FORMAS.find((f) => f.v === v)?.r ?? EXTRAS[v] ?? v
 
 export interface Sala { id: string; nome: string; ordem: number; ativo: boolean }
 /** Tamanho fixo por formato: toda mesa de um mesmo formato fica idêntica em qualquer tela */
@@ -37,7 +38,7 @@ export interface Produto extends Horario {
 export interface Comanda {
   id: string; numero: number; mesa_id: string | null; nome_cliente: string | null; telefone: string | null
   pessoas: number; origem: string; status: 'aberta' | 'pedindo_conta' | 'fechada' | 'cancelada'
-  aberta_em: string; fechada_em: string | null; taxa_servico_pct: number; desconto: number
+  aberta_em: string; fechada_em: string | null; taxa_servico_pct: number; desconto: number; desconto_detalhe?: unknown
   cpf_cnpj_nota: string | null; sessao_id: string | null; observacao: string | null; funcionario_id?: string | null
 }
 export interface Item {
