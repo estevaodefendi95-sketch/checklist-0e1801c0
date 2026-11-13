@@ -24,6 +24,8 @@ interface Item {
   emBreve?: boolean
 }
 
+type Modo = 'atendimento' | 'gestao'
+const MODO = 'paggio-modo-mobile'
 const RECOLHIDO = 'paggio-menu-recolhido'
 const ROTULO_GRUPO: Record<Item['grupo'], string> = {
   atendimento: 'Atendimento',
@@ -94,7 +96,24 @@ export function Layout({ children }: { children: ReactNode }) {
       ? [{ to: '/admin/templates', rotulo: 'Áreas e modelos', icone: 'modelos', grupo: 'admin' } as Item]
       : []),
   ]
-  const NA_BARRA = pode('pdv_operar') ? ['/pdv', '/pdv/comandas', '/pdv/reservas'] : ['/', '/areas', '/fichas']
+  const temAtend = pode('pdv_operar')
+  const [modoSalvo, setModoSalvo] = useState<Modo>(() => ler<Modo>(MODO, 'atendimento'))
+  const modo: Modo = temAtend ? modoSalvo : 'gestao'
+  const BARRA_MODO: Record<Modo, string[]> = {
+    atendimento: ['/pdv', '/pdv/comandas', '/pdv/reservas', '/pdv/caixa'],
+    gestao: ['/', '/pdv/relatorios', '/estoque/alertas', '/fichas'],
+  }
+  const NA_BARRA = itens.filter((i) => BARRA_MODO[modo].includes(i.to)).map((i) => i.to)
+  const ordem: Item['grupo'][] = modo === 'atendimento' ? ['atendimento', 'operacao', 'cardapio', 'admin'] : ['operacao', 'cardapio', 'admin', 'atendimento']
+  const itensMais = itens
+    .filter((i) => !NA_BARRA.includes(i.to))
+    .sort((a, b) => ordem.indexOf(a.grupo) - ordem.indexOf(b.grupo))
+  function trocarModo(m: Modo) {
+    setModoSalvo(m)
+    gravar(MODO, m)
+    setMaisAberto(false)
+    navigate(m === 'atendimento' ? '/pdv' : '/')
+  }
 
   useEffect(() => setMaisAberto(false), [pathname])
 
@@ -181,6 +200,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* celular/tablet retrato: só a marca; o título fica na própria página */}
         <div className="flex items-center justify-between px-4 pt-[calc(14px+env(safe-area-inset-top))] text-xs uppercase tracking-[0.08em] text-ink-soft md:px-6 lg:hidden">
           <span>Paggio</span>
+          {temAtend && <SeletorModo modo={modo} onModo={trocarModo} compacto />}
           <Sino className="text-brand" />
         </div>
         <main className="mx-auto max-w-6xl px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-3 md:px-6 lg:px-8 lg:pb-12 lg:pt-8">
@@ -192,8 +212,9 @@ export function Layout({ children }: { children: ReactNode }) {
       <Assistente />
       {/* ---------- barra inferior (< 1024 px) ---------- */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-surface px-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1.5 lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid border-t border-line bg-surface px-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1.5 lg:hidden"
         aria-label="Menu inferior"
+        style={{ gridTemplateColumns: `repeat(${NA_BARRA.length + 1}, minmax(0, 1fr))` }}
       >
         {itens
           .filter((i) => NA_BARRA.includes(i.to))
@@ -210,7 +231,9 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* ---------- folha "Mais" ---------- */}
       {maisAberto && (
         <FolhaMais
-          itens={itens.filter((i) => !NA_BARRA.includes(i.to))}
+          itens={itensMais}
+          modo={temAtend ? modo : undefined}
+          onModo={trocarModo}
           pathname={pathname}
           nome={profile?.nome}
           papel={profile ? roleLabel[profile.role] : ''}
@@ -269,6 +292,8 @@ function ItemBarra({ icone, rotulo, ativo }: { icone: NomeIcone; rotulo: string;
 
 function FolhaMais({
   itens,
+  modo,
+  onModo,
   pathname,
   nome,
   papel,
@@ -276,6 +301,8 @@ function FolhaMais({
   onSair,
 }: {
   itens: Item[]
+  modo?: Modo
+  onModo: (m: Modo) => void
   pathname: string
   nome?: string
   papel: string
@@ -302,6 +329,7 @@ function FolhaMais({
             <Icone nome="fechar" />
           </button>
         </div>
+        {modo && <SeletorModo modo={modo} onModo={onModo} />}
         <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
           {itens.map((i) => (
             <li key={i.to}>
@@ -353,5 +381,26 @@ function BotaoTema({ className = '', mostrarTexto }: { className?: string; mostr
       <Icone nome={escuro ? 'sol' : 'lua'} tamanho={18} />
       {mostrarTexto && (escuro ? 'Modo claro' : 'Modo escuro')}
     </button>
+  )
+}
+
+function SeletorModo({ modo, onModo, compacto }: { modo: Modo; onModo: (m: Modo) => void; compacto?: boolean }) {
+  const op: { v: Modo; r: string }[] = [
+    { v: 'atendimento', r: compacto ? 'Atendimento' : 'Atendimento e vendas' },
+    { v: 'gestao', r: 'Gestão' },
+  ]
+  return (
+    <div role="group" aria-label="Modo do app" className={`flex gap-1 rounded-full bg-paper-dim p-1 normal-case tracking-normal ${compacto ? 'text-xs' : 'mb-3 text-sm'}`}>
+      {op.map((o) => (
+        <button
+          key={o.v}
+          onClick={() => modo !== o.v && onModo(o.v)}
+          aria-pressed={modo === o.v}
+          className={`flex-1 rounded-full px-3 ${compacto ? 'min-h-[32px]' : 'min-h-[44px]'} ${modo === o.v ? 'bg-brand font-semibold text-brand-ink' : 'text-ink-soft'}`}
+        >
+          {o.r}
+        </button>
+      ))}
+    </div>
   )
 }
