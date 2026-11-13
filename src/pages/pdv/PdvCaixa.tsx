@@ -4,10 +4,15 @@ import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais, lerNumero } from '../../lib/formato'
 import { FORMAS, Sessao, enfileirar, hora, num, rotuloForma, useAoVivo } from '../../lib/pdv'
+import { useAuth } from '../../context/AuthContext'
+import { usePermissoes } from '../../context/PermissoesContext'
 
 interface Mov { id: string; tipo: 'sangria' | 'suprimento'; valor: number; motivo: string | null; criado_em: string }
 
 export function PdvCaixa() {
+  const { profile } = useAuth()
+  const { pode } = usePermissoes()
+  const [outros, setOutros] = useState<{ s: Sessao; nome: string; total: number }[]>([])
   const [sessao, setSessao] = useState<Sessao | null>(null)
   const [movs, setMovs] = useState<Mov[]>([])
   const [porForma, setPorForma] = useState<Record<string, number>>({})
@@ -15,7 +20,6 @@ export function PdvCaixa() {
   const [recentes, setRecentes] = useState<Sessao[]>([])
   const [pronto, setPronto] = useState(false)
   const [erro, setErro] = useState('')
-  const [fundo, setFundo] = useState('')
   const [mov, setMov] = useState<'sangria' | 'suprimento' | null>(null)
   const [mValor, setMValor] = useState('')
   const [mMotivo, setMMotivo] = useState('')
@@ -24,15 +28,29 @@ export function PdvCaixa() {
   const [obs, setObs] = useState('')
 
   const carregar = useCallback(async () => {
-    const { data: s } = await db.from('pdv_caixa_sessoes').select('*').eq('status', 'aberto').limit(1)
-    const atual = (s?.[0] as Sessao) ?? null
+    const uid = (await supabase.auth.getUser()).data.user?.id
+    const { data: s } = await db.from('pdv_caixa_sessoes').select('*').eq('status', 'aberto').order('aberto_em')
+    const abertas = (s ?? []) as Sessao[]
+    const atual = abertas.find((x) => x.aberto_por === uid) ?? null
     setSessao(atual)
-    const rec = await db.from('pdv_caixa_sessoes').select('*').eq('status', 'fechado').order('fechado_em', { ascending: false }).limit(8)
+    // gestor enxerga os caixas abertos dos outros operadores
+    const dos = abertas.filter((x) => x.id !== atual?.id)
+    if (dos.length && pode('pdv_gerir')) {
+      const [pn, pg] = await Promise.all([
+        db.from('profiles').select('id,nome').in('id', dos.map((x) => x.aberto_por).filter(Boolean) as string[]),
+        db.from('pdv_pagamentos').select('sessao_id,valor,troco').in('sessao_id', dos.map((x) => x.id)).eq('estornado', false).neq('forma', 'folha'),
+      ])
+      const nomes = Object.fromEntries(((pn.data ?? []) as { id: string; nome: string }[]).map((x) => [x.id, x.nome]))
+      setOutros(dos.map((x) => ({ s: x, nome: nomes[x.aberto_por ?? ''] ?? 'Operador', total: ((pg.data ?? []) as { sessao_id: string; valor: number; troco: number }[]).filter((p) => p.sessao_id === x.id).reduce((t, p) => t + num(p.valor) - num(p.troco), 0) })))
+    } else setOutros([])
+    let rq = db.from('pdv_caixa_sessoes').select('*').eq('status', 'fechado').order('fechado_em', { ascending: false }).limit(10)
+    if (!pode('pdv_gerir') && uid) rq = rq.eq('aberto_por', uid)
+    const rec = await rq
     setRecentes((rec.data ?? []) as Sessao[])
     if (atual) {
       const [m, p, c] = await Promise.all([
         db.from('pdv_caixa_movs').select('*').eq('sessao_id', atual.id).order('criado_em'),
-        db.from('pdv_pagamentos').select('forma,valor,troco').eq('sessao_id', atual.id).eq('estornado', false),
+        db.from('pdv_pagamentos').select('forma,valor,troco').eq('sessao_id', atual.id).eq('estornado', false).neq('forma', 'folha'),
         db.from('pdv_comandas').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'pedindo_conta']),
       ])
       setMovs((m.data ?? []) as Mov[])
@@ -42,21 +60,26 @@ export function PdvCaixa() {
       setComandasAbertas(c.count ?? 0)
     }
     setPronto(true)
-  }, [])
+  }, [pode])
   useAoVivo(['pdv_pagamentos', 'pdv_caixa_sessoes', 'pdv_caixa_movs'], carregar)
 
   const sangrias = movs.filter((m) => m.tipo === 'sangria').reduce((s, m) => s + num(m.valor), 0)
   const suprimentos = movs.filter((m) => m.tipo === 'suprimento').reduce((s, m) => s + num(m.valor), 0)
-  const dinheiroEsperado = num(sessao?.fundo_inicial) + (porForma.dinheiro ?? 0) + suprimentos - sangrias
+  const dinheiroEsperado = (porForma.dinheiro ?? 0) + suprimentos - sangrias
   const totalVendas = Object.values(porForma).reduce((s, v) => s + v, 0)
 
   async function abrir() {
     setErro('')
     const { error } = await db.from('pdv_caixa_sessoes').insert({
-      caixa: 'Caixa 1', fundo_inicial: lerNumero(fundo) ?? 0, aberto_por: (await supabase.auth.getUser()).data.user?.id,
+      caixa: profile?.nome ?? 'Caixa', fundo_inicial: 0, aberto_por: (await supabase.auth.getUser()).data.user?.id,
     })
-    if (error) return setErro(error.code === '23505' ? 'Já existe um caixa aberto.' : error.message)
-    setFundo('')
+    if (error) return setErro(error.code === '23505' ? 'Você já tem um caixa aberto.' : error.message)
+    carregar()
+  }
+  async function fecharOutro(o: Sessao) {
+    if (!window.confirm('Encerrar o caixa deste operador? O fechamento fica sem contagem de dinheiro.')) return
+    const { error } = await db.from('pdv_caixa_sessoes').update({ status: 'fechado', fechado_em: new Date().toISOString(), fechado_por: (await supabase.auth.getUser()).data.user?.id, observacao: 'Encerrado pelo gestor' }).eq('id', o.id)
+    if (error) setErro(error.message)
     carregar()
   }
   async function lancarMov() {
@@ -82,7 +105,7 @@ export function PdvCaixa() {
     }).eq('id', sessao.id)
     if (error) return setErro(error.message)
     const r = await enfileirar(db, 'caixa', 'fechamento_caixa', {
-      caixa: sessao.caixa, aberto_em: sessao.aberto_em, fundo: sessao.fundo_inicial, sangrias, suprimentos, esperado, contado: cont,
+      caixa: sessao.caixa, aberto_em: sessao.aberto_em, sangrias, suprimentos, esperado, contado: cont,
       diferenca_dinheiro: Math.round((cont.dinheiro - dinheiroEsperado) * 100) / 100, total_vendas: totalVendas,
     })
     setFechando(false); setContado({}); setObs('')
@@ -94,13 +117,14 @@ export function PdvCaixa() {
   if (!sessao)
     return (
       <div>
-        <Cabecalho titulo="Caixa" subtitulo="Caixa fechado" />
+        <Cabecalho titulo="Caixa" subtitulo={`Seu caixa está fechado · ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}`} />
         {erro && <Erro texto={erro} />}
         <section className={`${cartaoCls} max-w-md space-y-3 p-5`}>
-          <h2 className="font-semibold">Abertura de caixa</h2>
-          <label className="block text-sm">Fundo de troco (R$)<input className={inputCls} inputMode="decimal" value={fundo} onChange={(e) => setFundo(e.target.value)} /></label>
-          <button className={btnCls} onClick={abrir}>Abrir caixa</button>
+          <h2 className="font-semibold">Abertura de caixa do dia</h2>
+          <p className="text-sm text-ink-soft">Cada operador abre o próprio caixa uma vez por dia. Tudo que você receber fica no seu fechamento.</p>
+          <button className={btnCls} onClick={abrir}>Abrir meu caixa</button>
         </section>
+        <Outros lista={outros} fechar={fecharOutro} />
         {recentes.length > 0 && <Historico lista={recentes} />}
       </div>
     )
@@ -109,10 +133,13 @@ export function PdvCaixa() {
     <div>
       <Cabecalho
         titulo="Caixa"
-        subtitulo={`${sessao.caixa} aberto desde ${hora(sessao.aberto_em)} · fundo ${reais(sessao.fundo_inicial)}`}
+        subtitulo={`${sessao.caixa} · aberto ${new Date(sessao.aberto_em).toLocaleDateString('pt-BR')} às ${hora(sessao.aberto_em)}`}
         acoes={<button className={btnPerigoCls} onClick={() => setFechando(true)}>Fechar caixa</button>}
       />
       {erro && <Erro texto={erro} />}
+      {new Date(sessao.aberto_em).toLocaleDateString('sv-SE') !== new Date().toLocaleDateString('sv-SE') && (
+        <p className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">Este caixa foi aberto em {new Date(sessao.aberto_em).toLocaleDateString('pt-BR')}. Feche-o e abra o caixa de hoje para manter o fechamento diário.</p>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <section className={`${cartaoCls} p-4`}>
           <h2 className="mb-2 font-semibold">Recebido por forma</h2>
@@ -124,9 +151,8 @@ export function PdvCaixa() {
           </ul>
         </section>
         <section className={`${cartaoCls} space-y-2 p-4`}>
-          <h2 className="font-semibold">Dinheiro em gaveta</h2>
+          <h2 className="font-semibold">Dinheiro a conferir</h2>
           <dl className="space-y-1 text-sm">
-            <div className="flex justify-between"><dt>Fundo</dt><dd>{reais(sessao.fundo_inicial)}</dd></div>
             <div className="flex justify-between"><dt>+ Vendas em dinheiro</dt><dd>{reais(porForma.dinheiro ?? 0)}</dd></div>
             <div className="flex justify-between"><dt>+ Suprimentos</dt><dd>{reais(suprimentos)}</dd></div>
             <div className="flex justify-between"><dt>− Sangrias</dt><dd>{reais(sangrias)}</dd></div>
@@ -169,8 +195,26 @@ export function PdvCaixa() {
           <button className={btnPerigoCls} onClick={fechar}>Confirmar fechamento</button>
         </Modal>
       )}
+      <Outros lista={outros} fechar={fecharOutro} />
       {recentes.length > 0 && <Historico lista={recentes} />}
     </div>
+  )
+}
+
+function Outros({ lista, fechar }: { lista: { s: Sessao; nome: string; total: number }[]; fechar: (s: Sessao) => void }) {
+  if (!lista.length) return null
+  return (
+    <section className="mt-6">
+      <h2 className="mb-2 text-sm font-semibold">Caixas abertos de outros operadores</h2>
+      <ul className={`${cartaoCls} divide-y divide-line text-sm`}>
+        {lista.map(({ s, nome, total }) => (
+          <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
+            <span><b>{nome}</b> · aberto {new Date(s.aberto_em).toLocaleDateString('pt-BR')} {hora(s.aberto_em)} · recebido {reais(total)}</span>
+            <button className={btnPerigoCls + ' !min-h-[36px]'} onClick={() => fechar(s)}>Encerrar caixa</button>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -182,8 +226,8 @@ function Historico({ lista }: { lista: Sessao[] }) {
         <ul className={`${cartaoCls} divide-y divide-line text-sm`}>
           {lista.map((s) => (
             <li key={s.id} className="flex justify-between gap-2 p-3">
-              <span>{new Date(s.aberto_em).toLocaleDateString('pt-BR')} {hora(s.aberto_em)} → {s.fechado_em ? hora(s.fechado_em) : ''}</span>
-              <span>dinheiro contado {reais(s.contado?.dinheiro)}</span>
+              <span>{s.caixa} · {new Date(s.aberto_em).toLocaleDateString('pt-BR')} {hora(s.aberto_em)} → {s.fechado_em ? hora(s.fechado_em) : ''}</span>
+              <span>{s.contado ? `dinheiro contado ${reais(s.contado.dinheiro)}` : 'sem contagem'}</span>
             </li>
           ))}
         </ul>

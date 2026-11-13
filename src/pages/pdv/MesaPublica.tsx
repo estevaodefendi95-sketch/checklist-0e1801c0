@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../integrations/supabase/client'
 import { CardapioCliente } from '../../components/CardapioCliente'
+import { ProdutoDetalhe } from '../../components/ProdutoDetalhe'
+import { LeitorQr } from '../../components/LeitorQr'
 
 // Página pública aberta pelo QR Code da mesa (sem login). Toda a leitura e escrita passa pela
 // função pdv-tablet, que valida o token da mesa e só aceita pedido com comanda aberta.
@@ -22,7 +24,8 @@ export function MesaPublica() {
   const { token } = useParams()
   const [e, setE] = useState<Estado | null>(null)
   const [car, setCar] = useState<Linha[]>([])
-  const [esc, setEsc] = useState<{ p: Prod; sel: Record<string, string[]>; obs: string } | null>(null)
+  const [det, setDet] = useState<Prod | null>(null)
+  const [leitor, setLeitor] = useState(false)
   const [carrinho, setCarrinho] = useState(false)
   const [lateral, setLateral] = useState(() => window.innerWidth >= 768)
   useEffect(() => { const f = () => setLateral(window.innerWidth >= 768); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f) }, [])
@@ -38,6 +41,11 @@ export function MesaPublica() {
     if (error) return { erro: 'Sem conexão. Chame o garçom.' } as Estado
     return data as Estado
   }, [token])
+  const chamarTk = useCallback(async (tk: string, acao: string, extra: Record<string, unknown> = {}) => {
+    const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token: tk, acao, ...extra } })
+    if (error) return { erro: 'Sem conexão. Chame o garçom.' } as Estado
+    return data as Estado
+  }, [])
   const carregar = useCallback(async () => { const d = await chamar('menu'); setE(d) }, [chamar])
   useEffect(() => { carregar(); const t = setInterval(carregar, 10000); return () => clearInterval(t) }, [carregar])
 
@@ -47,35 +55,34 @@ export function MesaPublica() {
   const qtd = car.reduce((s, l) => s + l.qtd, 0)
   const qtdProd = (id: string) => car.filter((l) => l.p.id === id).reduce((s, l) => s + l.qtd, 0)
   function mais(p: Prod) {
-    if (p.grupos?.length) return setEsc({ p, sel: {}, obs: '' })
+    if (p.grupos?.length) return setDet(p)
     setCar((c) => { const i = c.findIndex((l) => l.p.id === p.id && !l.opcoes.length && !l.obs); return i >= 0 ? c.map((l, k) => (k === i ? { ...l, qtd: l.qtd + 1 } : l)) : [...c, { key: crypto.randomUUID(), p, qtd: 1, opcoes: [], obs: '' }] })
   }
   function menos(id: string) { setCar((c) => { const i = [...c].reverse().findIndex((l) => l.p.id === id); if (i < 0) return c; const k = c.length - 1 - i; return c.map((l, j) => (j === k ? { ...l, qtd: l.qtd - 1 } : l)).filter((l) => l.qtd > 0) }) }
-  function toggleOpc(g: Grp, o: Opc) {
-    setEsc((x) => {
-      if (!x) return x
-      const atual = x.sel[g.id] ?? []
-      let novo: string[]
-      if (atual.includes(o.id)) novo = atual.filter((i) => i !== o.id)
-      else if (g.max_escolhas === 1) novo = [o.id]
-      else novo = atual.length < g.max_escolhas ? [...atual, o.id] : atual
-      return { ...x, sel: { ...x.sel, [g.id]: novo } }
+  function adicionarDet(qtd: number, opcoes: string[], obs: string) {
+    if (!det) return
+    const p = det
+    setCar((c) => {
+      const i = opcoes.length || obs ? -1 : c.findIndex((l) => l.p.id === p.id && !l.opcoes.length && !l.obs)
+      return i >= 0 ? c.map((l, k) => (k === i ? { ...l, qtd: l.qtd + qtd } : l)) : [...c, { key: crypto.randomUUID(), p, qtd, opcoes, obs }]
     })
-  }
-  function confirmarEsc() {
-    if (!esc) return
-    for (const g of esc.p.grupos ?? []) if ((esc.sel[g.id]?.length ?? 0) < g.min_escolhas) return setMsg(`Escolha ${g.min_escolhas > 1 ? `ao menos ${g.min_escolhas} em` : ''} "${g.nome}".`)
-    setCar((c) => [...c, { key: crypto.randomUUID(), p: esc.p, qtd: 1, opcoes: Object.values(esc.sel).flat(), obs: esc.obs }])
-    setEsc(null); setMsg('')
+    setDet(null); setMsg('')
   }
 
-  async function pedir() {
+  // o pedido vai para a mesa do QR Code lido (a mesa onde o cliente realmente está)
+  async function enviarPara(texto: string) {
+    setLeitor(false)
+    const m = texto.match(/mesa\/([^/?#\s]+)/i)
+    const tk = m ? m[1] : texto.trim()
     setEnv(true)
+    const menu = await chamarTk(tk, 'menu')
+    if (menu.erro || !menu.mesa) { setEnv(false); return setMsg(menu.erro ?? 'Esse QR Code não é de uma mesa. Tente o QR Code da sua mesa.') }
+    if (!menu.comanda) { setEnv(false); return setMsg(`A mesa ${menu.mesa} ainda não foi aberta. Peça ao garçom para fazer o check-in.`) }
     const itens = car.map((l) => ({ produto_id: l.p.id, qtd: l.qtd, opcoes: l.opcoes, obs: l.obs }))
-    const r = await chamar('pedir', { itens }) as Estado & { ok?: boolean }
+    const r = await chamarTk(tk, 'pedir', { itens }) as Estado & { ok?: boolean }
     setEnv(false)
     if (r.erro) return setMsg(r.erro)
-    setCar([]); setMsg(`Pedido enviado para a mesa ${e?.mesa}! Já está sendo preparado e será levado até você.`); carregar()
+    setCar([]); setMsg(`Pedido enviado para a mesa ${menu.mesa}! Já está sendo preparado e será levado até você.`); carregar()
   }
   async function simples(acao: 'garcom' | 'conta', texto: string) {
     const r = await chamar(acao)
@@ -93,30 +100,6 @@ export function MesaPublica() {
   const btn = 'rounded-xl bg-[var(--p)] px-4 py-3 text-base font-semibold text-white disabled:opacity-50'
   const vars = { ['--p' as string]: e.tema?.primaria ?? '#7a1f2b', ['--f' as string]: e.tema?.fundo ?? '#faf7f2', ['--t' as string]: e.tema?.texto ?? '#222' }
   const tema = { colunas: 2, ...(e.tema ?? {}) }
-  const folha = esc && (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50" onClick={() => setEsc(null)}>
-      <div className="max-h-[85vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" style={vars} onClick={(x) => x.stopPropagation()}>
-        <h2 className="text-lg font-semibold">{esc.p.nome}</h2>
-        {esc.p.descricao && <p className="text-sm opacity-70">{esc.p.descricao}</p>}
-        {(esc.p.grupos ?? []).map((g) => (
-          <fieldset key={g.id} className="space-y-1">
-            <legend className="font-medium">{g.nome} <span className="text-xs opacity-60">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
-            {g.opcoes.map((o) => {
-              const on = (esc.sel[g.id] ?? []).includes(o.id)
-              return (
-                <button key={o.id} onClick={() => toggleOpc(g, o)} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${on ? 'border-[var(--p)] bg-black/5' : ''}`}>
-                  <span>{on ? '● ' : '○ '}{o.nome}</span>{Number(o.preco_adicional) > 0 && <span className="text-sm opacity-70">+ {brl(Number(o.preco_adicional))}</span>}
-                </button>
-              )
-            })}
-          </fieldset>
-        ))}
-        <input className="w-full rounded-lg border p-2 text-sm" placeholder="Observação" value={esc.obs} onChange={(x) => setEsc({ ...esc, obs: x.target.value })} />
-        {msg && <p className="text-sm text-[var(--p)]">{msg}</p>}
-        <button className={btn + ' w-full'} onClick={confirmarEsc}>Adicionar ao pedido</button>
-      </div>
-    </div>
-  )
   const sacola = carrinho && (
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50" onClick={() => setCarrinho(false)}>
       <div className="max-h-[85vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" style={vars} onClick={(x) => x.stopPropagation()}>
@@ -134,7 +117,7 @@ export function MesaPublica() {
         ))}
         {!car.length && <p className="text-sm opacity-70">Sacola vazia.</p>}
         {msg && <p className="text-sm text-[var(--p)]">{msg}</p>}
-        <button className={btn + ' w-full'} disabled={env || !car.length} onClick={async () => { await pedir(); setCarrinho(false) }}>Enviar pedido · {brl(total)}</button>
+        <button className={btn + ' w-full'} disabled={env || !car.length} onClick={() => { setCarrinho(false); setMsg(''); setLeitor(true) }}>Enviar pedido · {brl(total)}</button>
       </div>
     </div>
   )
@@ -160,10 +143,10 @@ export function MesaPublica() {
   if (!e.comanda) return abrirMesa
   return (
     <div className="mx-auto h-[100dvh] max-w-5xl">
-      {msg && !esc && !carrinho && <p className="fixed inset-x-3 top-3 z-40 mx-auto max-w-xl rounded-xl bg-white p-3 text-sm shadow-lg" onClick={() => setMsg('')}>{msg}</p>}
+      {msg && !det && !carrinho && <p className="fixed inset-x-3 top-3 z-40 mx-auto max-w-xl rounded-xl bg-white p-3 text-sm shadow-lg" onClick={() => setMsg('')}>{msg}</p>}
       <CardapioCliente
         tema={tema} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
-        qtdDe={qtdProd} onAdd={(p) => mais(p as Prod)} onMenos={menos}
+        qtdDe={qtdProd} onAdd={(p) => mais(p as Prod)} onMenos={menos} onAbrir={(p) => setDet(e.produtos?.find((x) => x.id === p.id) ?? null)}
         acoes={<>
           {e.pode_chamar && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}
           {e.pode_conta && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => simples('conta', 'Conta solicitada. O garçom já vai até você.')}>Pedir a conta</button>}
@@ -177,7 +160,7 @@ export function MesaPublica() {
           )}
           {qtd > 0 && <button className={btn + ' flex w-full items-center justify-between shadow-lg'} onClick={() => setCarrinho(true)}><span>Ver pedido · {qtd} {qtd === 1 ? 'item' : 'itens'}</span><span>{brl(total)}</span></button>}
         </>}
-        sobrepor={<>{folha}{sacola}</>}
+        sobrepor={<>{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr onLido={enviarPara} onCancelar={() => setLeitor(false)} />}</>}
       />
     </div>
   )

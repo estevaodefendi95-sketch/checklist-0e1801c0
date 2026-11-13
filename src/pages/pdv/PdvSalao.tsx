@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
@@ -26,6 +26,10 @@ export function PdvSalao() {
   const [pronto, setPronto] = useState(false)
   const [novaMesa, setNovaMesa] = useState<Mesa | null>(null)
   const [busca, setBusca] = useState('')
+  const [editando, setEditando] = useState(false)
+  const [selId, setSelId] = useState<string | null>(null)
+  const drag = useRef<{ id: string; dx: number; dy: number; moveu: boolean } | null>(null)
+  const area = useRef<HTMLDivElement>(null)
 
   const carregar = useCallback(async () => {
     const [s, m, c, t] = await Promise.all([
@@ -51,6 +55,39 @@ export function PdvSalao() {
   const abertas = comandas.length
   const aberto = comandas.reduce((s, c) => s + num(totais[c.id]?.total), 0)
 
+  async function upd(m: Mesa, p: Partial<Mesa>) {
+    setMesas((x) => x.map((k) => (k.id === m.id ? { ...k, ...p } : k)))
+    const { error } = await db.from('pdv_mesas').update(p).eq('id', m.id)
+    if (error) { setErro(error.code === '23505' ? 'Já existe uma mesa com esse número.' : error.message); carregar() } else setErro('')
+  }
+  async function novaMesaEd() {
+    if (!sala) return setErro('Crie uma sala em Configurações do PDV primeiro.')
+    const n = Math.max(0, ...mesas.map((m) => parseInt(m.numero, 10) || 0)) + 1
+    const doSala = mesas.filter((m) => m.sala_id === sala)
+    const { data, error } = await db.from('pdv_mesas').insert({ sala_id: sala, numero: String(n), capacidade: 4, pos_x: 20 + (doSala.length % 6) * 100, pos_y: 20 + Math.floor(doSala.length / 6) * 100 }).select('id').single()
+    if (error) return setErro(error.message)
+    setSelId(data.id); carregar()
+  }
+  async function removerMesa(m: Mesa) {
+    if (porMesa.has(m.id)) return setErro('Esta mesa tem comanda aberta.')
+    if (!window.confirm(`Remover a mesa ${m.numero}? Se ela tiver histórico, será apenas desativada.`)) return
+    const r = await db.from('pdv_mesas').delete().eq('id', m.id)
+    if (r.error) await db.from('pdv_mesas').update({ ativo: false }).eq('id', m.id)
+    setSelId(null); carregar()
+  }
+  function mover(e: React.PointerEvent) {
+    const d = drag.current; if (!d || !area.current) return
+    const r = area.current.getBoundingClientRect()
+    d.moveu = true
+    const x = Math.max(0, Math.round((e.clientX - r.left - d.dx) / 10) * 10)
+    const y = Math.max(0, Math.round((e.clientY - r.top - d.dy) / 10) * 10)
+    setMesas((ms) => ms.map((m) => (m.id === d.id ? { ...m, pos_x: x, pos_y: y } : m)))
+  }
+  async function soltar() {
+    const d = drag.current; drag.current = null
+    const m = mesas.find((k) => k.id === d?.id)
+    if (m && d?.moveu) await db.from('pdv_mesas').update({ pos_x: m.pos_x, pos_y: m.pos_y }).eq('id', m.id)
+  }
   function clicar(m: Mesa) {
     const c = porMesa.get(m.id)
     if (c) nav(`/pdv/comanda/${c.id}`)
@@ -67,8 +104,9 @@ export function PdvSalao() {
         subtitulo={`${abertas} comanda(s) aberta(s) · ${reais(aberto)} em consumo`}
         acoes={
           <>
-            <button className={btnCls} onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)}>Check-in rápido</button>
-            <button className={btnSecCls} onClick={() => nav('/pdv/comandas')}>Todas as comandas</button>
+            <button className={editando ? btnCls : btnSecCls} onClick={() => { setEditando((v) => !v); setSelId(null) }}>{editando ? 'Concluir edição' : 'Editar mesas'}</button>
+            {!editando && <button className={btnCls} onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)}>Check-in rápido</button>}
+            {!editando && <button className={btnSecCls} onClick={() => nav('/pdv/comandas')}>Todas as comandas</button>}
           </>
         }
       />
@@ -84,20 +122,46 @@ export function PdvSalao() {
           ))}
         </div>
       )}
+      {editando && (
+        <section className={`${cartaoCls} mb-3 space-y-3 p-4`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-ink-soft">Arraste as mesas para mudar a disposição. Toque numa mesa para ajustar número, lugares e formato.</p>
+            <button className={btnSecCls} onClick={novaMesaEd}>+ Nova mesa nesta sala</button>
+          </div>
+          {(() => { const m = mesas.find((x) => x.id === selId); if (!m) return null; return (
+            <div className="flex flex-wrap items-end gap-3 border-t border-line pt-3">
+              <label className="text-xs text-ink-soft">Número<input className={inputCls + ' !w-24'} defaultValue={m.numero} key={m.id + m.numero} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.numero) upd(m, { numero: v }) }} /></label>
+              <div className="text-xs text-ink-soft">Lugares
+                <div className="mt-1 flex items-center gap-2">
+                  <button className="h-11 w-11 rounded-lg border border-line text-xl" onClick={() => upd(m, { capacidade: Math.max(1, m.capacidade - 1) })}>−</button>
+                  <b className="w-8 text-center text-lg text-ink">{m.capacidade}</b>
+                  <button className="h-11 w-11 rounded-lg bg-brand text-xl text-brand-ink" onClick={() => upd(m, { capacidade: m.capacidade + 1 })}>+</button>
+                </div>
+              </div>
+              <div className="text-xs text-ink-soft">Formato
+                <div className="mt-1 flex gap-1.5">
+                  {(['quadrada', 'redonda', 'retangular'] as const).map((f) => <button key={f} className={`min-h-[44px] rounded-lg border px-3 text-sm ${m.forma === f ? 'border-brand bg-brand-soft text-brand' : 'border-line text-ink-soft'}`} onClick={() => upd(m, { forma: f, largura: f === 'retangular' ? 160 : 100, altura: 100 })}>{f}</button>)}
+                </div>
+              </div>
+              <button className={btnSecCls + ' !text-alert'} onClick={() => removerMesa(m)}>Remover mesa</button>
+            </div>) })()}
+        </section>
+      )}
       {!mesas.length ? (
         <Vazio texto={pode('pdv_gerir') ? 'Nenhuma mesa cadastrada. Monte o mapa em PDV · Configurações › Salão.' : 'Nenhuma mesa cadastrada.'} />
       ) : (
         <div className={`${cartaoCls} relative overflow-auto p-3`} style={{ minHeight: 420 }}>
-          <div className="relative" style={{ minWidth: 640, height: Math.max(420, ...mesasSala.map((m) => m.pos_y + m.altura + 20)) }}>
+          <div ref={area} className="relative touch-none select-none" onPointerMove={editando ? mover : undefined} onPointerUp={editando ? soltar : undefined} style={{ minWidth: 640, height: Math.max(420, ...mesasSala.map((m) => m.pos_y + m.altura + 20)) }}>
             {mesasSala.map((m) => {
               const c = porMesa.get(m.id)
               const st = c ? c.status : 'livre'
               return (
                 <button
                   key={m.id}
-                  onClick={() => clicar(m)}
+                  onClick={() => (editando ? setSelId(m.id) : clicar(m))}
+                  onPointerDown={editando ? (e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); drag.current = { id: m.id, dx: e.clientX - r.left, dy: e.clientY - r.top, moveu: false }; setSelId(m.id) } : undefined}
                   style={{ left: m.pos_x, top: m.pos_y, width: m.largura, height: m.altura }}
-                  className={`absolute flex flex-col items-center justify-center border-2 text-center text-xs leading-tight transition-transform active:scale-95 ${m.forma === 'redonda' ? 'rounded-full' : 'rounded-xl'} ${COR[st]}`}
+                  className={`absolute flex flex-col items-center justify-center border-2 text-center text-xs leading-tight transition-transform active:scale-95 ${m.forma === 'redonda' ? 'rounded-full' : 'rounded-xl'} ${COR[st]} ${editando && selId === m.id ? 'ring-2 ring-brand' : ''} ${editando ? 'cursor-move border-dashed' : ''}`}
                 >
                   <b className="text-base">{m.numero}</b>
                   {c ? (
@@ -131,7 +195,7 @@ export function PdvSalao() {
         </section>
       )}
       {novaMesa && (
-        <CheckinModal mesas={mesas.filter((m) => !porMesa.has(m.id))} mesaInicial={novaMesa.id ? novaMesa : null} onClose={() => setNovaMesa(null)} onAberta={(id) => nav(`/pdv/comanda/${id}`)} />
+        <CheckinModal mesas={mesas} mesaInicial={novaMesa.id ? novaMesa : null} onClose={() => setNovaMesa(null)} onAberta={(id) => nav(`/pdv/comanda/${id}`)} />
       )}
     </div>
   )

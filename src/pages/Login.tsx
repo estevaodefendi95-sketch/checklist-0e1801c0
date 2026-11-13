@@ -28,7 +28,8 @@ export function Login() {
         <ThemeToggle />
       </div>
       <div className="w-full max-w-sm">
-        <h1 className="font-display text-5xl font-semibold leading-none text-brand">Paggio</h1>
+        <h1 className="sr-only">Paggio</h1>
+        <img src="/logo-paggio.png" alt="Paggio Gastrobar" className="h-20 w-auto" />
         <div className="mb-2 mt-1 text-xs uppercase tracking-[0.08em] text-ink-soft">Operação</div>
         <p className="mb-8 text-sm text-ink-soft">
           checklists, fichas técnicas e cardápios

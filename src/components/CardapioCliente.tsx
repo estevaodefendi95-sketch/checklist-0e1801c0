@@ -8,8 +8,8 @@ export interface CardCat { id: string; nome: string }
 export interface CardProd { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; personalizavel?: boolean }
 const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, lateral, qtdDe, onAdd, onMenos, acoes, rodape, sobrepor, somenteLeitura }: {
-  somenteLeitura?: boolean; tema: CardTema; mesa?: string; boasVindas?: string | null; categorias: CardCat[]; produtos: CardProd[]; lateral: boolean
+export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, lateral, qtdDe, onAdd, onMenos, acoes, rodape, sobrepor, somenteLeitura, onAbrir }: {
+  onAbrir?: (p: CardProd) => void; somenteLeitura?: boolean; tema: CardTema; mesa?: string; boasVindas?: string | null; categorias: CardCat[]; produtos: CardProd[]; lateral: boolean
   qtdDe: (id: string) => number; onAdd: (p: CardProd) => void; onMenos: (id: string) => void
   acoes?: ReactNode; rodape?: ReactNode; sobrepor?: ReactNode
 }) {
@@ -53,7 +53,7 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
     )
     return (
       <li className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
-        <div role="button" tabIndex={0} onClick={() => !somenteLeitura && onAdd(p)} onKeyDown={(e) => e.key === 'Enter' && !somenteLeitura && onAdd(p)} className={`flex ${somenteLeitura ? '' : 'cursor-pointer'} ${vertical ? 'h-full flex-col' : 'items-stretch gap-3 p-3'}`}>
+        <div role="button" tabIndex={0} onClick={() => (onAbrir ? onAbrir(p) : !somenteLeitura && onAdd(p))} onKeyDown={(e) => e.key === 'Enter' && (onAbrir ? onAbrir(p) : !somenteLeitura && onAdd(p))} className={`flex ${somenteLeitura && !onAbrir ? '' : 'cursor-pointer'} ${vertical ? 'h-full flex-col' : 'items-stretch gap-3 p-3'}`}>
           {vertical && foto}
           <div className={`flex min-w-0 flex-1 flex-col ${vertical ? 'p-3' : ''}`}>
             <b className="leading-tight">{p.nome}</b>
@@ -77,7 +77,8 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.2em] opacity-80">{mesa ? `Mesa ${mesa}` : 'Cardápio digital'}</div>
-            <h1 className="truncate text-2xl font-semibold leading-tight">{tema.titulo || 'Paggio'}</h1>
+            <h1 className="sr-only">{tema.titulo || 'Paggio'}</h1>
+            <img src="/logo-paggio.png" alt={tema.titulo || 'Paggio Gastrobar'} className="mt-1 h-14 w-auto max-w-full object-contain object-left" />
             {(boasVindas || tema.subtitulo) && <p className="mt-0.5 line-clamp-2 text-xs opacity-85">{boasVindas || tema.subtitulo}</p>}
           </div>
           {acoes && <div className="flex shrink-0 gap-2">{acoes}</div>}

@@ -5,6 +5,7 @@ import { noHorarios, type Faixa } from '../../lib/pdv'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 import { DIAS, Grupo, Opcao } from './ConfigCardapio'
 import { CardapioCliente } from '../../components/CardapioCliente'
+import { ProdutoDetalhe } from '../../components/ProdutoDetalhe'
 
 interface Tema { primaria: string; fundo: string; texto: string; destaque: string; titulo: string; subtitulo: string; colunas: 1 | 2; mostrar_fotos: boolean }
 const PADRAO: Tema = { primaria: '#7a1f2b', fundo: '#faf7f2', texto: '#222222', destaque: '#c9a24b', titulo: 'Paggio', subtitulo: '', colunas: 2, mostrar_fotos: true }
@@ -13,7 +14,6 @@ const PRESETS: { nome: string; t: Partial<Tema> }[] = [
   { nome: 'Noite (escuro)', t: { primaria: '#c9a24b', fundo: '#1b1416', texto: '#f3ece4', destaque: '#c9a24b' } },
   { nome: 'Verde oliva', t: { primaria: '#3f5b3a', fundo: '#f6f3ea', texto: '#222222', destaque: '#b08d3c' } },
 ]
-const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 interface Cat { id: string; nome: string; visivel_tablet: boolean; horarios: Faixa[] | null }
 interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; visivel_tablet: boolean; disponivel: boolean; horarios: Faixa[] | null }
 
@@ -109,20 +109,11 @@ export function TabletLayout() {
               produtos={visiveis.map((p) => ({ id: p.id, nome: p.nome, descricao: p.descricao, preco: Number(p.preco), categoria_id: p.categoria_id, foto_url: p.foto_url, personalizavel: gruposDe(p).length > 0 }))}
               lateral={larg === 'tablet'} qtdDe={(id) => (id === aberto?.id ? 0 : 0)} onAdd={(c) => setAberto(prods.find((x) => x.id === c.id) ?? null)} onMenos={() => {}}
               acoes={<><span className="rounded-full border border-white/60 px-3 py-1.5 text-xs">Chamar garçom</span><span className="rounded-full border border-white/60 px-3 py-1.5 text-xs">Pedir a conta</span></>}
+              onAbrir={(c) => setAberto(prods.find((x) => x.id === c.id) ?? null)}
               sobrepor={aberto && (
-                <div className="absolute inset-0 z-20 flex items-end bg-black/50" onClick={() => setAberto(null)}>
-                  <div className="max-h-[85%] w-full space-y-3 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" onClick={(e) => e.stopPropagation()}>
-                    <h2 className="text-lg font-semibold">{aberto.nome}</h2>
-                    {aberto.descricao && <p className="text-sm opacity-70">{aberto.descricao}</p>}
-                    {gruposDe(aberto).map((g) => (
-                      <fieldset key={g.id} className="space-y-1">
-                        <legend className="font-medium">{g.nome} <span className="text-xs opacity-60">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
-                        {g.opcoes.map((o) => <div key={o.id} className="flex justify-between rounded-xl border p-3 text-sm"><span>○ {o.nome}</span>{Number(o.preco_adicional) > 0 && <span className="opacity-70">+ {brl(Number(o.preco_adicional))}</span>}</div>)}
-                      </fieldset>
-                    ))}
-                    <div className="rounded-xl py-3 text-center font-semibold text-white" style={{ background: tema.primaria }}>Adicionar · {brl(Number(aberto.preco))}</div>
-                  </div>
-                </div>
+                <ProdutoDetalhe previa className="absolute inset-0" fotos={tema.mostrar_fotos} onFechar={() => setAberto(null)}
+                  vars={{ ['--p' as string]: tema.primaria, ['--d' as string]: tema.destaque }}
+                  produto={{ id: aberto.id, nome: aberto.nome, descricao: aberto.descricao, preco: Number(aberto.preco), foto_url: aberto.foto_url, grupos: gruposDe(aberto).map((g) => ({ id: g.id, nome: g.nome, min_escolhas: g.min_escolhas, max_escolhas: g.max_escolhas, opcoes: g.opcoes.map((o) => ({ id: o.id, nome: o.nome, preco_adicional: Number(o.preco_adicional) })) })) }} />
               )}
             />
           </div>

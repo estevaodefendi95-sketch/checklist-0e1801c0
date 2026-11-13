@@ -4,8 +4,13 @@ import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
 import { Comanda, Item, Mesa, FORMAS, num, rotuloForma, hora } from '../../lib/pdv'
+import { Link } from 'react-router-dom'
+import { numero } from '../../lib/formato'
+import { chipCls } from '../../components/Estado'
 
-interface Pag { comanda_id: string; forma: string; valor: number; troco: number; tef_provedor: string | null }
+interface Pag { comanda_id: string; forma: string; valor: number; troco: number; tef_provedor: string | null; user_id: string | null }
+interface Cons { insumo_id: string; quantidade: number }
+interface Ins { id: string; nome: string; unidade: string; preco: number | null }
 
 const hojeISO = () => new Date().toLocaleDateString('sv-SE')
 const soma = (d: string, n: number) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('sv-SE') }
@@ -13,6 +18,12 @@ const soma = (d: string, n: number) => { const x = new Date(d + 'T12:00:00'); x.
 export function PdvRelatorios() {
   const [de, setDe] = useState(hojeISO())
   const [ate, setAte] = useState(hojeISO())
+  const [aba, setAba] = useState<'vendas' | 'estoque'>('vendas')
+  const [cons, setCons] = useState<Cons[]>([])
+  const [insumos, setInsumos] = useState<Record<string, Ins>>({})
+  const [semFicha, setSemFicha] = useState<Set<string>>(new Set())
+  const [operadores, setOperadores] = useState<Record<string, string>>({})
+  const [corte, setCorte] = useState('')
   const [comandas, setComandas] = useState<Comanda[]>([])
   const [itens, setItens] = useState<Item[]>([])
   const [pags, setPags] = useState<Pag[]>([])
@@ -27,20 +38,29 @@ export function PdvRelatorios() {
     const fim = new Date(soma(ate, 1) + 'T00:00:00').toISOString()
     const c = await db.from('pdv_comandas').select('*').gte('aberta_em', ini).lt('aberta_em', fim).order('aberta_em')
     if (c.error) { setErro(c.error.message); return setPronto(true) }
-    const cs = (c.data ?? []) as Comanda[]
+    const cs = ((c.data ?? []) as Comanda[]).filter((x) => !x.funcionario_id)
     setComandas(cs)
     const ids = cs.map((x) => x.id)
-    const [i, p, m, pr, ct] = await Promise.all([
+    const [i, p, m, pr, ct, cn, ins, cf, pf] = await Promise.all([
       ids.length ? db.from('pdv_pedido_itens').select('*').in('comanda_id', ids) : { data: [] },
-      ids.length ? db.from('pdv_pagamentos').select('comanda_id,forma,valor,troco,tef_provedor').in('comanda_id', ids).eq('estornado', false) : { data: [] },
+      ids.length ? db.from('pdv_pagamentos').select('comanda_id,forma,valor,troco,tef_provedor,user_id').in('comanda_id', ids).eq('estornado', false) : { data: [] },
       db.from('pdv_mesas').select('*'),
-      db.from('pdv_produtos').select('id,categoria_id'),
+      db.from('pdv_produtos').select('id,categoria_id,ficha_id'),
       db.from('pdv_categorias').select('id,nome'),
+      db.rpc('consumo_teorico', { p_inicio: de, p_fim: ate }),
+      db.from('insumos').select('id,nome,unidade,preco'),
+      db.from('pdv_config').select('estoque_auto_desde').eq('id', 1).maybeSingle(),
+      db.from('profiles').select('id,nome'),
     ])
+    setCons((cn.data ?? []) as Cons[])
+    setInsumos(Object.fromEntries(((ins.data ?? []) as Ins[]).map((x) => [x.id, x])))
+    setCorte(cf.data?.estoque_auto_desde ?? '')
+    setOperadores(Object.fromEntries(((pf.data ?? []) as { id: string; nome: string }[]).map((x) => [x.id, x.nome])))
     setItens((i.data ?? []) as Item[])
     setPags((p.data ?? []) as Pag[])
     setMesas(Object.fromEntries(((m.data ?? []) as Mesa[]).map((x) => [x.id, x])))
     const nomeCat = Object.fromEntries(((ct.data ?? []) as { id: string; nome: string }[]).map((x) => [x.id, x.nome]))
+    setSemFicha(new Set(((pr.data ?? []) as { id: string; ficha_id: string | null }[]).filter((x) => !x.ficha_id).map((x) => x.id)))
     setCatDe(Object.fromEntries(((pr.data ?? []) as { id: string; categoria_id: string | null }[]).map((x) => [x.id, x.categoria_id ? nomeCat[x.categoria_id] ?? '—' : 'Sem categoria'])))
     setErro('')
     setPronto(true)
@@ -58,6 +78,12 @@ export function PdvRelatorios() {
     const idsF = new Set(fechadas.map((c) => c.id))
     const porForma: Record<string, number> = {}
     pags.filter((p) => idsF.has(p.comanda_id)).forEach((p) => (porForma[p.forma] = (porForma[p.forma] ?? 0) + num(p.valor) - num(p.troco)))
+    const oper: Record<string, number> = {}
+    pags.filter((p) => idsF.has(p.comanda_id)).forEach((p) => { const k = operadores[p.user_id ?? ''] ?? 'Sem operador'; oper[k] = (oper[k] ?? 0) + num(p.valor) - num(p.troco) })
+    const horas: Record<string, number> = {}
+    fechadas.forEach((c) => { const h = String(new Date(c.aberta_em).getHours()).padStart(2, '0') + 'h'; horas[h] = (horas[h] ?? 0) + Math.max(0, bruto(c.id) * (1 + c.taxa_servico_pct / 100) - c.desconto) })
+    const vendSemFicha: Record<string, number> = {}
+    ativos.filter((i) => idsF.has(i.comanda_id) && i.tipo === 'produto' && i.produto_id && semFicha.has(i.produto_id)).forEach((i) => { vendSemFicha[i.nome] = (vendSemFicha[i.nome] ?? 0) + num(i.qtd) })
     const maq: Record<string, number> = {}
     pags.filter((p) => idsF.has(p.comanda_id) && (p.forma === 'credito' || p.forma === 'debito')).forEach((p) => { const k = `${p.tef_provedor ?? 'Sem maquininha'} · ${rotuloForma(p.forma)}`; maq[k] = (maq[k] ?? 0) + num(p.valor) - num(p.troco) })
     const prod: Record<string, { qtd: number; valor: number }> = {}
@@ -81,8 +107,8 @@ export function PdvRelatorios() {
       const d = ORD[new Date(c.aberta_em).getDay()]
       for (const [m, k] of [[faixas, f], [dias, d]] as const) { m[k] ??= { n: 0, v: 0, p: 0 }; m[k].n++; m[k].v += totC(c); m[k].p += c.pessoas }
     })
-    return { faixas, dias, ORD, mediaPessoas: fechadas.length ? pessoas / fechadas.length : 0, maq, couvert, rodizio, fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
-  }, [comandas, itens, pags, catDe])
+    return { oper, horas, vendSemFicha, faixas, dias, ORD, mediaPessoas: fechadas.length ? pessoas / fechadas.length : 0, maq, couvert, rodizio, fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
+  }, [comandas, itens, pags, catDe, operadores, semFicha])
 
   function csv() {
     const linhas = [['comanda', 'mesa', 'abertura', 'fechamento', 'status', 'pessoas', 'subtotal', 'servico_pct', 'desconto']]
@@ -94,7 +120,7 @@ export function PdvRelatorios() {
   const topProd = Object.entries(r.prod).sort((a, b) => b[1].valor - a[1].valor).slice(0, 15)
   return (
     <div>
-      <Cabecalho titulo="Relatórios do PDV" subtitulo={`${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}`}
+      <Cabecalho titulo="Relatório de vendas" subtitulo={`${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}`}
         acoes={<button className={btnSecCls} onClick={csv}>Exportar CSV</button>} />
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <button className={btnSecCls} onClick={() => { setDe(hojeISO()); setAte(hojeISO()) }}>Hoje</button>
@@ -105,7 +131,27 @@ export function PdvRelatorios() {
         <input type="date" className={inputCls + ' !w-auto'} value={ate} onChange={(e) => setAte(e.target.value)} />
       </div>
       {erro && <Erro texto={erro} />}
-      {!pronto ? <Carregando /> : (
+      <div className="mb-4 flex gap-2">
+        <button className={chipCls(aba === 'vendas')} onClick={() => setAba('vendas')}>Vendas</button>
+        <button className={chipCls(aba === 'estoque')} onClick={() => setAba('estoque')}>Estoque (baixa automática)</button>
+        <Link to="/pdv/consumo" className={chipCls(false)}>Consumo de funcionários</Link>
+      </div>
+      {!pronto ? <Carregando /> : aba === 'estoque' ? (
+        <div className="space-y-4">
+          <p className="rounded-xl bg-brand-soft px-4 py-3 text-sm">Cada item vendido no PDV baixa o estoque pelos insumos da ficha técnica{corte ? ` (vale desde ${corte.split('-').reverse().join('/')})` : ''}. O saldo e os alertas de mínimo estão em <Link className="font-semibold text-brand underline" to="/estoque/alertas">Alertas de estoque</Link>.</p>
+          <Bloco t="Consumo de insumos pelas vendas (inclui consumo de funcionários)">
+            {[...cons].map((c) => ({ c, i: insumos[c.insumo_id] })).filter((x) => x.i).sort((a, b) => num(b.c.quantidade) * num(b.i.preco) - num(a.c.quantidade) * num(a.i.preco) || b.c.quantidade - a.c.quantidade).slice(0, 80).map(({ c, i }) => (
+              <Linha key={c.insumo_id} a={i.nome} b={`${numero(num(c.quantidade))} ${i.unidade}${num(i.preco) > 0 ? ` · ${reais(num(c.quantidade) * num(i.preco))}` : ''}`} />
+            ))}
+            {!cons.length && <p className="text-sm text-ink-soft">Nenhum consumo no período (a baixa só conta vendas a partir da data de corte).</p>}
+          </Bloco>
+          {Object.keys(r.vendSemFicha).length > 0 && (
+            <Bloco t="Vendidos sem ficha técnica (não baixam estoque)">
+              {Object.entries(r.vendSemFicha).sort((a, b) => b[1] - a[1]).map(([k, v]) => <Linha key={k} a={k} b={`${numero(v)} un.`} />)}
+            </Bloco>
+          )}
+        </div>
+      ) : (
         <>
           <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Kpi t="Faturamento" v={reais(r.fat)} />
@@ -123,6 +169,14 @@ export function PdvRelatorios() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Bloco t="Por forma de pagamento">
               {FORMAS.map((f) => <Linha key={f.v} a={rotuloForma(f.v)} b={reais(r.porForma[f.v] ?? 0)} />)}
+            </Bloco>
+            <Bloco t="Recebido por operador de caixa">
+              {Object.entries(r.oper).sort((a, b) => b[1] - a[1]).map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}
+              {!Object.keys(r.oper).length && <p className="text-sm text-ink-soft">Sem recebimentos.</p>}
+            </Bloco>
+            <Bloco t="Faturamento por hora de abertura">
+              {Object.entries(r.horas).sort().map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}
+              {!Object.keys(r.horas).length && <p className="text-sm text-ink-soft">Sem comandas fechadas.</p>}
             </Bloco>
             <Bloco t="Cartão por maquininha (conferir com Sipag e Rede)">
               {Object.entries(r.maq).sort().map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}

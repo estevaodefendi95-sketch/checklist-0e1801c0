@@ -34,7 +34,7 @@ export interface Comanda {
   id: string; numero: number; mesa_id: string | null; nome_cliente: string | null; telefone: string | null
   pessoas: number; origem: string; status: 'aberta' | 'pedindo_conta' | 'fechada' | 'cancelada'
   aberta_em: string; fechada_em: string | null; taxa_servico_pct: number; desconto: number
-  cpf_cnpj_nota: string | null; sessao_id: string | null; observacao: string | null
+  cpf_cnpj_nota: string | null; sessao_id: string | null; observacao: string | null; funcionario_id?: string | null
 }
 export interface Item {
   id: string; comanda_id: string; produto_id: string | null; nome: string; qtd: number; preco_unit: number

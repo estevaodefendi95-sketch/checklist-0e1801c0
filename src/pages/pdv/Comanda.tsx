@@ -32,6 +32,7 @@ export function Comanda() {
   const [cats, setCats] = useState<Categoria[]>([])
   const [prods, setProds] = useState<Produto[]>([])
   const [sessao, setSessao] = useState<Sessao | null>(null)
+  const [func, setFunc] = useState<{ nome: string; pct: number } | null>(null)
   const [cat, setCat] = useState<string>('todas')
   const [busca, setBusca] = useState('')
   const [erro, setErro] = useState('')
@@ -60,7 +61,7 @@ export function Comanda() {
       db.from('pdv_comanda_totais').select('*').eq('comanda_id', id).single(),
       db.from('pdv_categorias').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_produtos').select('*').eq('ativo', true).order('ordem').order('nome'),
-      db.from('pdv_caixa_sessoes').select('*').eq('status', 'aberto').limit(1),
+      db.from('pdv_caixa_sessoes').select('*').eq('status', 'aberto'),
       db.from('pdv_grupos_opcoes').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_opcoes').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_produto_grupos').select('produto_id,grupo_id,ordem').order('ordem'),
@@ -74,7 +75,12 @@ export function Comanda() {
     setTot(tt.data as Totais)
     setCats((ct.data ?? []) as Categoria[])
     setProds((pr.data ?? []) as Produto[])
-    setSessao((ss.data?.[0] as Sessao) ?? null)
+    const uid = (await supabase.auth.getUser()).data.user?.id
+    setSessao(((ss.data ?? []) as Sessao[]).find((x) => x.aberto_por === uid) ?? null)
+    if (cmd.funcionario_id) {
+      const [fu, cf] = await Promise.all([db.from('pdv_funcionarios').select('nome').eq('id', cmd.funcionario_id).maybeSingle(), db.from('pdv_config').select('consumo_func_desconto_pct').eq('id', 1).maybeSingle()])
+      setFunc({ nome: fu.data?.nome ?? 'Funcionário', pct: num(cf.data?.consumo_func_desconto_pct ?? 100) })
+    } else setFunc(null)
     setGrupos(((gr.data ?? []) as Grupo[]).map((g) => ({
       ...g, opcoes: ((op.data ?? []) as Opcao[]).filter((o) => o.grupo_id === g.id),
       produtos: ((pgr.data ?? []) as { produto_id: string; grupo_id: string }[]).filter((x) => x.grupo_id === g.id).map((x) => x.produto_id),
@@ -162,7 +168,7 @@ export function Comanda() {
   }
   async function pagar() {
     if (!c) return
-    if (!sessao) return setErro('Abra o caixa antes de receber pagamentos (PDV · Caixa).')
+    if (!sessao) return setErro('Abra o seu caixa do dia antes de receber pagamentos (PDV · Caixa).')
     const v = lerNumero(valor || String(restante))
     if (!v || v <= 0) return setErro('Informe o valor.')
     let troco = 0
@@ -199,6 +205,23 @@ export function Comanda() {
     const { data: fc } = await db.from('pdv_fiscal_config').select('ativo').maybeSingle()
     if (fc?.ativo && pode('pdv_caixa')) { setFiscalFim(true); carregar(); return }
     nav('/pdv')
+  }
+  async function finalizarConsumo() {
+    if (!c || !func) return
+    const sub = num(tot?.subtotal)
+    if (sub <= 0) return setErro('Comanda sem itens.')
+    const desc = Math.round(sub * func.pct) / 100
+    const folha = Math.round((sub - desc) * 100) / 100
+    if (!window.confirm(`Finalizar consumo de ${func.nome}?\nValor de tabela ${reais(sub)} · desconto ${reais(desc)}${folha > 0 ? ` · a descontar em folha ${reais(folha)}` : ''}`)) return
+    const e1 = await db.from('pdv_comandas').update({ desconto: desc, taxa_servico_pct: 0 }).eq('id', c.id)
+    if (e1.error) return setErro(e1.error.message)
+    if (folha > 0) {
+      const e2 = await db.from('pdv_pagamentos').insert({ comanda_id: c.id, sessao_id: sessao?.id ?? null, forma: 'folha', valor: folha, troco: 0, user_id: (await supabase.auth.getUser()).data.user?.id })
+      if (e2.error) return setErro(e2.error.message)
+    }
+    const e3 = await db.from('pdv_comandas').update({ status: 'fechada', fechada_em: new Date().toISOString(), sessao_id: sessao?.id ?? null }).eq('id', c.id)
+    if (e3.error) return setErro(e3.error.message)
+    nav('/pdv/consumo')
   }
   async function cancelarComanda() {
     if (!c || !window.confirm('Cancelar a comanda inteira? Só é permitido sem pagamentos.')) return
@@ -243,7 +266,7 @@ export function Comanda() {
       <Cabecalho
         voltar={{ para: '/pdv', rotulo: 'Salão' }}
         titulo={`${mesa ? `Mesa ${mesa.numero}` : 'Balcão'} · #${c.numero}`}
-        subtitulo={`${c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
+        subtitulo={`${func ? `Consumo de ${func.nome}` : c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
       />
       {erro && <Erro texto={erro} />}
       {msg && <p className="mb-3 rounded-xl bg-brand-soft px-4 py-2 text-sm text-brand" onClick={() => setMsg('')}>{msg}</p>}
@@ -276,6 +299,17 @@ export function Comanda() {
                 ))}
               </div>
             )}
+          </section>
+        ) : aba === 'pagamento' && c.funcionario_id ? (
+          <section className={`${cartaoCls} space-y-3 p-4`}>
+            <h2 className="font-semibold">Consumo de funcionário</h2>
+            <p className="text-sm text-ink-soft">{func?.nome}: {func?.pct ?? 100}% de desconto sobre o valor de tabela. Não entra no caixa nem na nota fiscal.</p>
+            <dl className="space-y-1 text-sm">
+              <div className="flex justify-between"><dt>Valor de tabela</dt><dd>{reais(num(tot?.subtotal))}</dd></div>
+              <div className="flex justify-between"><dt>Desconto ({func?.pct ?? 100}%)</dt><dd>− {reais(num(tot?.subtotal) * (func?.pct ?? 100) / 100)}</dd></div>
+              <div className="flex justify-between font-semibold"><dt>A descontar em folha</dt><dd>{reais(num(tot?.subtotal) - num(tot?.subtotal) * (func?.pct ?? 100) / 100)}</dd></div>
+            </dl>
+            {aberta && <button className={btnCls} onClick={finalizarConsumo}>Finalizar consumo</button>}
           </section>
         ) : aba === 'pagamento' ? (
           <section className={`${cartaoCls} space-y-3 p-4`}>

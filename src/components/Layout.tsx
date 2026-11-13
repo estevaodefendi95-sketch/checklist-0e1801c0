@@ -60,17 +60,19 @@ export function Layout({ children }: { children: ReactNode }) {
       ? [
           { to: '/pdv/comandas', rotulo: 'Comandas', curto: 'Comandas', icone: 'nota', grupo: 'atendimento' } as Item,
           { to: '/pdv/crm', rotulo: 'Clientes e CRM', curto: 'CRM', icone: 'crm', grupo: 'atendimento' } as Item,
+          { to: '/pdv/consumo', rotulo: 'Consumo de funcionários', curto: 'Equipe', icone: 'usuarios', grupo: 'atendimento' } as Item,
           { to: '/pdv/reservas', rotulo: 'Reservas', curto: 'Reservas', icone: 'checklist', grupo: 'atendimento' } as Item,
           { to: '/whatsapp', rotulo: 'WhatsApp', curto: 'WhatsApp', icone: 'chat', grupo: 'atendimento' } as Item,
         ]
       : []),
     ...(pode('pdv_caixa') ? [{ to: '/pdv/caixa', rotulo: 'Caixa', icone: 'caixa', grupo: 'atendimento' } as Item] : []),
     ...(pode('pdv_operar')
-      ? [{ to: '/pdv/relatorios', rotulo: 'Vendas e relatórios PDV', curto: 'Vendas', icone: 'vendas', grupo: 'atendimento' } as Item]
+      ? [{ to: '/pdv/relatorios', rotulo: 'Relatório de vendas', curto: 'Vendas', icone: 'vendas', grupo: 'atendimento' } as Item]
       : []),
     { to: '/', rotulo: 'Checklists', curto: 'Checklist', icone: 'checklist', grupo: 'operacao' },
     { to: '/areas', rotulo: 'Áreas', icone: 'areas', grupo: 'operacao' },
     { to: '/relatorio/estoque', rotulo: 'Estoque', icone: 'estoque', grupo: 'operacao' },
+    ...(pode('pdv_operar') || pode('lancar_estoque') ? [{ to: '/estoque/alertas', rotulo: 'Alertas de estoque', curto: 'Alertas', icone: 'estoque', grupo: 'operacao' } as Item] : []),
     { to: '/historico', rotulo: 'Histórico', icone: 'historico', grupo: 'operacao' },
     { to: '/relatorio', rotulo: 'Relatórios', icone: 'relatorio', grupo: 'operacao' },
     { to: '/fichas', rotulo: 'Fichas técnicas', curto: 'Fichas', icone: 'fichas', grupo: 'cardapio' },

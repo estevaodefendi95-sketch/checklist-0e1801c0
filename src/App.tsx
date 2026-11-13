@@ -29,6 +29,8 @@ import { Eventos } from './pages/pdv/Eventos'
 import { Comandas } from './pages/pdv/Comandas'
 import { Crm } from './pages/pdv/Crm'
 import { Reservas } from './pages/pdv/Reservas'
+import { ConsumoFuncionarios } from './pages/pdv/ConsumoFuncionarios'
+import { EstoqueAlertas } from './pages/EstoqueAlertas'
 import { WhatsApp } from './pages/pdv/WhatsApp'
 import { CardapioPublico, ReservarPublico } from './pages/pdv/PaginasPublicas'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
@@ -67,6 +69,8 @@ const router = createBrowserRouter([
   { path: '/pdv/comanda/:id', element: <Protected><Comanda /></Protected> },
   { path: '/pdv/comandas', element: <Protected><Comandas /></Protected> },
   { path: '/pdv/crm', element: <Protected><Crm /></Protected> },
+  { path: '/pdv/consumo', element: <Protected><ConsumoFuncionarios /></Protected> },
+  { path: '/estoque/alertas', element: <Protected><EstoqueAlertas /></Protected> },
   { path: '/pdv/reservas', element: <Protected><Reservas /></Protected> },
   { path: '/whatsapp', element: <Protected><WhatsApp /></Protected> },
   { path: '/pdv/caixa', element: <Protected><PdvCaixa /></Protected> },

@@ -46,34 +46,28 @@ export function PerfisCheckin({
   const pessoas = Object.values(qtds).reduce((s, n) => s + n, 0)
   const mudar = (id: string, d: number) => onChange({ ...qtds, [id]: Math.max(0, (qtds[id] ?? 0) + d) })
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold">Quem chegou</span>
-        <span className="rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold text-brand">{pessoas} {pessoas === 1 ? 'pessoa' : 'pessoas'}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Quem chegou</span>
+        <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-xs font-semibold text-brand">{pessoas} {pessoas === 1 ? 'pessoa' : 'pessoas'}</span>
       </div>
-      <div className="grid auto-rows-fr grid-cols-2 gap-2">
+      <div className="divide-y divide-line">
         {perfis.map((p) => {
           const q = qtds[p.id] ?? 0
           return (
-            <div key={p.id} className={`relative flex flex-col items-center justify-between rounded-2xl border-2 p-3 text-center transition-colors [&:last-child:nth-child(odd)]:col-span-2 ${q > 0 ? 'border-brand bg-brand-soft' : 'border-line bg-surface'}`}>
-              <button type="button" onClick={() => mudar(p.id, 1)} className="w-full">
-                <span className="flex min-h-[2.5rem] items-center justify-center text-base font-semibold leading-tight">{p.nome}</span>
-                <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${p.percentual === 0 ? 'bg-emerald-100 text-emerald-800' : p.percentual < 100 ? 'bg-amber-100 text-amber-800' : 'bg-surface text-ink-soft ring-1 ring-line'}`}>
-                  {p.percentual === 0 ? 'não paga' : p.percentual < 100 ? `paga ${p.percentual}%` : 'paga inteiro'}
-                </span>
-                <span className="mt-2 block text-4xl font-bold leading-none">{q}</span>
-              </button>
-              <div className="mt-3 flex w-full gap-2">
-                <button type="button" aria-label={`Menos ${p.nome}`} disabled={q === 0} className="min-h-[48px] flex-1 rounded-xl border border-line bg-white text-2xl disabled:opacity-30" onClick={() => mudar(p.id, -1)}>−</button>
-                <button type="button" aria-label={`Mais ${p.nome}`} className="min-h-[48px] flex-1 rounded-xl bg-brand text-2xl text-brand-ink" onClick={() => mudar(p.id, 1)}>+</button>
-              </div>
+            <div key={p.id} className="flex items-center justify-between gap-2 py-1.5">
+              <span className="min-w-0 text-sm font-medium leading-tight">{p.nome}<span className={`ml-2 text-[11px] font-normal ${p.percentual === 0 ? 'text-emerald-600' : 'text-ink-soft'}`}>{p.percentual === 0 ? 'não paga' : p.percentual < 100 ? `${p.percentual}%` : ''}</span></span>
+              <span className="flex shrink-0 items-center gap-1.5">
+                <button type="button" aria-label={`Menos ${p.nome}`} disabled={q === 0} className="h-10 w-10 rounded-lg border border-line text-xl disabled:opacity-30" onClick={() => mudar(p.id, -1)}>−</button>
+                <span className="w-7 text-center text-lg font-bold tabular-nums">{q}</span>
+                <button type="button" aria-label={`Mais ${p.nome}`} className="h-10 w-10 rounded-lg bg-brand text-xl text-brand-ink" onClick={() => mudar(p.id, 1)}>+</button>
+              </span>
             </div>
           )
         })}
       </div>
       {linhas.length > 0 ? (
-        <div className="rounded-xl bg-brand-soft p-3 text-sm">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-soft">Entra na comanda</div>
+        <div className="rounded-xl bg-brand-soft p-2.5 text-xs">
           {linhas.map((l, i) => <div key={i} className="flex justify-between"><span>{l.qtd}× {l.nome}</span><span>{reais(l.qtd * l.unit)}</span></div>)}
           <div className="mt-1 flex justify-between border-t border-brand/20 pt-1 font-semibold"><span>Total de couvert/rodízio</span><span>{reais(total)}</span></div>
         </div>
