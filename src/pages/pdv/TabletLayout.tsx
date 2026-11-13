@@ -4,7 +4,7 @@ import { Carregando, btnCls, btnSecCls, cartaoCls, inputCls } from '../../compon
 import { noHorarios, type Faixa } from '../../lib/pdv'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 import { DIAS, Grupo, Opcao } from './ConfigCardapio'
-import { CardapioCliente } from '../../components/CardapioCliente'
+import { CardapioCliente, type CardBanner } from '../../components/CardapioCliente'
 import { ProdutoDetalhe } from '../../components/ProdutoDetalhe'
 
 interface Tema { primaria: string; fundo: string; texto: string; destaque: string; titulo: string; subtitulo: string; colunas: 1 | 2; mostrar_fotos: boolean }
@@ -15,13 +15,14 @@ const PRESETS: { nome: string; t: Partial<Tema> }[] = [
   { nome: 'Verde oliva', t: { primaria: '#3f5b3a', fundo: '#f6f3ea', texto: '#222222', destaque: '#b08d3c' } },
 ]
 interface Cat { id: string; nome: string; visivel_tablet: boolean; horarios: Faixa[] | null }
-interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; visivel_tablet: boolean; disponivel: boolean; horarios: Faixa[] | null }
+interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; visivel_tablet: boolean; disponivel: boolean; horarios: Faixa[] | null; indicacao?: boolean; indicacao_rotulo?: string | null }
 
 /** Aba "Layout do tablet": prévia fiel do que o cliente vê + ajustes de cor/título. */
 export function TabletLayout() {
   const [tema, setTema] = useState<Tema>(PADRAO)
   const [cats, setCats] = useState<Cat[]>([])
   const [prods, setProds] = useState<Prod[]>([])
+  const [banners, setBanners] = useState<CardBanner[]>([])
   const [grupos, setGrupos] = useState<(Grupo & { opcoes: Opcao[]; produtos: string[] })[]>([])
   const [boasVindas, setBoas] = useState('')
   const [pronto, setPronto] = useState(false)
@@ -33,14 +34,16 @@ export function TabletLayout() {
   const s = useSalvarMsg()
 
   const carregar = useCallback(async () => {
-    const [cfg, c, p, g, o, pg] = await Promise.all([
+    const [cfg, c, p, g, o, pg, bn] = await Promise.all([
       db.from('pdv_config').select('tablet_tema,tablet_mensagem_boas_vindas').single(),
       db.from('pdv_categorias').select('id,nome,visivel_tablet,horarios').eq('ativo', true).order('ordem'),
-      db.from('pdv_produtos').select('id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,disponivel,horarios').eq('ativo', true).order('ordem').order('nome'),
+      db.from('pdv_produtos').select('id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,disponivel,horarios,indicacao,indicacao_rotulo').eq('ativo', true).order('ordem').order('nome'),
       db.from('pdv_grupos_opcoes').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_opcoes').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_produto_grupos').select('produto_id,grupo_id'),
+      db.from('pdv_banners').select('id,titulo,patrocinador,imagem_url,produto_id').eq('ativo', true).order('ordem'),
     ])
+    setBanners((bn.data ?? []) as CardBanner[])
     setTema({ ...PADRAO, ...((cfg.data?.tablet_tema as Partial<Tema>) ?? {}) }); setBoas(cfg.data?.tablet_mensagem_boas_vindas ?? '')
     setCats((c.data ?? []) as Cat[]); setProds((p.data ?? []) as Prod[])
     setGrupos(((g.data ?? []) as Grupo[]).map((x) => ({ ...x, opcoes: ((o.data ?? []) as Opcao[]).filter((y) => y.grupo_id === x.id), produtos: ((pg.data ?? []) as { produto_id: string; grupo_id: string }[]).filter((y) => y.grupo_id === x.id).map((y) => y.produto_id) })))
@@ -106,7 +109,8 @@ export function TabletLayout() {
             <CardapioCliente
               tema={tema} mesa="12" boasVindas={boasVindas || 'Faça seu pedido pelo tablet. Nós levamos até a sua mesa.'}
               categorias={catsVis.map((c) => ({ id: c.id, nome: c.nome }))}
-              produtos={visiveis.map((p) => ({ id: p.id, nome: p.nome, descricao: p.descricao, preco: Number(p.preco), categoria_id: p.categoria_id, foto_url: p.foto_url, personalizavel: gruposDe(p).length > 0 }))}
+              produtos={visiveis.map((p) => ({ id: p.id, nome: p.nome, descricao: p.descricao, preco: Number(p.preco), categoria_id: p.categoria_id, foto_url: p.foto_url, personalizavel: gruposDe(p).length > 0, indicacao: p.indicacao, indicacao_rotulo: p.indicacao_rotulo }))}
+              banners={banners}
               lateral={larg === 'tablet'} qtdDe={(id) => (id === aberto?.id ? 0 : 0)} onAdd={(c) => setAberto(prods.find((x) => x.id === c.id) ?? null)} onMenos={() => {}}
               acoes={<><span className="rounded-full border border-white/60 px-3 py-1.5 text-xs">Chamar garçom</span><span className="rounded-full border border-white/60 px-3 py-1.5 text-xs">Pedir a conta</span></>}
               onAbrir={(c) => setAberto(prods.find((x) => x.id === c.id) ?? null)}

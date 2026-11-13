@@ -23,6 +23,7 @@ import { Comanda } from './pages/pdv/Comanda'
 import { PdvCaixa } from './pages/pdv/PdvCaixa'
 import { PdvRelatorios } from './pages/pdv/PdvRelatorios'
 import { PdvConfig } from './pages/pdv/PdvConfig'
+import { GestaoTablet } from './pages/pdv/GestaoTablet'
 import { MesaPublica } from './pages/pdv/MesaPublica'
 import { Compras } from './pages/Compras'
 import { Eventos } from './pages/pdv/Eventos'
@@ -78,6 +79,7 @@ const router = createBrowserRouter([
   { path: '/compras', element: <Protected><Compras /></Protected> },
   { path: '/pdv/eventos', element: <Protected><Eventos /></Protected> },
   { path: '/pdv/config', element: <Protected><PdvConfig /></Protected> },
+  { path: '/pdv/tablet', element: <Protected><GestaoTablet /></Protected> },
   { path: '/admin/templates', element: <Protected admin><AdminTemplates /></Protected> },
   // só o administrador master (a própria tela confere eh_master e volta ao início se não for)
   { path: '/usuarios', element: <Protected><Usuarios /></Protected> },

@@ -29,7 +29,7 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { token, acao, itens, nome, pessoas, telefone, nascimento } = await req.json();
+    const { token, acao, itens, nome, pessoas, telefone, nascimento, email, senha, reserva_id } = await req.json();
     if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return json({ erro: "QR Code inválido." });
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
@@ -37,24 +37,55 @@ Deno.serve(async (req) => {
     const { data: mesa } = await db.from("pdv_mesas").select("id,numero").eq("qr_token", token).eq("ativo", true).maybeSingle();
     if (!mesa) return json({ erro: "Mesa não encontrada." });
     const { data: cfg } = await db.from("pdv_config").select("*").eq("id", 1).single();
+
+    // Trava do tablet: trocar de mesa / sair do cardápio exige e-mail e senha de um usuário do sistema com acesso ao PDV.
+    if (acao === "autorizar") {
+      const desde = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { count } = await db.from("pdv_tablet_falhas").select("id", { count: "exact", head: true }).eq("token", token).gte("criado_em", desde);
+      if ((count ?? 0) >= 5) return json({ erro: "Muitas tentativas. Aguarde 10 minutos." });
+      const mail = String(email ?? "").trim().toLowerCase();
+      if (!mail || !senha) return json({ erro: "Informe e-mail e senha." });
+      const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { data: login, error: le } = await anon.auth.signInWithPassword({ email: mail, password: String(senha) });
+      const uid = login?.user?.id;
+      if (le || !uid) { await db.from("pdv_tablet_falhas").insert({ token }); return json({ erro: "E-mail ou senha incorretos." }); }
+      const [{ data: prof }, { data: perm }] = await Promise.all([
+        db.from("profiles").select("role,is_master").eq("id", uid).maybeSingle(),
+        db.from("permissoes").select("*").eq("user_id", uid).maybeSingle(),
+      ]);
+      const ok = prof?.role === "admin" || prof?.is_master || (perm as any)?.pdv_operar || (perm as any)?.pdv_gerir;
+      if (!ok) { await db.from("pdv_tablet_falhas").insert({ token }); return json({ erro: "Esse usuário não tem acesso ao PDV." }); }
+      const { data: todas } = await db.from("pdv_mesas").select("numero,qr_token,capacidade").eq("ativo", true);
+      const mesas = (todas ?? []).sort((a: any, b: any) => String(a.numero).localeCompare(String(b.numero), "pt-BR", { numeric: true }));
+      return json({ ok: true, mesas });
+    }
     if (!cfg.tablet_qr_ativo) return json({ mesa: mesa.numero, qr_ativo: false, boas_vindas: cfg.tablet_mensagem_boas_vindas, tema: cfg.tablet_tema });
 
     const { data: com } = await db.from("pdv_comandas").select("id,nome_cliente,status,taxa_servico_pct,desconto")
       .eq("mesa_id", mesa.id).in("status", ["aberta", "pedindo_conta"]).maybeSingle();
 
     if (acao === "menu") {
-      const [cats, prods, its, grp, pg, ops] = await Promise.all([
+      const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+      const [cats, prods, its, grp, pg, ops, bn, rs] = await Promise.all([
         db.from("pdv_categorias").select("id,nome,visivel_tablet,horarios").eq("ativo", true).order("ordem"),
-        db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,horarios").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
+        db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,horarios,indicacao,indicacao_rotulo").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
         com ? db.from("pdv_pedido_itens").select("nome,qtd,preco_unit,status,opcoes").eq("comanda_id", com.id).neq("status", "cancelado").order("criado_em") : Promise.resolve({ data: [] }),
         db.from("pdv_grupos_opcoes").select("id,nome,tipo,min_escolhas,max_escolhas").eq("ativo", true).order("ordem"),
         db.from("pdv_produto_grupos").select("produto_id,grupo_id,ordem").order("ordem"),
         db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true).order("ordem"),
+        db.from("pdv_banners").select("id,titulo,patrocinador,imagem_url,produto_id,inicio,fim").eq("ativo", true).order("ordem").order("criado_em"),
+        com ? Promise.resolve({ data: [] }) : db.from("reservas").select("id,nome,telefone,pessoas,hora,duracao_min,liberada_tablet_em").eq("mesa_id", mesa.id).eq("data", hoje).in("status", ["pendente", "confirmada"]).order("hora"),
       ]);
+      const banners = (bn.data ?? []).filter((b: any) => (!b.inicio || b.inicio <= hoje) && (!b.fim || b.fim >= hoje));
+      // reserva da mesa: aparece de 3 h antes até o fim da duração; o toque na tela do tablet libera
+      const { min: agoraMin } = agoraSP();
+      const hm = (x: string) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5));
+      const r: any = (rs.data ?? []).find((x: any) => agoraMin >= hm(x.hora) - 180 && agoraMin <= hm(x.hora) + x.duracao_min);
+      const reserva = r ? { id: r.id, nome: r.nome, telefone: r.telefone, pessoas: r.pessoas, hora: String(r.hora).slice(0, 5), liberada: !!r.liberada_tablet_em } : null;
       const catOk = new Map((cats.data ?? []).filter((c: any) => c.visivel_tablet && noHorario(c.horarios)).map((c: any) => [c.id, c]));
       const produtos = (prods.data ?? []).filter((p: any) => p.visivel_tablet && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorario(p.horarios))
         .map((p: any) => ({
-          id: p.id, nome: p.nome, descricao: p.descricao, preco: p.preco, categoria_id: p.categoria_id, foto_url: p.foto_url,
+          id: p.id, nome: p.nome, descricao: p.descricao, preco: p.preco, categoria_id: p.categoria_id, foto_url: p.foto_url, indicacao: !!p.indicacao, indicacao_rotulo: p.indicacao_rotulo,
           grupos: (pg.data ?? []).filter((x: any) => x.produto_id === p.id).map((x: any) => (grp.data ?? []).find((g: any) => g.id === x.grupo_id)).filter(Boolean)
             .map((g: any) => ({ ...g, opcoes: (ops.data ?? []).filter((o: any) => o.grupo_id === g.id) })),
         }));
@@ -65,7 +96,7 @@ Deno.serve(async (req) => {
         mesa: mesa.numero, qr_ativo: true, tema: cfg.tablet_tema, boas_vindas: cfg.tablet_mensagem_boas_vindas, exige_checkin: cfg.tablet_exige_checkin,
         pode_chamar: cfg.tablet_pode_chamar_garcom, pode_conta: cfg.tablet_pode_pedir_conta,
         comanda: com ? { id: com.id, nome_cliente: com.nome_cliente, status: com.status, total } : null,
-        itens: its.data ?? [], categorias, produtos,
+        itens: its.data ?? [], categorias, produtos, banners, reserva,
       });
     }
 
@@ -80,11 +111,23 @@ Deno.serve(async (req) => {
       const nasc = /^\d{4}-\d{2}-\d{2}$/.test(String(nascimento ?? "")) ? String(nascimento) : null;
       const { data: cli } = await db.from("pdv_clientes").upsert(
         nasc ? { telefone: tel, nome: nm, nascimento: nasc } : { telefone: tel, nome: nm }, { onConflict: "telefone" }).select("id").single();
-      const { error } = await db.from("pdv_comandas").insert({
+      const { data: nova, error } = await db.from("pdv_comandas").insert({
         mesa_id: mesa.id, nome_cliente: nm, telefone: tel, cliente_id: cli?.id ?? null, pessoas: Math.min(30, Math.max(1, Number(pessoas) || 1)),
         origem: "tablet", taxa_servico_pct: cfg.taxa_servico_pct,
-      });
+      }).select("id").single();
+      if (!error && nova) {
+        // reserva liberada no tablet vira "sentada" e fica ligada à comanda
+        const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+        const { data: rl } = await db.from("reservas").select("id").eq("mesa_id", mesa.id).eq("data", hoje).in("status", ["pendente", "confirmada"]).not("liberada_tablet_em", "is", null).order("hora").limit(1);
+        if (rl?.length) await db.from("reservas").update({ status: "sentada", comanda_id: nova.id, atualizado_em: new Date().toISOString() }).eq("id", rl[0].id);
+      }
       return error ? json({ erro: "Não foi possível abrir a mesa." }) : json({ ok: true });
+    }
+
+    if (acao === "liberar_reserva") {
+      if (com) return json({ ok: true });
+      const { error } = await db.from("reservas").update({ liberada_tablet_em: new Date().toISOString() }).eq("id", String(reserva_id ?? "")).eq("mesa_id", mesa.id);
+      return error ? json({ erro: "Não foi possível liberar." }) : json({ ok: true });
     }
 
     if (!com) return json({ erro: "Mesa sem comanda aberta. Chame o garçom." });

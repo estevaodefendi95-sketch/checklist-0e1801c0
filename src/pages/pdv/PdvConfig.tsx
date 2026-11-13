@@ -6,22 +6,18 @@ import { reais, lerNumero } from '../../lib/formato'
 import { Categoria, DESTINOS, Destino, Impressora, Mesa, Produto, Sala, TAM_FORMA, dimMesa } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
 import { Modal } from './PdvCaixa'
-import { Tablet } from './ConfigTablet'
 import { Checkin } from './ConfigCheckin'
 import { Fiscal, Tef } from './ConfigFiscal'
-import { TabletLayout } from './TabletLayout'
 import { ReimprimirCupons } from './FiscalRapido'
 import { GruposDoProduto, HorarioCampos, Opcoes, Pilula, RelogioHorario, rotuloHorario } from './ConfigCardapio'
 
-type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'layout' | 'impressoras' | 'tablet' | 'fiscal' | 'pagamentos'
+type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'fiscal' | 'pagamentos'
 const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
   { v: 'salao', r: 'Salão e mesas', perm: 'pdv_gerir' },
   { v: 'checkin', r: 'Check-in: couvert e rodízio', perm: 'pdv_gerir' },
   { v: 'produtos', r: 'Cardápio e preços', perm: 'pdv_gerir' },
   { v: 'opcoes', r: 'Opções e combos', perm: 'pdv_gerir' },
   { v: 'impressoras', r: 'Impressoras', perm: 'pdv_gerir' },
-  { v: 'layout', r: 'Layout do tablet', perm: 'pdv_gerir' },
-  { v: 'tablet', r: 'Tablet e QR Code', perm: 'pdv_gerir' },
   { v: 'fiscal', r: 'Fiscal (NFC-e)', perm: 'pdv_fiscal' },
   { v: 'pagamentos', r: 'Pagamentos / TEF', perm: 'pdv_gerir' },
 ]
@@ -32,7 +28,7 @@ export function PdvConfig() {
   const [aba, setAba] = useState<Aba>(abas[0]?.v ?? 'salao')
   return (
     <div>
-      <Cabecalho titulo="Configurações do PDV" subtitulo="Salão, produtos, impressoras, tablet, fiscal e pagamentos" />
+      <Cabecalho titulo="Configurações do PDV" subtitulo="Salão, produtos, impressoras, fiscal e pagamentos" />
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
         {abas.map((a) => <button key={a.v} className={aba === a.v ? btnCls : btnSecCls} onClick={() => setAba(a.v)}>{a.r}</button>)}
       </div>
@@ -41,8 +37,6 @@ export function PdvConfig() {
       {aba === 'produtos' && <Produtos />}
       {aba === 'opcoes' && <Opcoes />}
       {aba === 'impressoras' && <Impressoras />}
-      {aba === 'layout' && <TabletLayout />}
-      {aba === 'tablet' && <Tablet />}
       {aba === 'fiscal' && <Fiscal />}
       {aba === 'pagamentos' && <Tef />}
     </div>

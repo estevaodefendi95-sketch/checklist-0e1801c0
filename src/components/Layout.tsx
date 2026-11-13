@@ -85,6 +85,7 @@ export function Layout({ children }: { children: ReactNode }) {
         ]
       : []),
     ...(pode('pdv_fiscal') || pode('pdv_caixa') ? [{ to: '/pdv/eventos', rotulo: 'Notas de eventos', curto: 'Eventos', icone: 'evento', grupo: 'admin' } as Item] : []),
+    ...(pode('pdv_gerir') ? [{ to: '/pdv/tablet', rotulo: 'Gestão do tablet', curto: 'Tablet', icone: 'pdv', grupo: 'admin' } as Item] : []),
     ...(pode('pdv_gerir') || pode('pdv_fiscal')
       ? [{ to: '/pdv/config', rotulo: 'Configurações do PDV', curto: 'Config.', icone: 'impressora', grupo: 'admin' } as Item]
       : []),

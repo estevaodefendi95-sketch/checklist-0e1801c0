@@ -1,27 +1,34 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../integrations/supabase/client'
 import { CardapioCliente } from '../../components/CardapioCliente'
 import { ProdutoDetalhe } from '../../components/ProdutoDetalhe'
 import { LeitorQr } from '../../components/LeitorQr'
+import { AutorizarTablet, useSegurar } from '../../components/TabletAcesso'
+import type { CardBanner } from '../../components/CardapioCliente'
 
 // Página pública aberta pelo QR Code da mesa (sem login). Toda a leitura e escrita passa pela
 // função pdv-tablet, que valida o token da mesa e só aceita pedido com comanda aberta.
 interface Opc { id: string; nome: string; preco_adicional: number }
 interface Grp { id: string; nome: string; tipo: string; min_escolhas: number; max_escolhas: number; opcoes: Opc[] }
-interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; grupos?: Grp[] }
+interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; grupos?: Grp[]; indicacao?: boolean; indicacao_rotulo?: string | null }
 interface Linha { key: string; p: Prod; qtd: number; opcoes: string[]; obs: string }
 interface Cat { id: string; nome: string }
 interface It { nome: string; qtd: number; preco_unit: number; status: string; opcoes?: { nome: string }[] }
 interface Estado {
   erro?: string; mesa?: string; boas_vindas?: string; qr_ativo?: boolean; exige_checkin?: boolean
   comanda?: { id: string; nome_cliente: string | null; total: number; status: string } | null
+  banners?: CardBanner[]; reserva?: { id: string; nome: string; telefone: string; pessoas: number; hora: string; liberada: boolean } | null
   itens?: It[]; tema?: { primaria?: string; fundo?: string; texto?: string; destaque?: string; titulo?: string; subtitulo?: string; colunas?: number; mostrar_fotos?: boolean }; categorias?: Cat[]; produtos?: Prod[]; pode_chamar?: boolean; pode_conta?: boolean
 }
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export function MesaPublica() {
   const { token } = useParams()
+  const nav = useNavigate()
+  const [acesso, setAcesso] = useState<null | 'trocar' | 'sair'>(null)
+  const segTopoRes = useSegurar(() => setAcesso('trocar'))
+  const segLogoRes = useSegurar(() => setAcesso('sair'))
   const [e, setE] = useState<Estado | null>(null)
   const [car, setCar] = useState<Linha[]>([])
   const [det, setDet] = useState<Prod | null>(null)
@@ -47,6 +54,11 @@ export function MesaPublica() {
     return data as Estado
   }, [])
   const carregar = useCallback(async () => { const d = await chamar('menu'); setE(d) }, [chamar])
+  const preenchido = useRef('')
+  useEffect(() => {
+    const r = e?.reserva
+    if (r && preenchido.current !== r.id) { preenchido.current = r.id; setNome(r.nome); setTel(r.telefone); setPessoas(String(r.pessoas)) }
+  }, [e?.reserva])
   useEffect(() => { carregar(); const t = setInterval(carregar, 10000); return () => clearInterval(t) }, [carregar])
 
   const prodsCard = useMemo(() => (e?.produtos ?? []).map((p) => ({ ...p, personalizavel: !!p.grupos?.length })), [e])
@@ -123,7 +135,7 @@ export function MesaPublica() {
   )
   const abrirMesa = (
     <div className="mx-auto max-w-xl p-4" style={{ ...vars, color: 'var(--t)' }}>
-      <h1 className="mb-2 text-2xl font-semibold">{e.tema?.titulo || 'Paggio'} · Mesa {e.mesa}</h1>
+      <h1 {...segTopoRes} className="mb-2 select-none text-2xl font-semibold">{e.tema?.titulo || 'Paggio'} · Mesa {e.mesa}</h1>
       <div className="space-y-3 rounded-2xl bg-white p-4 shadow">
         <p>{e.exige_checkin ? 'Sua mesa ainda não foi aberta. Peça à recepção para fazer o check-in e volte aqui.' : 'Abra sua mesa para começar:'}</p>
         {!e.exige_checkin && (
@@ -139,13 +151,37 @@ export function MesaPublica() {
       </div>
     </div>
   )
+  const dialogoAcesso = acesso && (
+    <AutorizarTablet token={token} modo={acesso} mesaAtual={e.mesa}
+      onCancelar={() => setAcesso(null)} onSair={() => { setAcesso(null); nav('/') }}
+      onTrocar={(tk) => { setAcesso(null); setCar([]); setMsg(''); setE(null); preenchido.current = ''; nav(`/mesa/${tk}`) }} />
+  )
+  async function liberarReserva() {
+    if (!e?.reserva) return
+    const r = await chamar('liberar_reserva', { reserva_id: e.reserva.id })
+    if (r.erro) setMsg(r.erro); else carregar()
+  }
+  if (e.qr_ativo && !e.comanda && e.reserva && !e.reserva.liberada) {
+    return (
+      <div className="relative flex h-[100dvh] cursor-pointer select-none flex-col items-center justify-center gap-4 p-6 text-center text-white" style={{ ...vars, background: 'var(--p)' }} onClick={liberarReserva}>
+        <div {...segTopoRes} onClick={(x) => x.stopPropagation()} className="absolute inset-x-0 top-0 h-24" />
+        <img {...segLogoRes} onClick={(x) => x.stopPropagation()} draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="h-20 w-auto object-contain" />
+        <div className="text-sm uppercase tracking-[0.3em] opacity-80">Mesa {e.mesa}</div>
+        <h1 className="text-4xl font-semibold">Mesa reservada</h1>
+        <p className="text-2xl">{e.reserva.nome}</p>
+        <p className="opacity-80">{e.reserva.hora} · {e.reserva.pessoas} {e.reserva.pessoas === 1 ? 'pessoa' : 'pessoas'}</p>
+        <p className="mt-6 rounded-full border border-white/60 px-5 py-2 text-sm">Toque na tela para liberar</p>
+        {dialogoAcesso}
+      </div>
+    )
+  }
   if (!e.qr_ativo) return <p className="p-6 text-center">Pedidos pelo QR Code indisponíveis. Chame o garçom.</p>
-  if (!e.comanda) return abrirMesa
+  if (!e.comanda) return <>{abrirMesa}{dialogoAcesso}</>
   return (
     <div className="mx-auto h-[100dvh] max-w-5xl">
       {msg && !det && !carrinho && <p className="fixed inset-x-3 top-3 z-40 mx-auto max-w-xl rounded-xl bg-white p-3 text-sm shadow-lg" onClick={() => setMsg('')}>{msg}</p>}
       <CardapioCliente
-        tema={tema} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
+        tema={tema} banners={e.banners} onTopoSegurar={() => setAcesso('trocar')} onLogoSegurar={() => setAcesso('sair')} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
         qtdDe={qtdProd} onAdd={(p) => mais(p as Prod)} onMenos={menos} onAbrir={(p) => setDet(e.produtos?.find((x) => x.id === p.id) ?? null)}
         acoes={<>
           {e.pode_chamar && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}
@@ -160,7 +196,7 @@ export function MesaPublica() {
           )}
           {qtd > 0 && <button className={btn + ' flex w-full items-center justify-between shadow-lg'} onClick={() => setCarrinho(true)}><span>Ver pedido · {qtd} {qtd === 1 ? 'item' : 'itens'}</span><span>{brl(total)}</span></button>}
         </>}
-        sobrepor={<>{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr onLido={enviarPara} onCancelar={() => setLeitor(false)} />}</>}
+        sobrepor={<>{dialogoAcesso}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr onLido={enviarPara} onCancelar={() => setLeitor(false)} />}</>}
       />
     </div>
   )

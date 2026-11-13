@@ -1,19 +1,29 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useSegurar } from './TabletAcesso'
 
 // Cardápio digital que o cliente vê (tablet na mesa e QR Code). Layout inspirado no Goomer:
 // cabeçalho da casa com busca, categorias em trilho lateral (tablet) ou chips (celular),
 // seções por categoria rolando juntas, cartões com foto grande, preço e botão "+".
 export interface CardTema { primaria?: string; fundo?: string; texto?: string; destaque?: string; titulo?: string; subtitulo?: string; colunas?: number; mostrar_fotos?: boolean }
 export interface CardCat { id: string; nome: string }
-export interface CardProd { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; personalizavel?: boolean }
+export interface CardProd { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; personalizavel?: boolean; indicacao?: boolean; indicacao_rotulo?: string | null }
+export interface CardBanner { id: string; titulo: string; patrocinador: string | null; imagem_url: string; produto_id: string | null }
 const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, lateral, qtdDe, onAdd, onMenos, acoes, rodape, sobrepor, somenteLeitura, onAbrir }: {
+export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, lateral, qtdDe, onAdd, onMenos, acoes, rodape, sobrepor, somenteLeitura, onAbrir, banners, onTopoSegurar, onLogoSegurar }: {
+  banners?: CardBanner[]; onTopoSegurar?: () => void; onLogoSegurar?: () => void
   onAbrir?: (p: CardProd) => void; somenteLeitura?: boolean; tema: CardTema; mesa?: string; boasVindas?: string | null; categorias: CardCat[]; produtos: CardProd[]; lateral: boolean
   qtdDe: (id: string) => number; onAdd: (p: CardProd) => void; onMenos: (id: string) => void
   acoes?: ReactNode; rodape?: ReactNode; sobrepor?: ReactNode
 }) {
   const [busca, setBusca] = useState('')
+  const segTopo = useSegurar(onTopoSegurar)
+  const segLogo = useSegurar(onLogoSegurar)
+  const [bi, setBi] = useState(0)
+  const nb = banners?.length ?? 0
+  useEffect(() => { if (nb < 2) return; const t = setInterval(() => setBi((i) => (i + 1) % nb), 6000); return () => clearInterval(t) }, [nb])
+  const indicados = useMemo(() => produtos.filter((p) => p.indicacao), [produtos])
+  const abrir = (p: CardProd) => (onAbrir ? onAbrir(p) : !somenteLeitura && onAdd(p))
   const [ativa, setAtiva] = useState('')
   const rolagem = useRef<HTMLDivElement>(null)
   const vars = { ['--p' as string]: tema.primaria ?? '#7a1f2b', ['--f' as string]: tema.fundo ?? '#faf7f2', ['--t' as string]: tema.texto ?? '#222222', ['--d' as string]: tema.destaque ?? '#c9a24b' } as CSSProperties
@@ -76,9 +86,9 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
       <header className="shrink-0 px-4 pb-3 pt-4" style={{ background: 'var(--p)', color: '#fff' }}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.2em] opacity-80">{mesa ? `Mesa ${mesa}` : 'Cardápio digital'}</div>
+            <div {...segTopo} className="-mt-3 select-none py-3 pr-10 text-[11px] uppercase tracking-[0.2em] opacity-80">{mesa ? `Mesa ${mesa}` : 'Cardápio digital'}</div>
             <h1 className="sr-only">{tema.titulo || 'Paggio'}</h1>
-            <img src="/logo-paggio.png" alt={tema.titulo || 'Paggio Gastrobar'} className="mt-1 h-14 w-auto max-w-full object-contain object-left" />
+            <img {...segLogo} draggable={false} src="/logo-paggio.png" alt={tema.titulo || 'Paggio Gastrobar'} className="h-14 w-auto max-w-full object-contain object-left" />
             {(boasVindas || tema.subtitulo) && <p className="mt-0.5 line-clamp-2 text-xs opacity-85">{boasVindas || tema.subtitulo}</p>}
           </div>
           {acoes && <div className="flex shrink-0 gap-2">{acoes}</div>}
@@ -108,6 +118,38 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
           </nav>
         )}
         <div ref={rolagem} onScroll={aoRolar} className="relative min-w-0 flex-1 overflow-y-auto px-3 pb-36 pt-3">
+          {!termo && nb > 0 && banners && (() => {
+            const b = banners[bi % nb]
+            const prod = b.produto_id ? produtos.find((p) => p.id === b.produto_id) : undefined
+            return (
+              <section className="mb-4">
+                <div role={prod ? 'button' : undefined} onClick={() => prod && abrir(prod)} className={`relative overflow-hidden rounded-2xl bg-black/5 shadow-sm ring-1 ring-black/5 ${prod ? 'cursor-pointer' : ''}`}>
+                  <img key={b.id} src={b.imagem_url} alt={b.titulo} className="aspect-[3/1] w-full object-cover" />
+                  <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white">{b.patrocinador ? `Patrocinado · ${b.patrocinador}` : 'Patrocinado'}</span>
+                  {nb > 1 && <span className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">{banners.map((x, i) => <i key={x.id} className={`h-1.5 w-1.5 rounded-full ${i === bi % nb ? 'bg-white' : 'bg-white/50'}`} />)}</span>}
+                </div>
+              </section>
+            )
+          })()}
+          {!termo && indicados.length > 0 && (
+            <section className="mb-5">
+              <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold"><span className="h-5 w-1 rounded-full" style={{ background: 'var(--d)' }} />Indicações da casa</h2>
+              <ul className="flex gap-3 overflow-x-auto pb-1">
+                {indicados.map((p) => (
+                  <li key={p.id} className="w-44 shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
+                    <div role="button" tabIndex={0} className="cursor-pointer" onClick={() => abrir(p)} onKeyDown={(e) => e.key === 'Enter' && abrir(p)}>
+                      {fotos && (p.foto_url ? <img src={p.foto_url} alt="" loading="lazy" className="aspect-[4/3] w-full object-cover" /> : <span className="grid aspect-[4/3] w-full place-items-center text-3xl font-semibold" style={{ background: 'color-mix(in srgb, var(--p) 10%, white)', color: 'var(--p)' }}>{p.nome.slice(0, 1).toUpperCase()}</span>)}
+                      <div className="p-2.5">
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium text-white" style={{ background: 'var(--d)' }}>{p.indicacao_rotulo || 'Indicação da casa'}</span>
+                        <b className="mt-1 block text-sm leading-tight">{p.nome}</b>
+                        <span className="text-sm font-semibold" style={{ color: 'var(--p)' }}>{brl(p.preco)}</span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {!secoes.length && !soltos.length && <p className="p-6 text-center text-sm opacity-70">{termo ? 'Nada encontrado para a busca.' : 'Nenhum item disponível neste horário.'}</p>}
           {secoes.map(({ c, itens }) => (
             <section key={c.id} data-cat={c.id} className="mb-5">
