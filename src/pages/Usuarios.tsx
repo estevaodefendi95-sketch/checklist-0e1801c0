@@ -24,6 +24,7 @@ const SEM_PERMS: Perms = {
   pdv_ver_reservas: true,
   pdv_ver_whatsapp: true,
   pdv_ver_consumo: true,
+  pdv_ver_gestao: true,
 }
 const PAPEIS: { v: UserRole; rotulo: string }[] = [
   { v: 'admin', rotulo: 'Administrador' },

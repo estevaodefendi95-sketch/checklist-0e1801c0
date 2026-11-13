@@ -17,6 +17,7 @@ export const PERMISSOES = [
   { key: 'pdv_ver_reservas', label: 'Ver reservas' },
   { key: 'pdv_ver_whatsapp', label: 'Ver WhatsApp' },
   { key: 'pdv_ver_consumo', label: 'Ver consumo de funcionários' },
+  { key: 'pdv_ver_gestao', label: 'Ver modo Gestão no celular (checklists, estoque, fichas…)' },
 ] as const
 
 export type Permissao = (typeof PERMISSOES)[number]['key']
@@ -37,6 +38,7 @@ const vazio: Mapa = {
   pdv_ver_reservas: false,
   pdv_ver_whatsapp: false,
   pdv_ver_consumo: false,
+  pdv_ver_gestao: false,
 }
 
 const Ctx = createContext<{ pode: (p: Permissao) => boolean; master: boolean; carregado: boolean }>({

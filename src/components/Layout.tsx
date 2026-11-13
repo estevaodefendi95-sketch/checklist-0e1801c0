@@ -8,6 +8,7 @@ import { Icone, NomeIcone } from './Icone'
 import { LinhaVersao } from './AvisoAtualizacao'
 import { Sino } from './Avisos'
 import { Assistente } from './Assistente'
+import { MODO_KEY } from '../lib/modo'
 
 const roleLabel: Record<string, string> = {
   admin: 'Administrador',
@@ -22,10 +23,11 @@ interface Item {
   icone: NomeIcone
   grupo: 'atendimento' | 'operacao' | 'cardapio' | 'admin'
   emBreve?: boolean
+  soCelular?: boolean // só aparece no celular (não no menu lateral do computador)
 }
 
 type Modo = 'atendimento' | 'gestao'
-const MODO = 'paggio-modo-mobile'
+const MODO = MODO_KEY
 const RECOLHIDO = 'paggio-menu-recolhido'
 const ROTULO_GRUPO: Record<Item['grupo'], string> = {
   atendimento: 'Atendimento',
@@ -38,7 +40,8 @@ function ativo(to: string, pathname: string) {
   if (to === '/') return pathname === '/'
   // /relatorio não pode ficar aceso dentro de /relatorio/estoque (e vice-versa)
   if (to === '/relatorio') return pathname === '/relatorio'
-  if (to === '/pdv') return pathname === '/pdv' || pathname.startsWith('/pdv/comanda/')
+  if (to === '/pdv') return pathname === '/pdv'
+  if (to === '/atendimento') return pathname === '/atendimento' || pathname.startsWith('/pdv/comanda/')
   return pathname === to || pathname.startsWith(to + '/')
 }
 
@@ -55,6 +58,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const todosItens: Item[] = [
     ...(pode('pdv_operar')
       ? [
+          { to: '/atendimento', rotulo: 'Atendimento rápido', curto: 'Mesas', icone: 'pdv', grupo: 'atendimento', soCelular: true } as Item,
           { to: '/pdv', rotulo: 'Salão e mesas', curto: 'Salão', icone: 'pdv', grupo: 'atendimento' } as Item,
         ]
       : []),
@@ -99,12 +103,15 @@ export function Layout({ children }: { children: ReactNode }) {
   const VER: Record<string, Parameters<typeof pode>[0]> = {
     '/pdv/relatorios': 'pdv_ver_vendas', '/pdv/crm': 'pdv_ver_crm', '/pdv/reservas': 'pdv_ver_reservas', '/whatsapp': 'pdv_ver_whatsapp', '/pdv/consumo': 'pdv_ver_consumo',
   }
-  const itens = todosItens.filter((i) => !VER[i.to] || pode(VER[i.to]))
+  const verGestao = pode('pdv_ver_gestao')
+  // sem permissão de Gestão: só as telas de atendimento (cada uma ainda respeita as permissões próprias)
+  const itens = todosItens.filter((i) => (!VER[i.to] || pode(VER[i.to])) && (verGestao || i.grupo === 'atendimento'))
   const temAtend = pode('pdv_operar')
   const [modoSalvo, setModoSalvo] = useState<Modo>(() => ler<Modo>(MODO, 'atendimento'))
-  const modo: Modo = temAtend ? modoSalvo : 'gestao'
+  const modo: Modo = temAtend ? (verGestao ? modoSalvo : 'atendimento') : 'gestao'
+  const podeTrocar = temAtend && verGestao
   const BARRA_MODO: Record<Modo, string[]> = {
-    atendimento: ['/pdv', '/pdv/comandas', '/pdv/reservas', '/pdv/caixa'],
+    atendimento: ['/atendimento', '/pdv/comandas', '/pdv/reservas', '/pdv/caixa'],
     gestao: ['/', '/pdv/relatorios', '/estoque/alertas', '/fichas'],
   }
   const NA_BARRA = itens.filter((i) => BARRA_MODO[modo].includes(i.to)).map((i) => i.to)
@@ -116,7 +123,7 @@ export function Layout({ children }: { children: ReactNode }) {
     setModoSalvo(m)
     gravar(MODO, m)
     setMaisAberto(false)
-    navigate(m === 'atendimento' ? '/pdv' : '/')
+    navigate(m === 'atendimento' ? '/atendimento' : '/')
   }
 
   useEffect(() => setMaisAberto(false), [pathname])
@@ -153,7 +160,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="px-3.5"><Sino className="w-full hover:bg-brand-ink/10" rotulo={!recolhido} /></div>
         <nav className="flex-1 overflow-y-auto px-3.5">
           {(['atendimento', 'operacao', 'cardapio', 'admin'] as const).map((g) => {
-            const doGrupo = itens.filter((i) => i.grupo === g)
+            const doGrupo = itens.filter((i) => i.grupo === g && !i.soCelular)
             if (!doGrupo.length) return null
             return (
               <div key={g} className="mb-2">
@@ -204,7 +211,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* celular/tablet retrato: só a marca; o título fica na própria página */}
         <div className="flex items-center justify-between px-4 pt-[calc(14px+env(safe-area-inset-top))] text-xs uppercase tracking-[0.08em] text-ink-soft md:px-6 lg:hidden">
           <span>Paggio</span>
-          {temAtend && <SeletorModo modo={modo} onModo={trocarModo} compacto />}
+          {podeTrocar && <SeletorModo modo={modo} onModo={trocarModo} compacto />}
           <Sino className="text-brand" />
         </div>
         <main className="mx-auto max-w-6xl px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-3 md:px-6 lg:px-8 lg:pb-12 lg:pt-8">
@@ -236,7 +243,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {maisAberto && (
         <FolhaMais
           itens={itensMais}
-          modo={temAtend ? modo : undefined}
+          modo={podeTrocar ? modo : undefined}
           onModo={trocarModo}
           pathname={pathname}
           nome={profile?.nome}

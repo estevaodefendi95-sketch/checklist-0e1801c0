@@ -14,6 +14,7 @@ import { Grupo, Opcao } from './ConfigCardapio'
 import { EmitirFiscal } from './FiscalRapido'
 import { AprovacaoAdmin, AcaoAprovada } from '../../components/AprovacaoAdmin'
 import { DescontosComanda, DescontoDetalhe } from './DescontosComanda'
+import { inicioAtendimento } from '../../lib/modo'
 import { cacheGravar, cacheLer, enfileirarPedido, erroDeRede, useFila } from '../../lib/offline'
 
 interface Pag { tef_provedor: string | null; id: string; forma: string; valor: number; troco: number; tef_status: string | null; tef_nsu: string | null; estornado: boolean; criado_em: string }
@@ -254,7 +255,7 @@ export function Comanda() {
     // Conta fechada: abre a emissão rápida do cupom fiscal (CPF/CNPJ do cliente ou sem identificação)
     const { data: fc } = await db.from('pdv_fiscal_config').select('ativo').maybeSingle()
     if (fc?.ativo && pode('pdv_caixa')) { setFiscalFim(true); carregar(); return }
-    nav('/pdv')
+    nav(inicioAtendimento())
   }
   async function finalizarConsumo() {
     if (!c || !func) return
@@ -276,7 +277,7 @@ export function Comanda() {
   function cancelarComanda() {
     if (!c || semRede()) return
     if (pags.some((p) => !p.estornado)) return setErro('Estorne os pagamentos antes de cancelar.')
-    setAprov({ titulo: `Cancelar a comanda ${c.numero}`, descricao: 'Todos os itens serão cancelados. Só um administrador pode aprovar.', acao: 'cancelar_comanda', id: c.id, pedirMotivo: true, depois: () => nav('/pdv') })
+    setAprov({ titulo: `Cancelar a comanda ${c.numero}`, descricao: 'Todos os itens serão cancelados. Só um administrador pode aprovar.', acao: 'cancelar_comanda', id: c.id, pedirMotivo: true, depois: () => nav(inicioAtendimento()) })
   }
   async function salvarPessoas() {
     if (!c || pessoasEd == null) return
@@ -316,7 +317,7 @@ export function Comanda() {
       descricao: `${arForm.nome.trim()} · ${arForm.telefone}. A comanda é fechada e a cobrança fica na tela "A receber". Só um administrador pode aprovar.`,
       acao: 'a_receber', id: c.id, pedirMotivo: false,
       dados: { nome: arForm.nome, telefone: arForm.telefone, vencimento: arForm.vencimento || null, observacao: arForm.observacao },
-      depois: () => nav('/pdv'),
+      depois: () => nav(inicioAtendimento()),
     })
     setArForm(null)
   }
@@ -326,7 +327,7 @@ export function Comanda() {
     setAprov({
       titulo: `Consumo interno · liberar ${reais(restante)}`,
       descricao: 'Fecha a comanda sem cobrar. Fica registrado quem liberou. Só um administrador pode aprovar.',
-      acao: 'cortesia', id: c.id, pedirMotivo: true, rotuloMotivo: 'Quem consumiu / quem liberou (obrigatório)', depois: () => nav('/pdv'),
+      acao: 'cortesia', id: c.id, pedirMotivo: true, rotuloMotivo: 'Quem consumiu / quem liberou (obrigatório)', depois: () => nav(inicioAtendimento()),
     })
   }
 
@@ -338,14 +339,24 @@ export function Comanda() {
   return (
     <div>
       <Cabecalho
-        voltar={{ para: '/pdv', rotulo: 'Salão' }}
+        voltar={{ para: inicioAtendimento(), rotulo: inicioAtendimento() === '/atendimento' ? 'Mesas' : 'Salão' }}
         titulo={`${mesa ? `Mesa ${mesa.numero}` : 'Balcão'} · #${c.numero}`}
         subtitulo={`${func ? `Consumo de ${func.nome}` : c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
       />
-      {aba === 'pedido' && aberta && qtdCarrinho > 0 && (
+      {aberta && (
         <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 flex gap-2 px-3 lg:hidden">
-          <button className={btnSecCls + ' !bg-surface shadow-lg'} onClick={() => document.getElementById('resumo-comanda')?.scrollIntoView({ behavior: 'smooth' })}>Revisar</button>
-          <button className={btnCls + ' flex-1 shadow-lg'} onClick={enviar}>Enviar {qtdCarrinho} {qtdCarrinho === 1 ? 'item' : 'itens'} · {reais(totCarrinho)}</button>
+          {qtdCarrinho === 0 && aba === 'pedido' && (
+            <button className={btnSecCls + ' flex-1 !bg-surface shadow-lg'} onClick={() => setAba('pagamento')}>Conta · {reais(num(tot?.total))}{restante < num(tot?.total) - 0.005 ? ` (resta ${reais(restante)})` : ''}</button>
+          )}
+          {aba === 'pagamento' && (
+            <button className={btnSecCls + ' flex-1 !bg-surface shadow-lg'} onClick={() => setAba('pedido')}>‹ Voltar ao pedido</button>
+          )}
+          {qtdCarrinho > 0 && aba === 'pedido' && (
+            <>
+              <button className={btnSecCls + ' !bg-surface shadow-lg'} onClick={() => document.getElementById('resumo-comanda')?.scrollIntoView({ behavior: 'smooth' })}>Revisar</button>
+              <button className={btnCls + ' flex-1 shadow-lg'} onClick={enviar}>Enviar {qtdCarrinho} {qtdCarrinho === 1 ? 'item' : 'itens'} · {reais(totCarrinho)}</button>
+            </>
+          )}
         </div>
       )}
       {erro && <Erro texto={erro} />}
@@ -607,9 +618,9 @@ export function Comanda() {
         </Modal>
       )}
       {fiscalFim && (
-        <Modal titulo="Comanda fechada · cupom fiscal" fechar={() => nav('/pdv')}>
+        <Modal titulo="Comanda fechada · cupom fiscal" fechar={() => nav(inicioAtendimento())}>
           <EmitirFiscal comandaId={c.id} docInicial={c.cpf_cnpj_nota} compacto />
-          <button className={btnSecCls + ' w-full'} onClick={() => nav('/pdv')}>Concluir e voltar ao salão</button>
+          <button className={btnSecCls + ' w-full'} onClick={() => nav(inicioAtendimento())}>Concluir e voltar ao salão</button>
         </Modal>
       )}
       {editPerfis && (

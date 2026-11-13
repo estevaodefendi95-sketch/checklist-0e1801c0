@@ -24,6 +24,7 @@ import { PdvCaixa } from './pages/pdv/PdvCaixa'
 import { PdvRelatorios } from './pages/pdv/PdvRelatorios'
 import { PdvConfig } from './pages/pdv/PdvConfig'
 import { AReceber } from './pages/pdv/AReceber'
+import { AtendimentoRapido } from './pages/pdv/AtendimentoRapido'
 import { GestaoTablet } from './pages/pdv/GestaoTablet'
 import { MesaPublica } from './pages/pdv/MesaPublica'
 import { Compras } from './pages/Compras'
@@ -48,7 +49,9 @@ function Abertura() {
   let jaAbriu = true
   try { jaAbriu = sessionStorage.getItem('paggio-abriu') === '1'; sessionStorage.setItem('paggio-abriu', '1') } catch { /* sem armazenamento */ }
   const celular = window.matchMedia('(max-width: 1023px)').matches
-  if (!jaAbriu && celular && pode('pdv_operar') && ler<string>('paggio-modo-mobile', 'atendimento') === 'atendimento') return <Navigate to="/pdv" replace />
+  const soAtendimento = pode('pdv_operar') && !pode('pdv_ver_gestao')
+  if (soAtendimento) return <Navigate to={celular ? '/atendimento' : '/pdv'} replace />
+  if (!jaAbriu && celular && pode('pdv_operar') && ler<string>('paggio-modo-mobile', 'atendimento') === 'atendimento') return <Navigate to="/atendimento" replace />
   return <Dashboard modo="hoje" />
 }
 
@@ -92,6 +95,7 @@ const router = createBrowserRouter([
   { path: '/cardapio', element: <CardapioPublico /> },
   { path: '/reservar', element: <ReservarPublico /> },
   { path: '/pdv', element: <Protected><PdvSalao /></Protected> },
+  { path: '/atendimento', element: <Protected><AtendimentoRapido /></Protected> },
   { path: '/pdv/comanda/:id', element: <Protected><Comanda /></Protected> },
   { path: '/pdv/comandas', element: <Protected><Comandas /></Protected> },
   { path: '/pdv/crm', element: <Protected><Gate p="pdv_ver_crm"><Crm /></Gate></Protected> },
