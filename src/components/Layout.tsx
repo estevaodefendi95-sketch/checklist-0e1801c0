@@ -114,7 +114,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const modo: Modo = temAtend ? (verGestao ? modoSalvo : 'atendimento') : 'gestao'
   const podeTrocar = temAtend && verGestao
   const BARRA_MODO: Record<Modo, string[]> = {
-    atendimento: ['/atendimento', '/pdv/comandas', '/pdv/reservas', '/pdv/caixa'],
+    atendimento: ['/', '/atendimento', '/pdv/comandas', '/pdv/reservas', '/pdv/caixa'],
     gestao: ['/', '/checklists', '/pdv/relatorios', '/estoque/alertas', '/fichas'],
   }
   const NA_BARRA = itens.filter((i) => BARRA_MODO[modo].includes(i.to)).map((i) => i.to)
@@ -130,6 +130,16 @@ export function Layout({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => setMaisAberto(false), [pathname])
+
+  // ao abrir o app no celular: sempre começa no painel "Salão agora" (só consulta), mesmo que o aparelho tenha guardado a última tela
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('paggio-aberto')) return
+      sessionStorage.setItem('paggio-aberto', '1')
+    } catch { /* sem armazenamento: segue */ }
+    if (window.matchMedia('(max-width: 1023px)').matches && (pathname === '/atendimento' || pathname === '/pdv')) navigate('/', { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function alternarRecolhido() {
     setRecolhido((v) => {
