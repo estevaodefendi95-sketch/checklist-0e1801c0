@@ -82,7 +82,7 @@ export function AprovacaoAdmin({ titulo, descricao, acao, id, pedirMotivo = true
             <button type="button" onClick={() => { setOutro(true); setMotivo('') }}
               className={`min-h-[44px] rounded-full border px-4 text-sm transition-colors ${outro ? 'border-brand bg-brand-soft font-semibold text-brand' : 'border-dashed border-line bg-surface text-ink-soft hover:text-ink'}`}>Outro motivo…</button>
           </div>
-          {outro && <textarea className={inputCls + ' !min-h-[80px] py-2'} maxLength={200} placeholder="Descreva o motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus />}
+          {outro && <textarea className={inputCls + ' !min-h-[80px] py-2'} maxLength={200} placeholder={rotuloMotivo === 'Motivo (obrigatório)' ? 'Descreva o motivo' : rotuloMotivo} value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus />}
         </div>
       )}
       {porSenha ? (
