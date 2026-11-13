@@ -20,6 +20,7 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
   const segTopo = useSegurar(onTopoSegurar)
   const segLogo = useSegurar(onLogoSegurar)
   const [bi, setBi] = useState(0)
+  const [teloa, setTeloa] = useState(false)
   const nb = banners?.length ?? 0
   useEffect(() => { if (nb < 2) return; const t = setInterval(() => setBi((i) => (i + 1) % nb), 4000); return () => clearInterval(t) }, [nb])
   const indicados = useMemo(() => produtos.filter((p) => p.indicacao), [produtos])
@@ -62,7 +63,7 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
       <span className="grid h-9 w-9 place-items-center rounded-full text-xl text-white shadow" style={{ background: 'var(--p)' }} aria-hidden>+</span>
     )
     return (
-      <li className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
+      <li className="overflow-hidden rounded-3xl bg-white ring-1 ring-black/[0.06]">
         <div role="button" tabIndex={0} onClick={() => (onAbrir ? onAbrir(p) : !somenteLeitura && onAdd(p))} onKeyDown={(e) => e.key === 'Enter' && (onAbrir ? onAbrir(p) : !somenteLeitura && onAdd(p))} className={`flex ${somenteLeitura && !onAbrir ? '' : 'cursor-pointer'} ${vertical ? 'h-full flex-col' : 'items-stretch gap-3 p-3'}`}>
           {vertical && foto}
           <div className={`flex min-w-0 flex-1 flex-col ${vertical ? 'p-3' : ''}`}>
@@ -83,23 +84,22 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
 
   return (
     <div className="relative flex h-full flex-col" style={{ ...vars, background: 'var(--f)', color: 'var(--t)' }}>
-      <header className="shrink-0 px-4 pb-3 pt-4" style={{ background: 'var(--p)', color: '#fff' }}>
+      <header className="shrink-0 border-b border-black/5 bg-white px-5 py-3 text-[var(--t)]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="shrink-0">
             <h1 className="sr-only">{tema.titulo || 'Paggio'}</h1>
             <img {...segLogo} draggable={false} src="/logo-paggio.png" alt={tema.titulo || 'Paggio Gastrobar'} className="h-20 w-auto max-w-[220px] object-contain object-left" />
           </div>
-          <div className="order-last flex min-w-[220px] flex-1 items-center gap-2 rounded-full bg-white/95 px-4 py-3 text-[var(--t)] md:order-none">
+          <div className="order-last flex min-w-[220px] flex-1 items-center gap-2 rounded-full bg-black/[0.045] px-5 py-3 md:order-none">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="opacity-60"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar no cardápio" className="w-full bg-transparent text-base outline-none" />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {mesa && <div {...segTopo} className="select-none rounded-2xl bg-white/15 px-4 py-1.5 text-center leading-none ring-1 ring-white/40"><span className="block text-[10px] uppercase tracking-[0.25em] opacity-80">Mesa</span><b className="text-3xl">{mesa}</b></div>}
+            {mesa && <div {...segTopo} className="select-none rounded-2xl px-5 py-2 text-center leading-none text-white" style={{ background: 'var(--p)' }}><span className="block text-[10px] uppercase tracking-[0.25em] opacity-80">Mesa</span><b className="text-3xl">{mesa}</b></div>}
             {acoes}
           </div>
         </div>
-        {(boasVindas || tema.subtitulo) && <p className="mt-1 line-clamp-1 text-xs opacity-85">{boasVindas || tema.subtitulo}</p>}
-        <div className="mt-3 h-[3px] w-16 rounded-full" style={{ background: 'var(--d)' }} />
+        {(boasVindas || tema.subtitulo) && <p className="mt-1 line-clamp-1 text-xs opacity-60">{boasVindas || tema.subtitulo}</p>}
       </header>
 
       {!lateral && secoes.length > 1 && !termo && (
@@ -112,23 +112,22 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
 
       <div className="flex min-h-0 flex-1">
         {lateral && !termo && (
-          <nav className="flex w-44 shrink-0 flex-col border-r border-black/5" style={{ background: 'color-mix(in srgb, var(--f) 92%, black)' }}>
+          <nav className="flex w-44 shrink-0 flex-col border-r border-black/5 bg-white">
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
               {secoes.map(({ c }) => (
                 <button key={c.id} onClick={() => ir(c.id)} className="block w-full rounded-xl px-3 py-3 text-left text-sm font-medium leading-tight"
-                  style={ativa === c.id ? { background: 'var(--p)', color: '#fff', boxShadow: 'inset 4px 0 0 var(--d)' } : { color: 'var(--t)' }}>{c.nome}</button>
+                  style={ativa === c.id ? { background: 'color-mix(in srgb, var(--p) 10%, white)', color: 'var(--p)', fontWeight: 600 } : { color: 'var(--t)', opacity: 0.75 }}>{c.nome}</button>
               ))}
             </div>
-            {rodape && <div className="shrink-0 space-y-2 border-t border-black/10 bg-white/60 p-2">{rodape}</div>}
+            {rodape && <div className="shrink-0 space-y-2 border-t border-black/5 p-2">{rodape}</div>}
           </nav>
         )}
         <div ref={rolagem} onScroll={aoRolar} className={`relative min-w-0 flex-1 overflow-y-auto px-3 ${lateral && !termo ? 'pb-6' : 'pb-36'} pt-3`}>
           {!termo && nb > 0 && banners && (() => {
             const b = banners[bi % nb]
-            const prod = b.produto_id ? produtos.find((p) => p.id === b.produto_id) : undefined
             return (
               <section className="mb-4">
-                <div role={prod ? 'button' : undefined} onClick={() => prod && abrir(prod)} className={`relative overflow-hidden rounded-2xl bg-black/5 shadow-sm ring-1 ring-black/5 ${prod ? 'cursor-pointer' : ''}`}>
+                <div role="button" onClick={() => setTeloa(true)} className="relative cursor-pointer overflow-hidden rounded-3xl bg-black/5">
                   <img key={b.id} src={b.imagem_url} alt={b.titulo} className="aspect-[3/1] w-full object-cover" />
                   <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white">{b.patrocinador ? `Patrocinado · ${b.patrocinador}` : 'Patrocinado'}</span>
                   {nb > 1 && <span className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">{banners.map((x, i) => <i key={x.id} className={`h-1.5 w-1.5 rounded-full ${i === bi % nb ? 'bg-white' : 'bg-white/50'}`} />)}</span>}
@@ -166,6 +165,22 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
         </div>
       </div>
       {rodape && (!lateral || termo) && <div className="absolute inset-x-0 bottom-0 z-10 space-y-2 p-3" style={{ background: 'linear-gradient(to top, var(--f) 70%, transparent)' }}>{rodape}</div>}
+      {teloa && nb > 0 && banners && (() => {
+        const b = banners[bi % nb]
+        const prod = b.produto_id ? produtos.find((p) => p.id === b.produto_id) : undefined
+        return (
+          <div className="fixed inset-0 z-[45] flex select-none flex-col justify-end bg-black" onClick={() => setTeloa(false)}>
+            <img key={b.id} src={b.imagem_url} alt={b.titulo} className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+            <button aria-label="Fechar" className="absolute right-4 top-4 z-10 grid h-12 w-12 place-items-center rounded-full bg-black/40 text-xl text-white backdrop-blur" onClick={() => setTeloa(false)}>✕</button>
+            <div className="relative z-10 flex items-end justify-between gap-4 p-6 text-white">
+              <div>{b.patrocinador && <p className="text-xs uppercase tracking-wider opacity-80">Patrocinado · {b.patrocinador}</p>}<p className="text-2xl font-semibold">{b.titulo}</p></div>
+              {prod && <button className="shrink-0 rounded-full bg-white px-6 py-3 font-semibold text-[var(--p)]" onClick={(x) => { x.stopPropagation(); setTeloa(false); abrir(prod) }}>Ver produto</button>}
+            </div>
+            {nb > 1 && <span className="absolute inset-x-0 bottom-2 z-10 flex justify-center gap-1.5">{banners.map((x, i) => <i key={x.id} className={`h-1.5 w-1.5 rounded-full ${i === bi % nb ? 'bg-white' : 'bg-white/40'}`} />)}</span>}
+          </div>
+        )
+      })()}
       {sobrepor}
     </div>
   )

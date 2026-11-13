@@ -27,8 +27,9 @@ export function MesaPublica() {
   const nav = useNavigate()
   const [acesso, setAcesso] = useState<null | 'trocar' | 'sair' | 'reservar' | 'liberar'>(null)
   const saindo = useRef(false)
-  const segTopoRes = useSegurar(() => setAcesso('trocar'))
-  const segLogoRes = useSegurar(() => setAcesso('sair'))
+  const [menuEquipe, setMenuEquipe] = useState(false)
+  const segTopoRes = useSegurar(() => setMenuEquipe(true))
+  const segLogoRes = useSegurar(() => setMenuEquipe(true))
   const [e, setE] = useState<Estado | null>(null)
   const [car, setCar] = useState<Linha[]>([])
   const [det, setDet] = useState<Prod | null>(null)
@@ -42,8 +43,8 @@ export function MesaPublica() {
   // Totem: no navegador, o primeiro toque na tela liga a tela cheia (esconde abas e barra de endereço). Instalado como app, já abre em tela cheia.
   useEffect(() => {
     const instalado = window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches
-    if (instalado || !document.documentElement.requestFullscreen) return
-    const ligar = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => { /* o navegador recusou */ }) }
+    if (!document.documentElement.requestFullscreen) return
+    const ligar = () => { if (!document.fullscreenElement && !saindo.current && !instalado) document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => { /* o navegador recusou */ }) }
     document.addEventListener('pointerup', ligar)
     return () => document.removeEventListener('pointerup', ligar)
   }, [])
@@ -58,10 +59,12 @@ export function MesaPublica() {
       if (saindo.current) return
       if (ev.key === 'F5' || ev.key === 'F11' || ev.key === 'F12' || (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) || ((ev.ctrlKey || ev.metaKey) && ['l', 'w', 't', 'n', 'r', 'u', 'p', 's'].includes(ev.key.toLowerCase()))) ev.preventDefault()
     }
+    const html = document.documentElement, antes = html.style.overscrollBehavior
+    html.style.overscrollBehavior = 'none'; document.body.style.overscrollBehavior = 'none'
     window.addEventListener('popstate', aoVoltar); window.addEventListener('beforeunload', aoFechar)
     document.addEventListener('contextmenu', menu); window.addEventListener('keydown', teclas)
     // se o navegador sair da tela cheia (gesto do cliente), volta no próximo toque
-    return () => { window.removeEventListener('popstate', aoVoltar); window.removeEventListener('beforeunload', aoFechar); document.removeEventListener('contextmenu', menu); window.removeEventListener('keydown', teclas) }
+    return () => { html.style.overscrollBehavior = antes; document.body.style.overscrollBehavior = ''; window.removeEventListener('popstate', aoVoltar); window.removeEventListener('beforeunload', aoFechar); document.removeEventListener('contextmenu', menu); window.removeEventListener('keydown', teclas) }
   }, [])
   // depois de adicionar um item: "continuar pedindo" ou "enviar pedido" (abre a câmera na hora)
   const [add, setAdd] = useState<{ nome: string; n: number } | null>(null)
@@ -215,6 +218,18 @@ export function MesaPublica() {
       </div>
     </div>
   )
+  const dialogoEquipe = menuEquipe && !acesso && (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 p-4" onClick={() => setMenuEquipe(false)}>
+      <div className="w-full max-w-sm space-y-2 rounded-3xl bg-white p-5 text-[#222] shadow-2xl" onClick={(x) => x.stopPropagation()}>
+        <h2 className="text-lg font-semibold">Área da equipe</h2>
+        <p className="pb-1 text-sm opacity-60">Toda opção pede o PIN de supervisor.</p>
+        {[['reservar', 'Marcar mesa como reservada'], ['trocar', 'Trocar a mesa deste tablet'], ['sair', 'Sair do cardápio']].map(([k, t]) => (
+          <button key={k} className="block w-full rounded-2xl border border-black/10 px-4 py-4 text-left text-base font-medium active:bg-black/5" onClick={() => { setMenuEquipe(false); setAcesso(k as 'trocar' | 'sair' | 'reservar') }}>{t}</button>
+        ))}
+        <button className="block w-full rounded-2xl px-4 py-3 text-center text-sm opacity-60" onClick={() => setMenuEquipe(false)}>Cancelar</button>
+      </div>
+    </div>
+  )
   const dialogoAcesso = acesso && (
     <AutorizarTablet token={token} modo={acesso} mesaAtual={e.mesa}
       onCancelar={() => setAcesso(null)} onSair={() => {
@@ -239,7 +254,7 @@ export function MesaPublica() {
         <p className="text-3xl">{e.reserva.nome}</p>
         {!e.reserva.manual && <p className="opacity-80">{e.reserva.hora} · {e.reserva.pessoas} {e.reserva.pessoas === 1 ? 'pessoa' : 'pessoas'}</p>}
         <p className="mt-6 rounded-full border border-white/60 px-5 py-2 text-sm">{e.reserva.manual ? 'Toque para a equipe liberar a mesa' : 'Toque na tela para liberar'}</p>
-        {dialogoAcesso}
+        {dialogoAcesso}{dialogoEquipe}
       </div>
     )
   }
@@ -254,13 +269,12 @@ export function MesaPublica() {
         <div {...segTopoRes} onClick={(x) => x.stopPropagation()} className="absolute inset-x-0 top-0 z-10 h-24" />
         <img {...segLogoRes} onClick={(x) => x.stopPropagation()} draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="relative z-10 h-20 w-auto object-contain" />
         <div className="absolute left-5 top-5 z-10 rounded-2xl bg-black/35 px-5 py-2 text-left leading-none ring-1 ring-white/40 backdrop-blur"><span className="block text-[11px] uppercase tracking-[0.25em] opacity-90">Mesa</span><b className="text-4xl">{e.mesa}</b></div>
-        <button className="absolute bottom-3 right-3 z-10 rounded-full bg-black/30 px-3 py-1.5 text-[11px] text-white/80 backdrop-blur" onClick={(x) => { x.stopPropagation(); setAcesso('reservar') }}>Equipe · marcar reserva</button>
         <div className="relative z-10 space-y-3">
           <h1 className="text-4xl font-semibold drop-shadow">{e.boas_vindas || e.tema?.titulo || 'Bem-vindo'}</h1>
           {bn?.patrocinador && <p className="text-xs uppercase tracking-wider opacity-80">Patrocinado · {bn.patrocinador}</p>}
         </div>
         <p className="relative z-10 animate-pulse rounded-full border border-white/80 bg-black/30 px-8 py-4 text-xl font-medium backdrop-blur">Toque na tela para ver o cardápio</p>
-        {dialogoAcesso}
+        {dialogoAcesso}{dialogoEquipe}
       </div>
     )
   }
@@ -279,12 +293,12 @@ export function MesaPublica() {
       )}
       {msg && !det && !carrinho && <p className="fixed inset-x-3 top-3 z-40 mx-auto max-w-xl rounded-xl bg-white p-3 text-sm shadow-lg" onClick={() => setMsg('')}>{msg}</p>}
       <CardapioCliente
-        tema={tema} banners={e.banners} onTopoSegurar={() => setAcesso('trocar')} onLogoSegurar={() => setAcesso('sair')} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
+        tema={tema} banners={e.banners} onTopoSegurar={() => setMenuEquipe(true)} onLogoSegurar={() => setMenuEquipe(true)} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
         qtdDe={qtdProd} onAdd={(p) => mais(p as Prod)} onMenos={menos} onAbrir={(p) => setDet(e.produtos?.find((x) => x.id === p.id) ?? null)}
         acoes={<>
-          {e.pode_chamar && <button className="rounded-2xl border border-white/60 bg-white/10 px-4 py-3 text-sm font-semibold" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}
-          <button className="rounded-2xl border border-white/60 bg-white/10 px-4 py-3 text-sm font-semibold" onClick={() => { setMsg(''); setLeitor('minha') }}>Minha conta</button>
-          {e.pode_conta && <button className="rounded-2xl border border-white/60 bg-white/10 px-4 py-3 text-sm font-semibold" onClick={() => { setMsg(''); setLeitor('conta') }}>Pedir a conta</button>}
+          {e.pode_chamar && <button className="rounded-2xl bg-black/[0.05] px-4 py-3 text-sm font-semibold text-[var(--t)]" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}
+          <button className="rounded-2xl bg-black/[0.05] px-4 py-3 text-sm font-semibold text-[var(--t)]" onClick={() => { setMsg(''); setLeitor('minha') }}>Minha conta</button>
+          {e.pode_conta && <button className="rounded-2xl bg-black/[0.05] px-4 py-3 text-sm font-semibold text-[var(--t)]" onClick={() => { setMsg(''); setLeitor('conta') }}>Pedir a conta</button>}
         </>}
         rodape={<>
           {qtd > 0 ? (
@@ -296,9 +310,16 @@ export function MesaPublica() {
               <b className="mt-1 block text-xl">{brl(total)}</b>
               <span className="mt-2 block rounded-xl bg-white px-3 py-2 text-center text-sm font-semibold text-[var(--p)]">Ver pedido e enviar</span>
             </button>
-          ) : lateral ? <p className="rounded-xl border border-dashed border-black/20 p-3 text-center text-xs opacity-70">Carrinho vazio.<br />Toque em um prato para pedir.</p> : null}
+          ) : lateral ? (
+            <div className="flex items-center gap-2.5 rounded-2xl px-2 py-2 opacity-60">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-black/5">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h8.8a1 1 0 0 0 1-.8L20 7H6" /></svg>
+              </span>
+              <span className="text-xs leading-tight">Seu carrinho<br /><span className="opacity-70">está vazio</span></span>
+            </div>
+          ) : null}
         </>}
-        sobrepor={<>{dialogoAcesso}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr camera="user" titulo="Mostre o QR Code do cartão da sua comanda para a câmera da frente" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
+        sobrepor={<>{dialogoAcesso}{dialogoEquipe}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr camera="user" titulo="Mostre o QR Code do cartão da sua comanda para a câmera da frente" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setMinha(null)}>
             <div className="max-h-[88dvh] w-full max-w-2xl space-y-2 overflow-y-auto rounded-3xl bg-white p-6 text-[#222] shadow-2xl" onClick={(x) => x.stopPropagation()}>
               <h2 className="text-lg font-semibold">Comanda {minha.numero}{minha.nome ? ` · ${minha.nome}` : ''}</h2>
