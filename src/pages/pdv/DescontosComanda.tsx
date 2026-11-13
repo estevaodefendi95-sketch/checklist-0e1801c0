@@ -137,3 +137,58 @@ export function DescontosComanda({ c, itens, onFechar, onSalvo }: { c: Comanda; 
     </Modal>
   )
 }
+
+/** Campo rápido de desconto dentro de "Receber": valor (R$ ou %) + motivo + Aplicar. Mantém a regra automática e o couvert já definidos. */
+export function DescontoRapido({ c, itens, onSalvo, onMais, inputRef }: { c: Comanda; itens: Item[]; onSalvo: () => void; onMais: () => void; inputRef?: React.RefObject<HTMLInputElement | null> }) {
+  const { profile } = useAuth()
+  const det = (c as Comanda & { desconto_detalhe?: DescontoDetalhe | null }).desconto_detalhe ?? null
+  const [regras, setRegras] = useState<RegraDesconto[]>([])
+  const [tipo, setTipo] = useState<'pct' | 'valor'>('valor')
+  const [txt, setTxt] = useState('')
+  const [motivo, setMotivo] = useState('')
+  const [erro, setErro] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  useEffect(() => {
+    db.from('pdv_descontos_regras').select('*').eq('ativo', true).then((r: { data: RegraDesconto[] | null }) => setRegras((r.data ?? []).map((x) => ({ ...x, pct: num(x.pct) }))))
+  }, [])
+
+  async function aplicar() {
+    const v = lerNumero(txt) ?? 0
+    if (v <= 0) return setErro('Informe o valor do desconto.')
+    if (tipo === 'pct' && v > 100) return setErro('Percentual acima de 100%.')
+    if (motivo.trim().length < 3) return setErro('Informe o motivo do desconto.')
+    const regra = regras.find((r) => r.id === det?.regra_id) ?? null
+    const tiraServico = det?.tira_servico ?? (num(c.taxa_servico_pct) === 0 && !det)
+    const k = calcularDesconto(itens, regra, det?.tira_couvert ?? false, tiraServico, tipo, v, num(c.taxa_servico_pct))
+    setSalvando(true); setErro('')
+    const detalhe: DescontoDetalhe = {
+      regra_id: regra?.id ?? null, regra_nome: regra?.nome ?? null, tira_couvert: det?.tira_couvert ?? false, tira_servico: tiraServico,
+      manual_tipo: tipo, manual_valor: v, motivo: motivo.trim(), por: profile?.nome ?? null,
+    }
+    const { error } = await db.from('pdv_comandas').update({ desconto: k.desconto, taxa_servico_pct: k.servicoPct, desconto_detalhe: detalhe }).eq('id', c.id)
+    setSalvando(false)
+    if (error) return setErro(error.message)
+    setTxt(''); setMotivo('')
+    onSalvo()
+  }
+
+  return (
+    <div className="space-y-2 rounded-xl border border-line p-3">
+      <div className="flex items-center justify-between text-sm">
+        <b>Desconto{num(c.desconto) > 0 ? ` · aplicado ${reais(num(c.desconto))}` : ''}</b>
+        <button className="text-brand" onClick={onMais}>mais opções</button>
+      </div>
+      <div className="flex flex-wrap items-stretch gap-2">
+        <div className="flex overflow-hidden rounded-[10px] border border-line text-sm">
+          {(['valor', 'pct'] as const).map((t) => (
+            <button key={t} type="button" className={`px-3 ${tipo === t ? 'bg-brand text-brand-ink' : 'bg-surface'}`} onClick={() => setTipo(t)}>{t === 'valor' ? 'R$' : '%'}</button>
+          ))}
+        </div>
+        <input ref={inputRef} className={inputCls + ' !w-28'} inputMode="decimal" placeholder={tipo === 'valor' ? '0,00' : '10'} value={txt} onChange={(e) => setTxt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') aplicar() }} />
+        <input className={inputCls + ' min-w-[8rem] flex-1'} placeholder="Motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') aplicar() }} />
+        <button className={btnCls} disabled={salvando} onClick={aplicar}>Aplicar</button>
+      </div>
+      {erro && <p className="text-sm text-alert">{erro}</p>}
+    </div>
+  )
+}

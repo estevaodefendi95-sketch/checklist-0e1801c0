@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db, supabase } from '../../lib/supabase'
 import { idOperador } from '../../context/OperadorContext'
@@ -14,11 +14,14 @@ import { Modal } from './PdvCaixa'
 import { Grupo, Opcao } from './ConfigCardapio'
 import { EmitirFiscal } from './FiscalRapido'
 import { AprovacaoAdmin, AcaoAprovada } from '../../components/AprovacaoAdmin'
-import { DescontosComanda, DescontoDetalhe } from './DescontosComanda'
+import { DescontosComanda, DescontoDetalhe, DescontoRapido } from './DescontosComanda'
 import { inicioAtendimento } from '../../lib/modo'
 import { cacheGravar, cacheLer, enfileirarPedido, erroDeRede, useFila } from '../../lib/offline'
 
 interface Pag { tef_provedor: string | null; id: string; forma: string; valor: number; troco: number; tef_status: string | null; tef_nsu: string | null; estornado: boolean; criado_em: string }
+
+/** Dica do atalho de teclado (só aparece em tela grande). */
+const Tecla = ({ t }: { t: string }) => <kbd className="ml-1 hidden rounded border border-current/30 px-1 text-[10px] font-normal opacity-60 lg:inline">{t}</kbd>
 
 const ST_COR: Record<string, string> = {
   enviado: 'bg-brand-soft text-brand', preparando: 'bg-amber-100 text-amber-800', pronto: 'bg-emerald-100 text-emerald-800',
@@ -118,6 +121,8 @@ export function Comanda() {
   useAoVivo(['pdv_pedido_itens', 'pdv_pagamentos', 'pdv_comandas'], carregar, 10000)
 
   const aberta = c && (c.status === 'aberta' || c.status === 'pedindo_conta')
+  const lancavel = c?.status === 'aberta'   // conta fechada (aguardando recebimento) não recebe produto novo
+  const refDesc = useRef<HTMLInputElement | null>(null)
   const restante = Math.max(0, num(tot?.total) - num(tot?.pago))
   const lista = useMemo(() => {
     const q = busca.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -166,6 +171,7 @@ export function Comanda() {
   const precoLinha = (x: { p: Produto; opcoes: Opcao[] }) => Number(x.p.preco) + x.opcoes.reduce((s, o) => s + Number(o.preco_adicional), 0)
   async function enviar() {
     if (!c || !carrinho.length) return
+    if (c.status !== 'aberta') return setErro('Conta fechada: reabra a comanda para lançar novos produtos.')
     setErro('')
     const uid = await idOperador()
     const linhas = carrinho.map((x) => ({
@@ -196,8 +202,11 @@ export function Comanda() {
     carregar()
   }
   const semRede = () => (offline || !navigator.onLine) && (setErro('Sem conexão: esta ação precisa de internet.'), true)
-  async function pedirConta() {
+  /** Fechar comanda: imprime a pré-conta, bloqueia pedidos novos e leva para o recebimento. Reimprimir não muda nada. */
+  async function pedirConta(reimprimir = false) {
     if (!c || !tot || semRede()) return
+    if (!reimprimir && carrinho.length && !window.confirm('Há itens no carrinho que ainda não foram enviados. Fechar a comanda e descartar esses itens?')) return
+    if (!reimprimir) setCarrinho([])
     const ativos = itens.filter((i) => i.status !== 'cancelado')
     const r = await enfileirar(db, 'caixa', 'conta', {
       mesa: mesa?.numero ?? 'Balcão', comanda: c.numero, cliente: c.nome_cliente, pessoas: c.pessoas,
@@ -205,9 +214,22 @@ export function Comanda() {
       subtotal: tot.subtotal, servico: tot.servico, desconto: c.desconto, total: tot.total,
       taxa_servico_pct: c.taxa_servico_pct, por_pessoa: c.pessoas > 1 ? Math.round((num(tot.total) / c.pessoas) * 100) / 100 : null,
     }, c.id)
-    await db.from('pdv_comandas').update({ status: 'pedindo_conta' }).eq('id', c.id)
+    if (!reimprimir) {
+      const u = await db.from('pdv_comandas').update({ status: 'pedindo_conta' }).eq('id', c.id)
+      if (u.error) return setErro(u.error.message)
+      setAba('pagamento')
+    }
     setErro(r.erro ?? '')
-    if (!r.erro) setMsg('Pré-conta enviada à impressora do caixa.')
+    if (!r.erro) setMsg(reimprimir ? 'Pré-conta reenviada à impressora do caixa.' : 'Comanda fechada: novos pedidos bloqueados. Faça o recebimento.')
+    carregar()
+  }
+  /** Reabrir: só vale enquanto a conta está fechada e não foi encerrada. */
+  async function reabrir() {
+    if (!c || c.status !== 'pedindo_conta' || semRede()) return
+    if (pags.some((p) => !p.estornado) && !window.confirm('Já há pagamento registrado nesta comanda. Reabrir mesmo assim? Os pagamentos continuam lançados.')) return
+    const { error } = await db.from('pdv_comandas').update({ status: 'aberta' }).eq('id', c.id)
+    if (error) return setErro(error.message)
+    setErro(''); setAba('pedido'); setMsg('Comanda reaberta: já pode lançar novos produtos.')
     carregar()
   }
   const fail = (m: string) => { setErro(m); return false }
@@ -246,12 +268,12 @@ export function Comanda() {
     if (restante > 0.005) {
       // falta receber: oferece registrar o restante na forma de pagamento escolhida e fechar de uma vez
       if (!sessao) return setErro('Abra o seu caixa do dia antes de receber (PDV · Caixa).')
-      if (!window.confirm(`Falta receber ${reais(restante)}.\nRegistrar ${reais(restante)} em ${rotuloForma(forma)} e fechar a comanda?`)) return
+      if (!window.confirm(`Falta receber ${reais(restante)}.\nRegistrar ${reais(restante)} em ${rotuloForma(forma)} e encerrar a conta?`)) return
       setValor(String(restante).replace('.', ','))
       const ok = await pagar(true)
       if (!ok) return
     }
-    if (itens.some((i) => i.status !== 'cancelado') === false && !window.confirm('Comanda sem itens. Fechar mesmo assim?')) return
+    if (itens.some((i) => i.status !== 'cancelado') === false && !window.confirm('Comanda sem itens. Encerrar mesmo assim?')) return
     const { error } = await db.from('pdv_comandas').update({ status: 'fechada', fechada_em: new Date().toISOString(), sessao_id: sessao?.id ?? null, fechada_por: await idOperador() }).eq('id', c.id)
     if (error) return setErro(error.message)
     // Conta fechada: abre a emissão rápida do cupom fiscal (CPF/CNPJ do cliente ou sem identificação)
@@ -350,6 +372,28 @@ export function Comanda() {
     })
   }
 
+  // Atalhos de teclado (computador): F2 pedido · F3 conta/pagamento · F4 fechar comanda · F5 encerrar conta · F6 reabrir · F7 desconto · F8 enviar pedido · 1-6 forma de pagamento
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (!c || e.ctrlKey || e.metaKey || e.altKey) return
+      if (esc || pessoasEd || editPerfis || descAberto || aprov || escMesa || arForm || fiscalFim) return
+      const alvo = e.target as HTMLElement
+      const digitando = /^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName)
+      const faz = (fn: () => void) => { e.preventDefault(); fn() }
+      if (e.key === 'F2') return faz(() => { setAba('pedido'); setTimeout(() => document.querySelector<HTMLInputElement>('input[type=search]')?.focus(), 50) })
+      if (e.key === 'F3') return faz(() => setAba('pagamento'))
+      if (e.key === 'F4' && lancavel && (pode('pdv_operar') || pode('pdv_caixa'))) return faz(() => pedirConta())
+      if (e.key === 'F5' && aberta && pode('pdv_caixa') && !c.funcionario_id) return faz(() => fechar())
+      if (e.key === 'F6' && c.status === 'pedindo_conta' && (pode('pdv_operar') || pode('pdv_caixa'))) return faz(() => reabrir())
+      if (e.key === 'F7' && aberta && pode('pdv_caixa')) return faz(() => { setAba('pagamento'); setTimeout(() => refDesc.current?.focus(), 80) })
+      if (e.key === 'F8' && lancavel && carrinho.length) return faz(() => enviar())
+      if (e.key === 'Escape' && digitando) alvo.blur()
+      if (!digitando && aba === 'pagamento' && aberta && /^[1-6]$/.test(e.key)) setForma(FORMAS[Number(e.key) - 1].v)
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  })
+
   if (!fim) return erro ? <Erro texto={erro} /> : <Carregando />
   if (!c) return <Vazio texto="Comanda não encontrada." />
   const qtdCarrinho = carrinho.reduce((s, x) => s + x.qtd, 0)
@@ -362,6 +406,12 @@ export function Comanda() {
         titulo={`${mesa ? `Mesa ${mesa.numero}` : 'Balcão'} · #${c.numero}`}
         subtitulo={`${func ? `Consumo de ${func.nome}` : c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
       />
+      {c.status === 'pedindo_conta' && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800">
+          <span>CONTA FECHADA · fazer o recebimento · novos pedidos bloqueados</span>
+          <button className="rounded-lg bg-white px-3 py-1.5 text-red-800 ring-1 ring-red-300" onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>
+        </div>
+      )}
       {aberta && (
         <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 flex gap-2 px-3 lg:hidden">
           {qtdCarrinho === 0 && aba === 'pedido' && (
@@ -398,7 +448,7 @@ export function Comanda() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-        {aba === 'pedido' && aberta ? (
+        {aba === 'pedido' && lancavel ? (
           <section>
             <div className="sticky top-0 z-10 -mx-4 mb-2 space-y-2 bg-paper px-4 pb-2 pt-1 shadow-[0_6px_8px_-8px_rgba(0,0,0,0.5)] md:-mx-6 md:px-6 lg:static lg:mx-0 lg:p-0 lg:shadow-none">
               <div className="relative">
@@ -461,6 +511,15 @@ export function Comanda() {
               </div>
             )}
           </section>
+        ) : aba === 'pedido' && c.status === 'pedindo_conta' ? (
+          <section className={`${cartaoCls} space-y-3 p-6 text-center`}>
+            <h2 className="text-lg font-semibold text-alert">Conta fechada · aguardando recebimento</h2>
+            <p className="text-sm text-ink-soft">Novos pedidos estão bloqueados. Para lançar mais um produto, reabra a comanda.</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button className={btnCls} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>
+              <button className={btnSecCls} onClick={() => setAba('pagamento')}>Ir para o recebimento <Tecla t="F3" /></button>
+            </div>
+          </section>
         ) : aba === 'pagamento' && c.funcionario_id ? (
           <section className={`${cartaoCls} space-y-3 p-4`}>
             <h2 className="font-semibold">Consumo de funcionário</h2>
@@ -477,13 +536,14 @@ export function Comanda() {
             <h2 className="font-semibold">Receber</h2>
             {aberta ? (
               <>
+                {pode('pdv_caixa') && <DescontoRapido c={c} itens={itens} inputRef={refDesc} onMais={abrirDescontos} onSalvo={() => { setMsg('Desconto aplicado.'); carregar() }} />}
                 <div className="flex flex-wrap gap-2">
                   {FORMAS.map((f) => (
-                    <button key={f.v} className={forma === f.v ? btnCls : btnSecCls} onClick={() => setForma(f.v)}>{f.r}</button>
+                    <button key={f.v} className={forma === f.v ? btnCls : btnSecCls} onClick={() => setForma(f.v)}>{f.r} <Tecla t={String(FORMAS.findIndex((x) => x.v === f.v) + 1)} /></button>
                   ))}
                 </div>
                 <label className="block text-sm">Valor (restante {reais(restante)})
-                  <input className={inputCls} inputMode="decimal" placeholder={restante.toFixed(2).replace('.', ',')} value={valor} onChange={(e) => setValor(e.target.value)} />
+                  <input className={inputCls} inputMode="decimal" placeholder={restante.toFixed(2).replace('.', ',')} value={valor} onChange={(e) => setValor(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') pagar() }} />
                 </label>
                 {forma === 'dinheiro' && (
                   <label className="block text-sm">Valor recebido
@@ -591,8 +651,13 @@ export function Comanda() {
           {aberta && (
             <div className="flex flex-wrap gap-2">
               <button className={btnSecCls} onClick={abrirPerfis}>Pessoas e perfis</button>
-              <button className={btnSecCls} onClick={pedirConta}>Imprimir pré-conta</button>
-              {pode('pdv_caixa') && <button className={btnCls} onClick={fechar}>Fechar comanda</button>}
+              {lancavel
+                ? <button className={btnSecCls} onClick={() => pedirConta()}>Fechar comanda <Tecla t="F4" /></button>
+                : <>
+                    <button className={btnSecCls} onClick={() => pedirConta(true)}>Reimprimir pré-conta</button>
+                    <button className={btnSecCls} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>
+                  </>}
+              {pode('pdv_caixa') && <button className={btnCls} onClick={fechar}>Encerrar conta <Tecla t="F5" /></button>}
               {pode('pdv_caixa') && <button className={btnPerigoCls} onClick={cancelarComanda}>Cancelar</button>}
             </div>
           )}
