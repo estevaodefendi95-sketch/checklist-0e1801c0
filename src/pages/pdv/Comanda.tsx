@@ -14,6 +14,7 @@ import { Modal } from './PdvCaixa'
 import { Grupo, Opcao } from './ConfigCardapio'
 import { EmitirFiscal } from './FiscalRapido'
 import { AprovacaoAdmin, AcaoAprovada } from '../../components/AprovacaoAdmin'
+import { AgruparComandas } from '../../components/AgruparComandas'
 import { DescontosComanda, DescontoDetalhe, DescontoRapido } from './DescontosComanda'
 import { inicioAtendimento } from '../../lib/modo'
 import { cacheGravar, cacheLer, enfileirarPedido, erroDeRede, useFila } from '../../lib/offline'
@@ -126,6 +127,7 @@ export function Comanda() {
   const refDesc = useRef<HTMLInputElement | null>(null)
   const [pedeMesa, setPedeMesa] = useState(false)
   const [sinalDesc, setSinalDesc] = useState(0)
+  const [agrupando, setAgrupando] = useState(false)
   const balcaoOk = useRef(false)
   const restante = Math.max(0, num(tot?.total) - num(tot?.pago))
   const lista = useMemo(() => {
@@ -538,13 +540,23 @@ export function Comanda() {
           </section>
         ) : aba === 'pagamento' ? (
           <section className={`${cartaoCls} space-y-3 p-4`}>
-            <h2 className="font-semibold">Receber</h2>
+            <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Encerrar conta</h2>
+              {aberta && pode('pdv_operar') && !pags.some((p) => !p.estornado) && <button className="text-sm text-brand underline" onClick={() => setAgrupando(true)}>Agrupar comandas</button>}
+            </div>
+            <div className="rounded-2xl bg-paper-dim p-4">
+              <div className="flex items-end justify-between gap-3">
+                <div><p className="text-xs uppercase tracking-wider text-ink-soft">{restante <= 0.005 ? 'Conta quitada' : 'Falta receber'}</p>
+                  <p className={`text-4xl font-semibold leading-none ${restante <= 0.005 ? 'text-ok' : ''}`}>{reais(restante)}</p></div>
+                <div className="text-right text-sm text-ink-soft"><p>Total {reais(num(tot?.total))}</p><p>Pago {reais(num(tot?.pago))}</p></div>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-line"><div className="h-full rounded-full bg-ok transition-all" style={{ width: `${Math.min(100, num(tot?.total) > 0 ? (num(tot?.pago) / num(tot?.total)) * 100 : 0)}%` }} /></div>
+            </div>
             {aberta ? (
               <>
                 {podeDesc && <DescontoRapido c={c} itens={itens} inputRef={refDesc} sinal={sinalDesc} onMais={abrirDescontos} onSalvo={() => { setMsg('Desconto aplicado.'); carregar() }} />}
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                   {FORMAS.map((f) => (
-                    <button key={f.v} className={forma === f.v ? btnCls : btnSecCls} onClick={() => setForma(f.v)}>{f.r} <Tecla t={String(FORMAS.findIndex((x) => x.v === f.v) + 1)} /></button>
+                    <button key={f.v} className={(forma === f.v ? btnCls : btnSecCls) + ' !min-h-[56px]'} onClick={() => setForma(f.v)}>{f.r} <Tecla t={String(FORMAS.findIndex((x) => x.v === f.v) + 1)} /></button>
                   ))}
                 </div>
                 <label className="block text-sm">Valor (restante {reais(restante)})
@@ -567,15 +579,18 @@ export function Comanda() {
                     <input className={inputCls} value={nsu} onChange={(e) => setNsu(e.target.value)} />
                   </label>
                 )}
-                <button className={btnCls} onClick={() => pagar()}>Registrar pagamento</button>
+                <div className="flex flex-wrap gap-2">
+                  <button className={(restante > 0.005 ? btnCls : btnSecCls) + ' flex-1 !min-h-[56px]'} onClick={() => pagar()}>Registrar pagamento</button>
+                  {pode('pdv_caixa') && <button className={(restante <= 0.005 ? btnCls : btnSecCls) + ' flex-1 !min-h-[56px]'} onClick={fechar}>Encerrar conta <Tecla t="F5" /></button>}
+                </div>
                 {pode('pdv_caixa') && (
-                  <div className="space-y-2 border-t border-line pt-3">
-                    <p className="text-xs text-ink-soft">Sem pagar agora (precisa da aprovação de um administrador):</p>
-                    <div className="flex flex-wrap gap-2">
+                  <details className="rounded-xl border border-line px-4 py-2 text-sm">
+                    <summary className="cursor-pointer py-1 text-ink-soft">Outras opções (precisam da aprovação de um administrador)</summary>
+                    <div className="flex flex-wrap gap-2 pb-2 pt-2">
                       <button className={btnSecCls} onClick={abrirAReceber}>Deixar a receber</button>
                       <button className={btnSecCls} onClick={consumoInterno}>Consumo interno (sem cobrança)</button>
                     </div>
-                  </div>
+                  </details>
                 )}
                 {!sessao && <p className="text-sm text-alert">Caixa fechado: só quem tem permissão (ou o agendamento) abre o caixa, em PDV · Caixa.</p>}
               </>
@@ -602,6 +617,7 @@ export function Comanda() {
           <Vazio texto="Comanda encerrada." />
         )}
 
+        {agrupando && <AgruparComandas principalId={c.id} principalNumero={c.numero} onFechar={() => setAgrupando(false)} onOk={(n) => { setAgrupando(false); setMsg(`${n} comanda(s) agrupada(s) nesta conta.`); carregar() }} />}
         <aside id="resumo-comanda" className={`${cartaoCls} h-fit space-y-3 p-4`}>
           {carrinho.length > 0 && (
             <div className="space-y-2 rounded-xl bg-brand-soft p-3">
@@ -627,7 +643,7 @@ export function Comanda() {
               {itens.map((i) => (
                 <li key={i.id} className="py-2">
                   <div className="flex justify-between gap-2">
-                    <span className={i.status === 'cancelado' ? 'line-through opacity-60' : ''}>{i.qtd}× {i.nome}{i.opcoes?.length ? <em className="block text-xs text-ink-soft">{i.opcoes.map((o) => o.nome).join(', ')}</em> : null}{i.obs ? <em className="block text-xs text-ink-soft">{i.obs}</em> : null}</span>
+                    <span className={i.status === 'cancelado' ? 'line-through opacity-60' : ''}>{i.qtd}× {i.nome}{(i as { comanda_origem_id?: string | null }).comanda_origem_id ? <em className="ml-1 rounded-full bg-paper-dim px-1.5 py-0.5 text-[10px] not-italic text-ink-soft">agrupada</em> : null}{i.opcoes?.length ? <em className="block text-xs text-ink-soft">{i.opcoes.map((o) => o.nome).join(', ')}</em> : null}{i.obs ? <em className="block text-xs text-ink-soft">{i.obs}</em> : null}</span>
                     <span>{reais(i.qtd * i.preco_unit)}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
