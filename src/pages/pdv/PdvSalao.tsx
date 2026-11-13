@@ -274,7 +274,7 @@ export function PdvSalao() {
         </section>
       )}
       {!editando && (
-        <button onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)} className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-4 z-20 flex min-h-[52px] items-center gap-2 rounded-full bg-brand px-5 text-base font-semibold text-brand-ink shadow-xl md:hidden">+ Check-in</button>
+        <button onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)} className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-[84px] z-20 flex min-h-[56px] items-center gap-2 rounded-full bg-brand px-5 text-base font-semibold text-brand-ink shadow-xl md:hidden">+ Check-in</button>
       )}
       {novaMesa && (
         <CheckinModal mesas={mesas} mesaInicial={novaMesa.id ? novaMesa : null} onClose={() => setNovaMesa(null)} onAberta={(id) => nav(`/pdv/comanda/${id}`)} />
