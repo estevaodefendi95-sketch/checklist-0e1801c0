@@ -167,29 +167,31 @@ export function Comanda() {
     if (!r.erro) setMsg('Pré-conta enviada à impressora do caixa.')
     carregar()
   }
-  async function pagar() {
-    if (!c) return
-    if (!sessao) return setErro('Abra o seu caixa do dia antes de receber pagamentos (PDV · Caixa).')
-    const v = lerNumero(valor || String(restante))
-    if (!v || v <= 0) return setErro('Informe o valor.')
+  const fail = (m: string) => { setErro(m); return false }
+  async function pagar(restanteTudo = false): Promise<boolean> {
+    if (!c) return false
+    if (!sessao) return fail('Abra o seu caixa do dia antes de receber pagamentos (PDV · Caixa).')
+    const v = restanteTudo ? restante : lerNumero(valor || String(restante))
+    if (!v || v <= 0) return fail('Informe o valor.')
     let troco = 0
     let aplicado = v
     if (forma === 'dinheiro') {
       const rec = lerNumero(recebido || String(v)) ?? v
       aplicado = Math.min(v, restante)
       troco = Math.max(0, rec - aplicado)
-      if (rec < aplicado) return setErro('Valor recebido menor que o valor a pagar.')
-    } else if (v > restante + 0.005) return setErro('Valor acima do restante da conta.')
+      if (rec < aplicado) return fail('Valor recebido menor que o valor a pagar.')
+    } else if (v > restante + 0.005) return fail('Valor acima do restante da conta.')
     const cartao = forma === 'credito' || forma === 'debito'
     const { error } = await db.from('pdv_pagamentos').insert({
       comanda_id: c.id, sessao_id: sessao.id, forma, valor: forma === 'dinheiro' ? aplicado + troco : aplicado, troco,
       tef_provedor: cartao ? maq : null, tef_status: cartao ? 'aprovado' : null, tef_nsu: nsu.trim() || null,
       user_id: (await supabase.auth.getUser()).data.user?.id,
     })
-    if (error) return setErro(error.message)
+    if (error) return fail(error.message)
     setValor(''); setNsu(''); setRecebido(''); setErro('')
     if (troco > 0) setMsg(`Troco: ${reais(troco)}`)
     carregar()
+    return true
   }
   async function estornar(p: Pag) {
     if (!window.confirm(`Estornar ${rotuloForma(p.forma)} de ${reais(p.valor - p.troco)}?`)) return
@@ -198,7 +200,14 @@ export function Comanda() {
   }
   async function fechar() {
     if (!c) return
-    if (restante > 0.005) return setErro(`Falta receber ${reais(restante)}.`)
+    if (restante > 0.005) {
+      // falta receber: oferece registrar o restante na forma de pagamento escolhida e fechar de uma vez
+      if (!sessao) return setErro('Abra o seu caixa do dia antes de receber (PDV · Caixa).')
+      if (!window.confirm(`Falta receber ${reais(restante)}.\nRegistrar ${reais(restante)} em ${rotuloForma(forma)} e fechar a comanda?`)) return
+      setValor(String(restante).replace('.', ','))
+      const ok = await pagar(true)
+      if (!ok) return
+    }
     if (itens.some((i) => i.status !== 'cancelado') === false && !window.confirm('Comanda sem itens. Fechar mesmo assim?')) return
     const { error } = await db.from('pdv_comandas').update({ status: 'fechada', fechada_em: new Date().toISOString(), sessao_id: sessao?.id ?? null }).eq('id', c.id)
     if (error) return setErro(error.message)
@@ -344,7 +353,7 @@ export function Comanda() {
                     <input className={inputCls} value={nsu} onChange={(e) => setNsu(e.target.value)} />
                   </label>
                 )}
-                <button className={btnCls} onClick={pagar}>Registrar pagamento</button>
+                <button className={btnCls} onClick={() => pagar()}>Registrar pagamento</button>
                 {!sessao && <p className="text-sm text-alert">Caixa fechado: abra em PDV · Caixa para receber.</p>}
               </>
             ) : (
@@ -419,6 +428,7 @@ export function Comanda() {
             <div className="flex justify-between font-semibold"><dt>Restante</dt><dd>{reais(restante)}</dd></div>
           </dl>
           {!aberta && c.status === 'fechada' && (pode('pdv_caixa') || pode('pdv_fiscal')) && <button className={btnSecCls + ' w-full'} onClick={() => setAba('pagamento')}>Cupom fiscal desta comanda</button>}
+          {erro && <p className="rounded-xl bg-alert-soft px-3 py-2 text-sm text-alert">{erro}</p>}
           {aberta && (
             <div className="flex flex-wrap gap-2">
               <button className={btnSecCls} onClick={abrirPerfis}>Pessoas e perfis</button>
