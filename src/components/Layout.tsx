@@ -142,6 +142,17 @@ export function Layout({ children }: { children: ReactNode }) {
     navigate('/login')
   }
 
+  // grupos do menu: o usuário abre/fecha cada um e a escolha fica gravada; o grupo da página atual nunca fica escondido
+  const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('paggio-menu-grupos') || '{}') } catch { return {} }
+  })
+  function alternarGrupo(g: string, aberto: boolean) {
+    setGruposAbertos((o) => {
+      const n = { ...o, [g]: !aberto }
+      try { localStorage.setItem('paggio-menu-grupos', JSON.stringify(n)) } catch { /* sem armazenamento */ }
+      return n
+    })
+  }
   const largura = recolhido ? 'lg:w-[72px]' : 'lg:w-[232px]'
   const recuo = recolhido ? 'lg:pl-[72px]' : 'lg:pl-[232px]'
   const maisAtivo = !NA_BARRA.some((to) => ativo(to, pathname))
@@ -153,7 +164,7 @@ export function Layout({ children }: { children: ReactNode }) {
         className={`fixed inset-y-0 left-0 z-30 hidden flex-col bg-brand text-brand-ink transition-[width] duration-200 lg:flex ${largura}`}
         aria-label="Menu principal"
       >
-        <div className={`flex items-center px-5 pb-4 pt-6 ${recolhido ? 'justify-center px-0' : ''}`}>
+        <div className={`flex items-center px-5 pb-2 pt-4 ${recolhido ? 'justify-center px-0' : ''}`}>
           <Link to="/" className="leading-none" title="Paggio">
             <b className="font-display text-2xl font-semibold">{recolhido ? 'P' : 'Paggio'}</b>
             {!recolhido && <small className="mt-1 block text-[11px] uppercase tracking-[0.08em] opacity-75">Operação</small>}
@@ -166,15 +177,19 @@ export function Layout({ children }: { children: ReactNode }) {
           {(['atendimento', 'operacao', 'cardapio', 'admin'] as const).map((g) => {
             const doGrupo = itens.filter((i) => i.grupo === g && !i.soCelular)
             if (!doGrupo.length) return null
+            const temAtivo = doGrupo.some((i) => ativo(i.to, pathname))
+            const aberto = recolhido || temAtivo || (gruposAbertos[g] ?? g === itens[0]?.grupo)
             return (
-              <div key={g} className="mb-2">
+              <div key={g} className="mb-1">
                 {!recolhido && (
-                  <div className="px-2.5 pb-1.5 pt-3.5 text-[11px] uppercase tracking-[0.08em] opacity-60">
-                    {ROTULO_GRUPO[g]}
-                  </div>
+                  <button type="button" onClick={() => alternarGrupo(g, aberto)} aria-expanded={aberto}
+                    className="flex w-full items-center justify-between rounded-lg px-2.5 pb-1 pt-3 text-[11px] uppercase tracking-[0.08em] opacity-60 hover:opacity-100">
+                    <span>{ROTULO_GRUPO[g]}</span>
+                    <span aria-hidden className={`text-xs transition-transform ${aberto ? 'rotate-90' : ''}`}>›</span>
+                  </button>
                 )}
                 {recolhido && g !== 'atendimento' && <hr className="mx-3 my-2 border-brand-ink/20" />}
-                {doGrupo.map((i) => (
+                {aberto && doGrupo.map((i) => (
                   <ItemLateral key={i.to} item={i} recolhido={recolhido} ativo={ativo(i.to, pathname)} />
                 ))}
               </div>
@@ -182,31 +197,24 @@ export function Layout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="space-y-1 border-t border-brand-ink/15 px-3.5 py-3">
+        <div className="border-t border-brand-ink/15 px-3.5 py-2.5">
           {!recolhido && profile && (
-            <div className="px-2.5 pb-1 leading-tight">
-              <div className="truncate text-sm font-semibold">{profile.nome}</div>
-              <div className="text-xs opacity-70">{roleLabel[profile.role]}</div>
+            <div className="flex items-baseline justify-between gap-2 px-1 pb-1.5 leading-tight">
+              <span className="truncate text-[13px] font-semibold">{profile.nome}</span>
+              <span className="shrink-0 text-[11px] opacity-60">{roleLabel[profile.role]}</span>
             </div>
           )}
-          <BotaoTema className="text-brand-ink hover:bg-brand-ink/10" mostrarTexto={!recolhido} />
-          <button
-            onClick={sair}
-            title="Sair"
-            className={`flex min-h-[44px] w-full items-center gap-3 rounded-[10px] px-2.5 text-sm hover:bg-brand-ink/10 ${recolhido ? 'justify-center px-0' : ''}`}
-          >
-            <Icone nome="sair" />
-            {!recolhido && 'Sair'}
-          </button>
-          <button
-            onClick={alternarRecolhido}
-            aria-expanded={!recolhido}
-            title={recolhido ? 'Expandir menu' : 'Recolher menu'}
-            className="mt-1 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[10px] border border-brand-ink/30 text-sm hover:bg-brand-ink/10"
-          >
-            <Icone nome={recolhido ? 'expandir' : 'recolher'} tamanho={18} />
-            {!recolhido && 'Recolher menu'}
-          </button>
+          <div className={`flex gap-1 ${recolhido ? 'flex-col items-center' : 'justify-between'}`}>
+            <BotaoTema className="text-brand-ink hover:bg-brand-ink/10" mostrarTexto={false} />
+            <button onClick={sair} title="Sair" aria-label="Sair"
+              className="flex min-h-[40px] w-full items-center justify-center rounded-[10px] text-sm hover:bg-brand-ink/10">
+              <Icone nome="sair" tamanho={18} />
+            </button>
+            <button onClick={alternarRecolhido} aria-expanded={!recolhido} aria-label={recolhido ? 'Expandir menu' : 'Recolher menu'} title={recolhido ? 'Expandir menu' : 'Recolher menu'}
+              className="flex min-h-[40px] w-full items-center justify-center rounded-[10px] text-sm hover:bg-brand-ink/10">
+              <Icone nome={recolhido ? 'expandir' : 'recolher'} tamanho={18} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -392,7 +400,7 @@ function BotaoTema({ className = '', mostrarTexto }: { className?: string; mostr
     <button
       onClick={alternar}
       title={escuro ? 'Modo claro' : 'Modo escuro'}
-      className={`flex min-h-[44px] w-full items-center gap-3 rounded-[10px] px-2.5 text-sm ${mostrarTexto ? '' : 'justify-center px-0'} ${className}`}
+      className={`flex min-h-[40px] w-full items-center gap-3 rounded-[10px] px-2.5 text-sm ${mostrarTexto ? '' : 'justify-center px-0'} ${className}`}
     >
       <Icone nome={escuro ? 'sol' : 'lua'} tamanho={18} />
       {mostrarTexto && (escuro ? 'Modo claro' : 'Modo escuro')}
