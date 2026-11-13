@@ -2,9 +2,16 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../integrations/supabase/client'
 import { db } from '../lib/supabase'
 import { Modal } from '../pages/pdv/PdvCaixa'
-import { btnCls, btnSecCls, inputCls } from './Estado'
+import { Alerta, btnCls, btnSecCls, inputCls } from './Estado'
 import { lerOperador } from '../context/OperadorContext'
 
+const SUGESTOES: Record<string, string[]> = {
+  cancelar_item: ['Erro de lançamento', 'Cliente desistiu', 'Demora no preparo'],
+  cancelar_comanda: ['Lançada por engano', 'Cliente desistiu', 'Comanda duplicada'],
+  estornar: ['Valor lançado errado', 'Forma de pagamento errada', 'Pagamento duplicado'],
+  a_receber: ['Cliente vai pagar depois', 'Cliente conhecido', 'Acerto combinado'],
+  cortesia: ['Cortesia da casa', 'Compensação por problema', 'Aniversariante'],
+}
 export type AcaoAprovada = 'cancelar_item' | 'cancelar_comanda' | 'estornar' | 'a_receber' | 'cortesia'
 
 /** Pede o motivo (quando precisa) e o PIN de quem pode autorizar (ou e-mail e senha de administrador); o servidor confere e executa. */
@@ -13,6 +20,7 @@ export function AprovacaoAdmin({ titulo, descricao, acao, id, pedirMotivo = true
   dados?: Record<string, unknown>; onOk: () => void; onFechar: () => void
 }) {
   const [motivo, setMotivo] = useState('')
+  const [outro, setOutro] = useState(false)
   const [pin, setPin] = useState('')
   const [porSenha, setPorSenha] = useState(false) // alternativa: e-mail e senha do administrador
   const [email, setEmail] = useState('')
@@ -57,13 +65,26 @@ export function AprovacaoAdmin({ titulo, descricao, acao, id, pedirMotivo = true
     <Modal titulo={titulo} fechar={onFechar}>
       {pedido ? (
         <>
-          <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Pedido enviado. O administrador recebeu uma notificação e precisa aprovar no celular dele. Aguardando…</p>
+          <Alerta tipo="aviso" titulo="Pedido enviado" texto="O administrador recebeu uma notificação e precisa aprovar no celular dele. Aguardando…" />
           <button className={btnSecCls + ' w-full'} onClick={onFechar}>Fechar (o pedido continua valendo por 30 min)</button>
         </>
       ) : (
       <>
       {descricao && <p className="text-sm text-ink-soft">{descricao}</p>}
-      {pedirMotivo && <input className={inputCls} placeholder={rotuloMotivo} value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus />}
+      {pedirMotivo && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Motivo</p>
+          <div className="flex flex-wrap gap-2">
+            {(SUGESTOES[acao] ?? []).map((m) => (
+              <button key={m} type="button" onClick={() => { setOutro(false); setMotivo(m) }}
+                className={`min-h-[44px] rounded-full border px-4 text-sm transition-colors ${!outro && motivo === m ? 'border-brand bg-brand-soft font-semibold text-brand' : 'border-line bg-surface text-ink-soft hover:text-ink'}`}>{m}</button>
+            ))}
+            <button type="button" onClick={() => { setOutro(true); setMotivo('') }}
+              className={`min-h-[44px] rounded-full border px-4 text-sm transition-colors ${outro ? 'border-brand bg-brand-soft font-semibold text-brand' : 'border-dashed border-line bg-surface text-ink-soft hover:text-ink'}`}>Outro motivo…</button>
+          </div>
+          {outro && <textarea className={inputCls + ' !min-h-[80px] py-2'} maxLength={200} placeholder="Descreva o motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus />}
+        </div>
+      )}
       {porSenha ? (
         <>
           <p className="text-sm text-ink-soft">E-mail e senha de um administrador.</p>
