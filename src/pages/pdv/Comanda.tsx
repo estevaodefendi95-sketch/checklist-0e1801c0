@@ -125,6 +125,7 @@ export function Comanda() {
   const lancavel = c?.status === 'aberta'   // conta fechada (aguardando recebimento) não recebe produto novo
   const refDesc = useRef<HTMLInputElement | null>(null)
   const [pedeMesa, setPedeMesa] = useState(false)
+  const [sinalDesc, setSinalDesc] = useState(0)
   const balcaoOk = useRef(false)
   const restante = Math.max(0, num(tot?.total) - num(tot?.pago))
   const lista = useMemo(() => {
@@ -391,7 +392,7 @@ export function Comanda() {
       if (e.key === 'F4' && lancavel && (pode('pdv_operar') || pode('pdv_caixa'))) return faz(() => pedirConta())
       if (e.key === 'F5' && aberta && pode('pdv_caixa') && !c.funcionario_id) return faz(() => fechar())
       if (e.key === 'F6' && c.status === 'pedindo_conta' && (pode('pdv_operar') || pode('pdv_caixa'))) return faz(() => reabrir())
-      if (e.key === 'F7' && aberta && podeDesc) return faz(() => { setAba('pagamento'); setTimeout(() => refDesc.current?.focus(), 80) })
+      if (e.key === 'F7' && aberta && podeDesc) return faz(() => { setAba('pagamento'); setSinalDesc((n) => n + 1); setTimeout(() => refDesc.current?.focus(), 150) })
       if (e.key === 'F8' && lancavel && carrinho.length) return faz(() => enviar())
       if (e.key === 'Escape' && digitando) alvo.blur()
       if (!digitando && aba === 'pagamento' && aberta && /^[1-6]$/.test(e.key)) setForma(FORMAS[Number(e.key) - 1].v)
@@ -542,7 +543,7 @@ export function Comanda() {
             <h2 className="font-semibold">Receber</h2>
             {aberta ? (
               <>
-                {podeDesc && <DescontoRapido c={c} itens={itens} inputRef={refDesc} onMais={abrirDescontos} onSalvo={() => { setMsg('Desconto aplicado.'); carregar() }} />}
+                {podeDesc && <DescontoRapido c={c} itens={itens} inputRef={refDesc} sinal={sinalDesc} onMais={abrirDescontos} onSalvo={() => { setMsg('Desconto aplicado.'); carregar() }} />}
                 <div className="flex flex-wrap gap-2">
                   {FORMAS.map((f) => (
                     <button key={f.v} className={forma === f.v ? btnCls : btnSecCls} onClick={() => setForma(f.v)}>{f.r} <Tecla t={String(FORMAS.findIndex((x) => x.v === f.v) + 1)} /></button>

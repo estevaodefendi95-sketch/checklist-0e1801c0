@@ -139,7 +139,7 @@ export function DescontosComanda({ c, itens, onFechar, onSalvo, perm }: { c: Com
 }
 
 /** Campo rápido de desconto dentro de "Receber": valor (R$ ou %) + motivo + Aplicar. Mantém a regra automática e o couvert já definidos. */
-export function DescontoRapido({ c, itens, onSalvo, onMais, inputRef }: { c: Comanda; itens: Item[]; onSalvo: () => void; onMais: () => void; inputRef?: React.RefObject<HTMLInputElement | null> }) {
+export function DescontoRapido({ c, itens, onSalvo, onMais, inputRef, sinal }: { c: Comanda; itens: Item[]; onSalvo: () => void; onMais: () => void; sinal?: number; inputRef?: React.RefObject<HTMLInputElement | null> }) {
   const { profile } = useAuth()
   const det = (c as Comanda & { desconto_detalhe?: DescontoDetalhe | null }).desconto_detalhe ?? null
   const [regras, setRegras] = useState<RegraDesconto[]>([])
@@ -148,6 +148,8 @@ export function DescontoRapido({ c, itens, onSalvo, onMais, inputRef }: { c: Com
   const [motivo, setMotivo] = useState('')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [aberto, setAberto] = useState(false)
+  useEffect(() => { if (sinal) setAberto(true) }, [sinal])
   useEffect(() => {
     db.from('pdv_descontos_regras').select('*').eq('ativo', true).then((r: { data: RegraDesconto[] | null }) => setRegras((r.data ?? []).map((x) => ({ ...x, pct: num(x.pct) }))))
   }, [])
@@ -168,15 +170,28 @@ export function DescontoRapido({ c, itens, onSalvo, onMais, inputRef }: { c: Com
     const { error } = await db.from('pdv_comandas').update({ desconto: k.desconto, taxa_servico_pct: k.servicoPct, desconto_detalhe: detalhe }).eq('id', c.id)
     setSalvando(false)
     if (error) return setErro(error.message)
-    setTxt(''); setMotivo('')
+    setTxt(''); setMotivo(''); setAberto(false)
     onSalvo()
+  }
+
+  // na maioria das vezes não há desconto: fica só um atalho (F7) até a pessoa precisar
+  if (!aberto) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <button className="inline-flex min-h-[40px] items-center gap-2 rounded-[10px] border border-dashed border-line px-3 text-ink-soft hover:text-ink" onClick={() => setAberto(true)}>
+          {num(c.desconto) > 0 ? `Desconto aplicado ${reais(num(c.desconto))} · alterar` : '+ Desconto'}
+          <kbd className="rounded border border-line px-1 text-[10px]">F7</kbd>
+        </button>
+        <button className="text-brand" onClick={onMais}>mais opções</button>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-2 rounded-xl border border-line p-3">
       <div className="flex items-center justify-between text-sm">
         <b>Desconto{num(c.desconto) > 0 ? ` · aplicado ${reais(num(c.desconto))}` : ''}</b>
-        <button className="text-brand" onClick={onMais}>mais opções</button>
+        <span className="flex gap-3"><button className="text-ink-soft" onClick={() => setAberto(false)}>recolher</button><button className="text-brand" onClick={onMais}>mais opções</button></span>
       </div>
       <div className="flex flex-wrap items-stretch gap-2">
         <div className="flex overflow-hidden rounded-[10px] border border-line text-sm">
