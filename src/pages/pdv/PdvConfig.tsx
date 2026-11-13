@@ -344,6 +344,20 @@ function Produtos() {
               } catch (x) { s.falha((x as Error).message) }
             }} /></label>
           </div>
+          <div className="flex items-center gap-3 text-sm">
+            <label>Vídeo do prato (opcional, até 50 MB)<input type="file" accept="video/mp4,video/webm,video/quicktime" className="mt-1 block text-xs" onChange={async (e) => {
+              const arq = e.target.files?.[0]; if (!arq) return
+              if (arq.size > 50 * 1024 * 1024) return s.falha('O vídeo passa de 50 MB.')
+              try {
+                const path = `produtos/${crypto.randomUUID()}.${arq.name.split('.').pop()?.toLowerCase() || 'mp4'}`
+                const up = await supabase.storage.from('tablet').upload(path, arq, { contentType: arq.type || 'video/mp4' })
+                if (up.error) throw up.error
+                set({ video_url: supabase.storage.from('tablet').getPublicUrl(path).data.publicUrl })
+              } catch (x) { s.falha((x as Error).message) }
+            }} /></label>
+            {ed.video_url && <><span className="text-xs text-emerald-700">vídeo anexado</span><button type="button" className="text-xs text-red-700 underline" onClick={() => set({ video_url: null })}>remover</button></>}
+          </div>
+          <p className="text-xs text-ink-soft">Foto e vídeo da ficha técnica vinculada aparecem no tablet automaticamente; os daqui têm prioridade.</p>
           {ed.ficha_id ? <p className="text-xs text-ink-soft">Ficha técnica vinculada · <Link className="text-brand underline" to={`/fichas/${ed.ficha_id}`}>abrir ficha</Link> (ingredientes, custo e modo de preparo ficam lá).</p> : <p className="text-xs text-ink-soft">Sem ficha técnica vinculada: o estoque não baixa sozinho nas vendas deste produto.</p>}
           <div className="grid grid-cols-2 gap-2">
             <Campo r="Preço (R$)"><input className={inputCls} inputMode="decimal" defaultValue={ed.preco ?? ''} onChange={(e) => set({ preco: lerNumero(e.target.value) ?? 0 })} /></Campo>

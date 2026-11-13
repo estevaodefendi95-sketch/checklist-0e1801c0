@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
 
     if (!token || !uuidOk(token)) return json({ erro: "Endereço do tablet inválido." });
 
-    const { data: mesa } = await db.from("pdv_mesas").select("id,numero").eq("qr_token", token).eq("ativo", true).maybeSingle();
+    const { data: mesa } = await db.from("pdv_mesas").select("id,numero,reservado_nome").eq("qr_token", token).eq("ativo", true).maybeSingle();
     if (!mesa) return json({ erro: "Mesa não encontrada." });
     const { data: cfg } = await db.from("pdv_config").select("*").eq("id", 1).single();
 
@@ -103,27 +103,30 @@ Deno.serve(async (req) => {
 
     if (acao === "menu") {
       const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-      const [cats, prods, mn, grp, pg, ops, bn, rs] = await Promise.all([
+      const [cats, prods, mn, grp, pg, ops, bn, rs, fch] = await Promise.all([
         db.from("pdv_categorias").select("id,nome,visivel_tablet,horarios,menu_id").eq("ativo", true).order("ordem"),
-        db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,horarios,indicacao,indicacao_rotulo").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
+        db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,video_url,ficha_id,visivel_tablet,horarios,indicacao,indicacao_rotulo").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
         db.from("pdv_menus").select("id,visivel,horarios").eq("ativo", true),
         db.from("pdv_grupos_opcoes").select("id,nome,tipo,min_escolhas,max_escolhas").eq("ativo", true).order("ordem"),
         db.from("pdv_produto_grupos").select("produto_id,grupo_id,ordem").order("ordem"),
         db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true).order("ordem"),
         db.from("pdv_banners").select("id,titulo,patrocinador,imagem_url,produto_id,inicio,fim,horarios").eq("ativo", true).order("ordem").order("criado_em"),
         db.from("reservas").select("id,nome,telefone,pessoas,hora,duracao_min,liberada_tablet_em").eq("mesa_id", mesa.id).eq("data", hoje).in("status", ["pendente", "confirmada"]).order("hora"),
+        db.from("fichas").select("id,foto_url,video_url").or("foto_url.not.is.null,video_url.not.is.null"),
       ]);
       const banners = (bn.data ?? []).filter((b: any) => (!b.inicio || b.inicio <= hoje) && (!b.fim || b.fim >= hoje) && noHorario(b.horarios));
       // reserva da mesa: aparece de 3 h antes até o fim da duração; o toque na tela do tablet libera
       const { min: agoraMin } = agoraSP();
       const hm = (x: string) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5));
       const r: any = (rs.data ?? []).find((x: any) => agoraMin >= hm(x.hora) - 180 && agoraMin <= hm(x.hora) + x.duracao_min);
-      const reserva = r ? { id: r.id, nome: r.nome, telefone: r.telefone, pessoas: r.pessoas, hora: String(r.hora).slice(0, 5), liberada: !!r.liberada_tablet_em } : null;
+      const fmap = new Map((fch.data ?? []).map((f: any) => [f.id, f]));
+      const reserva: any = r ? { id: r.id, nome: r.nome, telefone: r.telefone, pessoas: r.pessoas, hora: String(r.hora).slice(0, 5), liberada: !!r.liberada_tablet_em } : null;
+      const reservaManual = !reserva && mesa.reservado_nome ? { id: "manual", nome: mesa.reservado_nome, telefone: "", pessoas: 0, hora: "", liberada: false, manual: true } : null;
       const menuOk = new Map((mn.data ?? []).map((m: any) => [m.id, m.visivel && noHorario(m.horarios)]));
       const catOk = new Map((cats.data ?? []).filter((c: any) => c.visivel_tablet && noHorario(c.horarios) && (!c.menu_id || menuOk.get(c.menu_id) === true)).map((c: any) => [c.id, c]));
       const produtos = (prods.data ?? []).filter((p: any) => p.visivel_tablet && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorario(p.horarios))
         .map((p: any) => ({
-          id: p.id, nome: p.nome, descricao: p.descricao, preco: p.preco, categoria_id: p.categoria_id, foto_url: p.foto_url, indicacao: !!p.indicacao, indicacao_rotulo: p.indicacao_rotulo,
+          id: p.id, nome: p.nome, descricao: p.descricao, preco: p.preco, categoria_id: p.categoria_id, foto_url: p.foto_url ?? (fmap.get(p.ficha_id) as any)?.foto_url ?? null, video_url: p.video_url ?? (fmap.get(p.ficha_id) as any)?.video_url ?? null, indicacao: !!p.indicacao, indicacao_rotulo: p.indicacao_rotulo,
           grupos: (pg.data ?? []).filter((x: any) => x.produto_id === p.id).map((x: any) => (grp.data ?? []).find((g: any) => g.id === x.grupo_id)).filter(Boolean)
             .map((g: any) => ({ ...g, opcoes: (ops.data ?? []).filter((o: any) => o.grupo_id === g.id) })),
         }));
@@ -131,10 +134,18 @@ Deno.serve(async (req) => {
       return json({
         mesa: mesa.numero, qr_ativo: true, tema: cfg.tablet_tema, boas_vindas: cfg.tablet_mensagem_boas_vindas, exige_checkin: cfg.tablet_exige_checkin,
         pode_chamar: cfg.tablet_pode_chamar_garcom, pode_conta: cfg.tablet_pode_pedir_conta, inatividade_min: cfg.tablet_tempo_inatividade_min,
-        categorias, produtos, banners, reserva,
+        categorias, produtos, banners, reserva: reserva ?? reservaManual,
       });
     }
 
+    if (acao === "reservar" || acao === "liberar_manual") {
+      const r = await conferirPin("tablet-" + token);
+      if ("erro" in r) return json({ erro: r.erro });
+      const nm = String(nome ?? "").trim().slice(0, 60);
+      if (acao === "reservar" && !nm) return json({ erro: "Informe o nome da reserva." });
+      const { error } = await db.from("pdv_mesas").update(acao === "reservar" ? { reservado_nome: nm, reservado_em: new Date().toISOString() } : { reservado_nome: null, reservado_em: null }).eq("id", mesa.id);
+      return error ? json({ erro: "Não foi possível salvar." }) : json({ ok: true });
+    }
     if (acao === "liberar_reserva") {
       const { error } = await db.from("reservas").update({ liberada_tablet_em: new Date().toISOString() }).eq("id", String(reserva_id ?? "")).eq("mesa_id", mesa.id);
       return error ? json({ erro: "Não foi possível liberar." }) : json({ ok: true });

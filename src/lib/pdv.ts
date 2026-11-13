@@ -29,7 +29,7 @@ export interface Faixa { dia: number; inicio: string; fim: string }
 export interface Horario { horarios: Faixa[] | null }
 export interface Categoria extends Horario { id: string; nome: string; ordem: number; destino_padrao: Destino; ativo: boolean; visivel_tablet: boolean }
 export interface Produto extends Horario {
-  visivel_tablet: boolean; foto_url?: string | null;
+  visivel_tablet: boolean; foto_url?: string | null; video_url?: string | null;
   id: string; categoria_id: string | null; ficha_id: string | null; codigo: string | null; nome: string
   descricao: string | null; preco: number; destino: Destino; ativo: boolean; disponivel: boolean; ordem: number
   ncm: string | null; cest: string | null; cfop: string | null; unidade: string | null; origem: number | null

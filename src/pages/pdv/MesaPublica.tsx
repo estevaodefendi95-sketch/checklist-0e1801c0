@@ -11,13 +11,13 @@ import type { CardBanner } from '../../components/CardapioCliente'
 // seu cartão para enviá-lo. Toda a leitura e escrita passa pela função pdv-tablet.
 interface Opc { id: string; nome: string; preco_adicional: number }
 interface Grp { id: string; nome: string; tipo: string; min_escolhas: number; max_escolhas: number; opcoes: Opc[] }
-interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; grupos?: Grp[]; indicacao?: boolean; indicacao_rotulo?: string | null }
+interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; video_url?: string | null; grupos?: Grp[]; indicacao?: boolean; indicacao_rotulo?: string | null }
 interface Linha { key: string; p: Prod; qtd: number; opcoes: string[]; obs: string }
 interface Cat { id: string; nome: string }
 interface It { nome: string; qtd: number; preco_unit: number; status: string; opcoes?: { nome: string }[] }
 interface Estado {
   erro?: string; mesa?: string; boas_vindas?: string; qr_ativo?: boolean
-  banners?: CardBanner[]; reserva?: { id: string; nome: string; telefone: string; pessoas: number; hora: string; liberada: boolean } | null
+  banners?: CardBanner[]; reserva?: { id: string; nome: string; telefone: string; pessoas: number; hora: string; liberada: boolean; manual?: boolean } | null
   itens?: It[]; tema?: { primaria?: string; fundo?: string; texto?: string; destaque?: string; titulo?: string; subtitulo?: string; colunas?: number; mostrar_fotos?: boolean }; categorias?: Cat[]; produtos?: Prod[]; pode_chamar?: boolean; pode_conta?: boolean; inatividade_min?: number
 }
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -25,7 +25,8 @@ const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 export function MesaPublica() {
   const { token } = useParams()
   const nav = useNavigate()
-  const [acesso, setAcesso] = useState<null | 'trocar' | 'sair'>(null)
+  const [acesso, setAcesso] = useState<null | 'trocar' | 'sair' | 'reservar' | 'liberar'>(null)
+  const saindo = useRef(false)
   const segTopoRes = useSegurar(() => setAcesso('trocar'))
   const segLogoRes = useSegurar(() => setAcesso('sair'))
   const [e, setE] = useState<Estado | null>(null)
@@ -45,6 +46,22 @@ export function MesaPublica() {
     const ligar = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => { /* o navegador recusou */ }) }
     document.addEventListener('pointerup', ligar)
     return () => document.removeEventListener('pointerup', ligar)
+  }, [])
+  // Trava de totem: o cliente não consegue voltar/sair da tela. Só o PIN da equipe (segurar o logo) libera a saída.
+  useEffect(() => {
+    const trava = () => { if (!saindo.current) window.history.pushState(null, '', window.location.href) }
+    trava(); trava()
+    const aoVoltar = () => trava()
+    const aoFechar = (ev: BeforeUnloadEvent) => { if (!saindo.current) { ev.preventDefault(); ev.returnValue = '' } }
+    const menu = (ev: Event) => ev.preventDefault()
+    const teclas = (ev: KeyboardEvent) => {
+      if (saindo.current) return
+      if (ev.key === 'F5' || ev.key === 'F11' || ev.key === 'F12' || (ev.altKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) || ((ev.ctrlKey || ev.metaKey) && ['l', 'w', 't', 'n', 'r', 'u', 'p', 's'].includes(ev.key.toLowerCase()))) ev.preventDefault()
+    }
+    window.addEventListener('popstate', aoVoltar); window.addEventListener('beforeunload', aoFechar)
+    document.addEventListener('contextmenu', menu); window.addEventListener('keydown', teclas)
+    // se o navegador sair da tela cheia (gesto do cliente), volta no próximo toque
+    return () => { window.removeEventListener('popstate', aoVoltar); window.removeEventListener('beforeunload', aoFechar); document.removeEventListener('contextmenu', menu); window.removeEventListener('keydown', teclas) }
   }, [])
   // depois de adicionar um item: "continuar pedindo" ou "enviar pedido" (abre a câmera na hora)
   const [add, setAdd] = useState<{ nome: string; n: number } | null>(null)
@@ -115,7 +132,7 @@ export function MesaPublica() {
   const nBanners = e?.banners?.length ?? 0
   useEffect(() => {
     if (aberto || nBanners < 2) return
-    const t = setInterval(() => setBi((i) => i + 1), 6000)
+    const t = setInterval(() => setBi((i) => i + 1), 4000)
     return () => clearInterval(t)
   }, [aberto, nBanners])
   useEffect(() => { carregar(); const t = setInterval(carregar, 10000); return () => clearInterval(t) }, [carregar])
@@ -200,11 +217,15 @@ export function MesaPublica() {
   )
   const dialogoAcesso = acesso && (
     <AutorizarTablet token={token} modo={acesso} mesaAtual={e.mesa}
-      onCancelar={() => setAcesso(null)} onSair={() => { setAcesso(null); nav('/') }}
+      onCancelar={() => setAcesso(null)} onSair={() => {
+        if (acesso === 'sair') { saindo.current = true; if (document.fullscreenElement) document.exitFullscreen().catch(() => { /* já saiu */ }); setAcesso(null); nav('/') }
+        else { setAcesso(null); carregar() }
+      }}
       onTrocar={(tk) => { setAcesso(null); setCar([]); setMsg(''); setE(null); nav(`/mesa/${tk}`) }} />
   )
   async function liberarReserva() {
     if (!e?.reserva) return
+    if (e.reserva.manual) return setAcesso('liberar')
     const r = await chamar('liberar_reserva', { reserva_id: e.reserva.id })
     if (r.erro) setMsg(r.erro); else carregar()
   }
@@ -213,11 +234,11 @@ export function MesaPublica() {
       <div className="relative flex h-[100dvh] cursor-pointer select-none flex-col items-center justify-center gap-4 p-6 text-center text-white" style={{ ...vars, background: 'var(--p)' }} onClick={liberarReserva}>
         <div {...segTopoRes} onClick={(x) => x.stopPropagation()} className="absolute inset-x-0 top-0 h-24" />
         <img {...segLogoRes} onClick={(x) => x.stopPropagation()} draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="h-20 w-auto object-contain" />
-        <div className="text-sm uppercase tracking-[0.3em] opacity-80">Mesa {e.mesa}</div>
+        <div className="absolute left-5 top-5 rounded-2xl bg-white/15 px-5 py-2 text-left leading-none ring-1 ring-white/40"><span className="block text-[11px] uppercase tracking-[0.25em] opacity-80">Mesa</span><b className="text-4xl">{e.mesa}</b></div>
         <h1 className="text-4xl font-semibold">Mesa reservada</h1>
-        <p className="text-2xl">{e.reserva.nome}</p>
-        <p className="opacity-80">{e.reserva.hora} · {e.reserva.pessoas} {e.reserva.pessoas === 1 ? 'pessoa' : 'pessoas'}</p>
-        <p className="mt-6 rounded-full border border-white/60 px-5 py-2 text-sm">Toque na tela para liberar</p>
+        <p className="text-3xl">{e.reserva.nome}</p>
+        {!e.reserva.manual && <p className="opacity-80">{e.reserva.hora} · {e.reserva.pessoas} {e.reserva.pessoas === 1 ? 'pessoa' : 'pessoas'}</p>}
+        <p className="mt-6 rounded-full border border-white/60 px-5 py-2 text-sm">{e.reserva.manual ? 'Toque para a equipe liberar a mesa' : 'Toque na tela para liberar'}</p>
         {dialogoAcesso}
       </div>
     )
@@ -232,8 +253,9 @@ export function MesaPublica() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/10 to-black/70" />
         <div {...segTopoRes} onClick={(x) => x.stopPropagation()} className="absolute inset-x-0 top-0 z-10 h-24" />
         <img {...segLogoRes} onClick={(x) => x.stopPropagation()} draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="relative z-10 h-20 w-auto object-contain" />
+        <div className="absolute left-5 top-5 z-10 rounded-2xl bg-black/35 px-5 py-2 text-left leading-none ring-1 ring-white/40 backdrop-blur"><span className="block text-[11px] uppercase tracking-[0.25em] opacity-90">Mesa</span><b className="text-4xl">{e.mesa}</b></div>
+        <button className="absolute bottom-3 right-3 z-10 rounded-full bg-black/30 px-3 py-1.5 text-[11px] text-white/80 backdrop-blur" onClick={(x) => { x.stopPropagation(); setAcesso('reservar') }}>Equipe · marcar reserva</button>
         <div className="relative z-10 space-y-3">
-          <div className="text-sm uppercase tracking-[0.3em] opacity-90">Mesa {e.mesa}</div>
           <h1 className="text-4xl font-semibold drop-shadow">{e.boas_vindas || e.tema?.titulo || 'Bem-vindo'}</h1>
           {bn?.patrocinador && <p className="text-xs uppercase tracking-wider opacity-80">Patrocinado · {bn.patrocinador}</p>}
         </div>
@@ -260,16 +282,21 @@ export function MesaPublica() {
         tema={tema} banners={e.banners} onTopoSegurar={() => setAcesso('trocar')} onLogoSegurar={() => setAcesso('sair')} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
         qtdDe={qtdProd} onAdd={(p) => mais(p as Prod)} onMenos={menos} onAbrir={(p) => setDet(e.produtos?.find((x) => x.id === p.id) ?? null)}
         acoes={<>
-          <button className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-sm font-semibold text-[var(--p)] shadow" onClick={() => { setAdd(null); setCarrinho(true) }} aria-label="Abrir o carrinho">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h8.8a1 1 0 0 0 1-.8L20 7H6" /></svg>
-            Carrinho{qtd > 0 ? ` · ${qtd} · ${brl(total)}` : ''}
-          </button>
-          {e.pode_chamar && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}
-          <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => { setMsg(''); setLeitor('minha') }}>Minha conta</button>
-          {e.pode_conta && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => { setMsg(''); setLeitor('conta') }}>Pedir a conta</button>}
+          {e.pode_chamar && <button className="rounded-2xl border border-white/60 bg-white/10 px-4 py-3 text-sm font-semibold" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}
+          <button className="rounded-2xl border border-white/60 bg-white/10 px-4 py-3 text-sm font-semibold" onClick={() => { setMsg(''); setLeitor('minha') }}>Minha conta</button>
+          {e.pode_conta && <button className="rounded-2xl border border-white/60 bg-white/10 px-4 py-3 text-sm font-semibold" onClick={() => { setMsg(''); setLeitor('conta') }}>Pedir a conta</button>}
         </>}
         rodape={<>
-          {qtd > 0 && <button className={btn + ' flex w-full items-center justify-between shadow-lg'} onClick={() => setCarrinho(true)}><span>Ver pedido · {qtd} {qtd === 1 ? 'item' : 'itens'}</span><span>{brl(total)}</span></button>}
+          {qtd > 0 ? (
+            <button className="block w-full rounded-2xl bg-[var(--p)] p-3 text-left text-white shadow-lg" onClick={() => { setAdd(null); setCarrinho(true) }}>
+              <span className="flex items-center gap-2 text-xs uppercase tracking-wider opacity-90">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h8.8a1 1 0 0 0 1-.8L20 7H6" /></svg>
+                Carrinho · {qtd} {qtd === 1 ? 'item' : 'itens'}
+              </span>
+              <b className="mt-1 block text-xl">{brl(total)}</b>
+              <span className="mt-2 block rounded-xl bg-white px-3 py-2 text-center text-sm font-semibold text-[var(--p)]">Ver pedido e enviar</span>
+            </button>
+          ) : lateral ? <p className="rounded-xl border border-dashed border-black/20 p-3 text-center text-xs opacity-70">Carrinho vazio.<br />Toque em um prato para pedir.</p> : null}
         </>}
         sobrepor={<>{dialogoAcesso}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr camera="user" titulo="Mostre o QR Code do cartão da sua comanda para a câmera da frente" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setMinha(null)}>

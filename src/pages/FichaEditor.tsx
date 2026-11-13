@@ -93,6 +93,8 @@ export function FichaEditor() {
   const [tinhaPerdaLinha, setTinhaPerdaLinha] = useState(false)
   const [foto, setFoto] = useState<File | null>(null)
   const [removerFoto, setRemoverFoto] = useState(false)
+  const [video, setVideo] = useState<File | null>(null)
+  const [removerVideo, setRemoverVideo] = useState(false)
   const [preparandoFoto, setPreparandoFoto] = useState(false)
   const [fotoErro, setFotoErro] = useState<string | null>(null)
   const previaFoto = useMemo(() => (foto ? URL.createObjectURL(foto) : null), [foto])
@@ -122,7 +124,7 @@ export function FichaEditor() {
   const [base, setBase] = useState<{ f: typeof f; itens: LinhaItem[]; sel: string[] } | null>(null)
   const retrato = (x: { f: typeof f; itens: LinhaItem[]; sel: string[] }) =>
     JSON.stringify({ f: x.f, itens: x.itens.map(({ chave: _c, ...r }) => r), sel: [...x.sel].sort() })
-  const sujo = !!base && (!!foto || removerFoto || retrato({ f, itens, sel: selCardapios }) !== retrato(base))
+  const sujo = !!base && (!!foto || removerFoto || !!video || removerVideo || retrato({ f, itens, sel: selCardapios }) !== retrato(base))
   const { liberar } = useAlteracoesPendentes(sujo)
 
   function descartar() {
@@ -335,6 +337,19 @@ export function FichaEditor() {
     } else if (removerFoto) {
       campos.foto_url = null
     }
+    if (video) {
+      const ext = video.name.split('.').pop()?.toLowerCase() || 'mp4'
+      const path = `${id ?? 'nova-' + crypto.randomUUID()}/video-${Date.now()}.${ext}`
+      const up = await supabase.storage.from('fichas').upload(path, video, { contentType: video.type || 'video/mp4' })
+      if (up.error) {
+        setSalvando(false)
+        setFotoErro('Não foi possível enviar o vídeo. Nada foi salvo. ' + up.error.message)
+        return
+      }
+      campos.video_url = supabase.storage.from('fichas').getPublicUrl(path).data.publicUrl
+    } else if (removerVideo) {
+      campos.video_url = null
+    }
 
     try {
       // 1. ficha (no update, o gatilho guarda a versão anterior com os itens antigos)
@@ -470,6 +485,21 @@ export function FichaEditor() {
                 <button type="button" onClick={tirarFoto} disabled={salvando} className={btnPerigoCls}>
                   Remover foto
                 </button>
+              )}
+            </div>
+            <p className="apoio pt-2">Vídeo do prato (MP4/WEBM, até 50 MB): aparece no tablet da mesa. A foto e o vídeo daqui já vão sozinhos para o tablet.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className={`${btnSecCls} cursor-pointer ${salvando ? 'pointer-events-none opacity-50' : ''}`}>
+                {video ? `Vídeo: ${video.name}` : (original as { video_url?: string | null } | null)?.video_url && !removerVideo ? 'Trocar vídeo' : 'Adicionar vídeo'}
+                <input type="file" accept="video/mp4,video/webm,video/quicktime" className="sr-only" disabled={salvando} onChange={(e) => {
+                  const a = e.target.files?.[0]; e.target.value = ''
+                  if (!a) return
+                  if (a.size > 50 * 1024 * 1024) return setFotoErro('O vídeo passa de 50 MB. Escolha um menor.')
+                  setFotoErro(null); setVideo(a); setRemoverVideo(false)
+                }} />
+              </label>
+              {(video || ((original as { video_url?: string | null } | null)?.video_url && !removerVideo)) && (
+                <button type="button" className={btnPerigoCls} disabled={salvando} onClick={() => { setVideo(null); setRemoverVideo(!!(original as { video_url?: string | null } | null)?.video_url) }}>Remover vídeo</button>
               )}
             </div>
             {fotoErro && <Erro texto={fotoErro} />}

@@ -23,22 +23,24 @@ export function useSegurar(fn?: () => void, ms = 1000) {
 interface MesaTk { numero: string; qr_token: string; capacidade: number }
 /** Pede o PIN de supervisor (cadastrado pelo administrador, com "pode autorizar") antes de trocar de mesa ou sair do cardápio. */
 export function AutorizarTablet({ token, modo, mesaAtual, onTrocar, onSair, onCancelar }: {
-  token?: string; modo: 'trocar' | 'sair'; mesaAtual?: string
+  token?: string; modo: 'trocar' | 'sair' | 'reservar' | 'liberar'; mesaAtual?: string
   onTrocar: (tokenNovo: string) => void; onSair: () => void; onCancelar?: () => void
 }) {
   const [pin, setPin] = useState('')
   const [erro, setErro] = useState('')
   const [carga, setCarga] = useState(false)
   const [mesas, setMesas] = useState<MesaTk[] | null>(null)
+  const [nome, setNome] = useState('')
 
   async function entrar() {
     setErro(''); setCarga(true)
     // sem mesa definida ainda (endereço único do tablet): ação "configurar"
-    const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao: token ? 'autorizar' : 'configurar', pin } })
+    const acao = modo === 'reservar' ? 'reservar' : modo === 'liberar' ? 'liberar_manual' : token ? 'autorizar' : 'configurar'
+    const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao, pin, nome } })
     setCarga(false); setPin('')
     if (error) return setErro('Sem conexão. Tente de novo.')
     if (data?.erro) return setErro(data.erro)
-    if (modo === 'sair') return onSair()
+    if (modo !== 'trocar') return onSair()
     setMesas((data.mesas ?? []) as MesaTk[])
   }
   const campo = 'w-full rounded-xl border border-black/20 p-3 text-base text-[#222]'
@@ -47,13 +49,14 @@ export function AutorizarTablet({ token, modo, mesaAtual, onTrocar, onSair, onCa
       <div className="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-2xl bg-white p-5 text-[#222] shadow-xl" onClick={(e) => e.stopPropagation()}>
         {!mesas ? (
           <>
-            <h2 className="text-lg font-semibold">{modo === 'trocar' ? 'Trocar a mesa deste tablet' : 'Sair do cardápio'}</h2>
+            <h2 className="text-lg font-semibold">{modo === 'trocar' ? 'Trocar a mesa deste tablet' : modo === 'sair' ? 'Sair do cardápio' : modo === 'reservar' ? 'Marcar a mesa como reservada' : 'Liberar a mesa reservada'}</h2>
             <p className="text-sm opacity-70">Acesso da equipe: digite o PIN de supervisor.</p>
+            {modo === 'reservar' && <input className={campo} maxLength={60} placeholder="Nome da reserva" value={nome} onChange={(e) => setNome(e.target.value)} />}
             <input className={campo + ' text-center text-2xl tracking-[0.5em]'} type="password" inputMode="numeric" autoComplete="off" maxLength={6} placeholder="PIN" value={pin} autoFocus onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => e.key === 'Enter' && pin.length >= 4 && entrar()} />
             {erro && <p className="text-sm text-red-700">{erro}</p>}
             <div className="flex gap-2">
               {onCancelar && <button className="flex-1 rounded-xl border border-black/20 px-4 py-3 font-medium" onClick={onCancelar}>Cancelar</button>}
-              <button className="flex-1 rounded-xl bg-[#7a1f2b] px-4 py-3 font-semibold text-white disabled:opacity-50" disabled={carga || pin.length < 4} onClick={entrar}>{carga ? 'Verificando…' : 'Confirmar'}</button>
+              <button className="flex-1 rounded-xl bg-[#7a1f2b] px-4 py-3 font-semibold text-white disabled:opacity-50" disabled={carga || pin.length < 4 || (modo === 'reservar' && !nome.trim())} onClick={entrar}>{carga ? 'Verificando…' : 'Confirmar'}</button>
             </div>
           </>
         ) : (
