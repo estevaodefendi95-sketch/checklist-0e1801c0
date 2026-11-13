@@ -35,6 +35,7 @@ import { EstoqueAlertas } from './pages/EstoqueAlertas'
 import { WhatsApp } from './pages/pdv/WhatsApp'
 import { CardapioPublico, ReservarPublico } from './pages/pdv/PaginasPublicas'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
+import { AvisoOffline } from './components/AvisoOffline'
 
 function Protected({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
   return (
@@ -91,6 +92,7 @@ export default function App() {
     <AuthProvider>
       <PermissoesProvider>
         <AvisoAtualizacao />
+        <AvisoOffline />
         <RouterProvider router={router} />
       </PermissoesProvider>
     </AuthProvider>

@@ -4,6 +4,7 @@ import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
+import { cacheGravar, cacheLer, erroDeRede } from '../../lib/offline'
 import { Comanda, Mesa, Sala, TAM_FORMA, Totais, dimMesa, minutosDesde, num, useAoVivo } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
 import { CheckinModal } from './CheckinRapido'
@@ -41,7 +42,19 @@ export function PdvSalao() {
       db.from('pdv_comanda_totais').select('*'),
     ])
     const e = s.error || m.error || c.error || t.error
+    if (e && erroDeRede(e)) {
+      const ch = cacheLer<any>('salao')
+      if (ch) {
+        setSalas(ch.v.s); setMesas(ch.v.m); setComandas(ch.v.c); setTotais(ch.v.t); setPronto(true)
+        setErro('Sem conexão — mostrando o salão como estava há ' + Math.max(1, Math.round((Date.now() - ch.t) / 60000)) + ' min. Abra a comanda da mesa para lançar pedidos.')
+        return
+      }
+    }
     if (e) setErro(e.message)
+    else {
+      setErro('')
+      cacheGravar('salao', { s: s.data ?? [], m: m.data ?? [], c: c.data ?? [], t: Object.fromEntries(((t.data ?? []) as Totais[]).map((x) => [x.comanda_id, x])) })
+    }
     setSalas((s.data ?? []) as Sala[])
     setMesas((m.data ?? []) as Mesa[])
     setComandas((c.data ?? []) as Comanda[])

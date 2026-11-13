@@ -12,6 +12,7 @@ import { PerfisCheckin, usePerfisCobrancas } from './PerfisCheckin'
 import { Modal } from './PdvCaixa'
 import { Grupo, Opcao } from './ConfigCardapio'
 import { EmitirFiscal } from './FiscalRapido'
+import { cacheGravar, cacheLer, enfileirarPedido, erroDeRede, useFila } from '../../lib/offline'
 
 interface Pag { tef_provedor: string | null; id: string; forma: string; valor: number; troco: number; tef_status: string | null; tef_nsu: string | null; estornado: boolean; criado_em: string }
 
@@ -52,6 +53,8 @@ export function Comanda() {
   const [editPerfis, setEditPerfis] = useState<Record<string, number> | null>(null)
   const [selCob, setSelCob] = useState<string[]>([])
   const { perfis, cobrancas } = usePerfisCobrancas()
+  const fila = useFila().filter((p) => p.comanda_id === id)
+  const [offline, setOffline] = useState(false)
 
   const carregar = useCallback(async () => {
     if (!id) return
@@ -67,7 +70,17 @@ export function Comanda() {
       db.from('pdv_opcoes').select('*').eq('ativo', true).order('ordem'),
       db.from('pdv_produto_grupos').select('produto_id,grupo_id,ordem').order('ordem'),
     ])
-    if (cm.error) return setErro(cm.error.message)
+    if (cm.error) {
+      const ch = cacheLer<any>('comanda:' + id)
+      if (ch && erroDeRede(cm.error)) {
+        const v = ch.v
+        setOffline(true); setC(v.c); setMesa(v.mesa); setItens(v.itens); setTot(v.tot); setPags(v.pags)
+        setCats(v.cats); setProds(v.prods); setGrupos(v.grupos); setSessao(v.sessao); setFunc(v.func); setFim(true)
+        return
+      }
+      return setErro(cm.error.message)
+    }
+    setOffline(false)
     const cmd = cm.data as TComanda
     setC(cmd)
     if (cmd.mesa_id) setMesa(((await db.from('pdv_mesas').select('*').eq('id', cmd.mesa_id).single()).data as Mesa) ?? null)
@@ -82,10 +95,16 @@ export function Comanda() {
       const [fu, cf] = await Promise.all([db.from('pdv_funcionarios').select('nome').eq('id', cmd.funcionario_id).maybeSingle(), db.from('pdv_config').select('consumo_func_desconto_pct').eq('id', 1).maybeSingle()])
       setFunc({ nome: fu.data?.nome ?? 'Funcionário', pct: num(cf.data?.consumo_func_desconto_pct ?? 100) })
     } else setFunc(null)
-    setGrupos(((gr.data ?? []) as Grupo[]).map((g) => ({
+    const gruposCarregados = ((gr.data ?? []) as Grupo[]).map((g) => ({
       ...g, opcoes: ((op.data ?? []) as Opcao[]).filter((o) => o.grupo_id === g.id),
       produtos: ((pgr.data ?? []) as { produto_id: string; grupo_id: string }[]).filter((x) => x.grupo_id === g.id).map((x) => x.produto_id),
-    })))
+    }))
+    setGrupos(gruposCarregados)
+    cacheGravar('comanda:' + id, {
+      c: cmd, mesa: ((cmd.mesa_id && (await db.from('pdv_mesas').select('*').eq('id', cmd.mesa_id).single()).data) as Mesa) ?? null,
+      itens: it.data ?? [], tot: tt.data, pags: pg.data ?? [], cats: ct.data ?? [], prods: pr.data ?? [], grupos: gruposCarregados,
+      sessao: ((ss.data ?? []) as Sessao[]).find((x) => x.aberto_por === uid) ?? null, func: null,
+    })
     setFim(true)
   }, [id])
   useAoVivo(['pdv_pedido_itens', 'pdv_pagamentos', 'pdv_comandas'], carregar, 10000)
@@ -130,14 +149,22 @@ export function Comanda() {
   async function enviar() {
     if (!c || !carrinho.length) return
     setErro('')
-    const uid = (await supabase.auth.getUser()).data.user?.id
-    const { error } = await db.from('pdv_pedido_itens').insert(
-      carrinho.map((x) => ({
-        comanda_id: c.id, produto_id: x.p.id, nome: x.p.nome, qtd: x.qtd, preco_unit: precoLinha(x),
-        opcoes: x.opcoes.map((o) => ({ id: o.id, nome: o.nome, preco: Number(o.preco_adicional) })), obs: x.obs.trim() || null, destino: x.p.destino, origem: 'sistema', criado_por: uid,
-      }))
-    )
-    if (error) return setErro(error.message)
+    const uid = ((await supabase.auth.getSession()).data.session?.user.id) ?? undefined
+    const linhas = carrinho.map((x) => ({
+      comanda_id: c.id, produto_id: x.p.id, nome: x.p.nome, qtd: x.qtd, preco_unit: precoLinha(x),
+      opcoes: x.opcoes.map((o) => ({ id: o.id, nome: o.nome, preco: Number(o.preco_adicional) })), obs: x.obs.trim() || null, destino: x.p.destino, origem: 'sistema', criado_por: uid,
+    }))
+    const guardar = () => {
+      enfileirarPedido(c.id, linhas)
+      setCarrinho([])
+      setMsg('Sem conexão: pedido guardado no aparelho. Ele vai para a cozinha sozinho quando a internet voltar.')
+    }
+    if (!navigator.onLine) return guardar()
+    const { error } = await db.from('pdv_pedido_itens').insert(linhas)
+    if (error) {
+      if (erroDeRede(error)) return guardar()
+      return setErro(error.message)
+    }
     setCarrinho([])
     setMsg('Pedido enviado para as impressoras.')
     carregar()
@@ -153,8 +180,9 @@ export function Comanda() {
     await db.from('pdv_pedido_itens').update({ status }).eq('id', i.id)
     carregar()
   }
+  const semRede = () => (offline || !navigator.onLine) && (setErro('Sem conexão: esta ação precisa de internet.'), true)
   async function pedirConta() {
-    if (!c || !tot) return
+    if (!c || !tot || semRede()) return
     const ativos = itens.filter((i) => i.status !== 'cancelado')
     const r = await enfileirar(db, 'caixa', 'conta', {
       mesa: mesa?.numero ?? 'Balcão', comanda: c.numero, cliente: c.nome_cliente, pessoas: c.pessoas,
@@ -170,6 +198,7 @@ export function Comanda() {
   const fail = (m: string) => { setErro(m); return false }
   async function pagar(restanteTudo = false): Promise<boolean> {
     if (!c) return false
+    if (semRede()) return false
     if (!sessao) return fail('Abra o seu caixa do dia antes de receber pagamentos (PDV · Caixa).')
     const v = restanteTudo ? restante : lerNumero(valor || String(restante))
     if (!v || v <= 0) return fail('Informe o valor.')
@@ -287,6 +316,13 @@ export function Comanda() {
         </div>
       )}
       {erro && <Erro texto={erro} />}
+      {offline && <p className="mb-3 rounded-xl bg-amber-100 px-4 py-2 text-sm text-amber-900">Mostrando a última versão salva desta comanda. Você pode lançar pedidos; pagamento e fechamento precisam de internet.</p>}
+      {fila.length > 0 && (
+        <div className="mb-3 rounded-xl border border-amber-400 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          <b>Aguardando conexão ({fila.reduce((n, p) => n + p.linhas.length, 0)} item/itens):</b>{' '}
+          {fila.flatMap((p) => p.linhas).map((l) => `${l.qtd}× ${l.nome}`).join(', ')}
+        </div>
+      )}
       {msg && <p className="mb-3 rounded-xl bg-brand-soft px-4 py-2 text-sm text-brand" onClick={() => setMsg('')}>{msg}</p>}
 
       <div className="mb-4 flex gap-2">
