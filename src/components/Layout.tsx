@@ -8,6 +8,7 @@ import { Icone, NomeIcone } from './Icone'
 import { LinhaVersao } from './AvisoAtualizacao'
 import { Sino } from './Avisos'
 import { Assistente } from './Assistente'
+import { AlertaImpressao } from './AlertaImpressao'
 import { MODO_KEY } from '../lib/modo'
 
 const roleLabel: Record<string, string> = {
@@ -215,6 +216,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <Sino className="text-brand" />
         </div>
         <main className="mx-auto max-w-6xl px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-3 md:px-6 lg:px-8 lg:pb-12 lg:pt-8">
+          <AlertaImpressao />
           {children}
           <LinhaVersao className="mt-12 text-center text-ink-soft" />
         </main>
