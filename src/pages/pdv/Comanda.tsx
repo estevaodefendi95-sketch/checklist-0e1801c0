@@ -115,13 +115,16 @@ export function Comanda() {
   const restante = Math.max(0, num(tot?.total) - num(tot?.pago))
   const lista = useMemo(() => {
     const q = busca.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    return prods.filter(
-      (p) =>
-        p.disponivel &&
-        (cat === 'todas' || p.categoria_id === cat) &&
-        (!q || p.nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes(q))
-    )
-  }, [prods, cat, busca])
+    const ordemCat = (id: string | null) => { const i = cats.findIndex((k) => k.id === id); return i < 0 ? 999 : i }
+    return prods
+      .filter(
+        (p) =>
+          p.disponivel &&
+          (q || cat === 'todas' || p.categoria_id === cat) &&
+          (!q || p.nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes(q))
+      )
+      .sort((a, b) => ordemCat(a.categoria_id) - ordemCat(b.categoria_id))
+  }, [prods, cats, cat, busca])
 
   const gruposDe = (p: Produto) => grupos.filter((g) => g.produtos.includes(p.id) && g.opcoes.length)
   function add(p: Produto) {
@@ -130,6 +133,13 @@ export function Comanda() {
       const i = cs.findIndex((x) => x.p.id === p.id && !x.obs && !x.opcoes.length)
       if (i >= 0) return cs.map((x, k) => (k === i ? { ...x, qtd: x.qtd + 1 } : x))
       return [...cs, { p, qtd: 1, obs: '', opcoes: [] }]
+    })
+  }
+  function tirar(p: Produto) {
+    setCarrinho((cs) => {
+      const i = cs.findIndex((x) => x.p.id === p.id && !x.obs && !x.opcoes.length)
+      if (i < 0) return cs
+      return cs[i].qtd > 1 ? cs.map((x, k) => (k === i ? { ...x, qtd: x.qtd - 1 } : x)) : cs.filter((_, k) => k !== i)
     })
   }
   function toggleOpc(g: Grupo & { opcoes: Opcao[] }, o: Opcao) {
@@ -333,27 +343,56 @@ export function Comanda() {
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         {aba === 'pedido' && aberta ? (
           <section>
-            <div className="sticky top-0 z-10 -mx-4 mb-3 bg-paper px-4 pb-1 pt-1 md:-mx-6 md:px-6 lg:static lg:mx-0 lg:p-0">
-            <input className={`${inputCls} mb-2`} placeholder="Buscar produto…" value={busca} onChange={(e) => setBusca(e.target.value)} />
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button className={cat === 'todas' ? btnCls : btnSecCls} onClick={() => setCat('todas')}>Todas</button>
-              {cats.map((k) => (
-                <button key={k.id} className={(cat === k.id ? btnCls : btnSecCls) + ' shrink-0 whitespace-nowrap'} onClick={() => setCat(k.id)}>{k.nome}</button>
-              ))}
-            </div>
+            <div className="sticky top-0 z-10 -mx-4 mb-2 space-y-2 bg-paper px-4 pb-2 pt-1 shadow-[0_6px_8px_-8px_rgba(0,0,0,0.5)] md:-mx-6 md:px-6 lg:static lg:mx-0 lg:p-0 lg:shadow-none">
+              <div className="relative">
+                <input className={`${inputCls} !pr-11`} type="search" enterKeyHint="search" placeholder="Buscar produto…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+                {busca && <button aria-label="Limpar busca" className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center text-xl text-ink-soft" onClick={() => setBusca('')}>×</button>}
+              </div>
+              <div className="-mx-4 flex snap-x gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] md:mx-0 md:px-0">
+                {[{ id: 'todas', nome: 'Todas' }, ...cats].map((k) => {
+                  const on = !busca && cat === k.id
+                  return (
+                    <button key={k.id} onClick={() => { setCat(k.id); setBusca('') }}
+                      className={`min-h-[40px] shrink-0 snap-start whitespace-nowrap rounded-full border px-4 text-sm ${on ? 'border-brand bg-brand font-semibold text-brand-ink' : 'border-line bg-surface text-ink-soft'}`}>
+                      {k.nome}
+                    </button>
+                  )
+                })}
+              </div>
+              {busca && <div className="text-xs text-ink-soft">{lista.length} resultado(s) em todas as categorias</div>}
             </div>
             {!lista.length ? (
-              <Vazio texto="Nenhum produto. Cadastre em PDV · Configurações › Produtos." />
+              <Vazio texto={busca ? `Nenhum produto com "${busca}".` : 'Nenhum produto. Cadastre em PDV · Configurações › Produtos.'} />
             ) : (
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                {lista.map((p) => (
-                  <button key={p.id} onClick={() => add(p)} className={`${cartaoCls} relative min-h-[88px] p-3 text-left active:scale-[0.98] ${carrinho.some((x) => x.p.id === p.id) ? 'ring-2 ring-brand' : ''}`}>
-                    {carrinho.some((x) => x.p.id === p.id) && <span className="absolute right-2 top-2 grid h-6 min-w-6 place-items-center rounded-full bg-brand px-1.5 text-xs font-bold text-brand-ink">{carrinho.filter((x) => x.p.id === p.id).reduce((a, x) => a + x.qtd, 0)}</span>}
-                    <div className="pr-6 text-sm font-semibold leading-tight">{p.nome}</div>
-                    <div className="mt-1 text-sm text-brand">{reais(p.preco)}</div>
-                    <div className="text-[11px] uppercase text-ink-soft">{p.destino}{gruposDe(p).length ? ' · opções' : ''}</div>
-                  </button>
-                ))}
+              <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3">
+                {lista.map((p, i) => {
+                  const q = carrinho.filter((x) => x.p.id === p.id).reduce((a, x) => a + x.qtd, 0)
+                  const comOpcoes = gruposDe(p).length > 0
+                  const nomeCat = cats.find((k) => k.id === p.categoria_id)?.nome
+                  const novaCat = cat === 'todas' && !busca && (i === 0 || lista[i - 1].categoria_id !== p.categoria_id)
+                  return (
+                    <div key={p.id} className="contents">
+                      {novaCat && <div className="col-span-full px-1 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">{nomeCat ?? 'Sem categoria'}</div>}
+                      <div className={`${cartaoCls} flex min-h-[64px] items-center gap-2 p-2 pl-3 ${q ? 'ring-2 ring-brand' : ''}`}>
+                        <button onClick={() => add(p)} className="min-w-0 flex-1 text-left active:opacity-70">
+                          <div className="text-[15px] font-semibold leading-tight">{p.nome}</div>
+                          <div className="mt-0.5 text-xs text-ink-soft">
+                            <span className="text-sm font-semibold text-brand">{reais(p.preco)}</span>
+                            {busca && nomeCat ? ` · ${nomeCat}` : ''}{comOpcoes ? ' · opções' : ''}
+                          </div>
+                        </button>
+                        {q > 0 && !comOpcoes && (
+                          <>
+                            <button aria-label={`Tirar um ${p.nome}`} onClick={() => tirar(p)} className="grid h-11 w-11 place-items-center rounded-full border border-line text-xl">−</button>
+                            <span className="w-5 text-center text-base font-bold tabular-nums">{q}</span>
+                          </>
+                        )}
+                        {q > 0 && comOpcoes && <span className="grid h-7 min-w-7 place-items-center rounded-full bg-brand px-1.5 text-sm font-bold text-brand-ink">{q}</span>}
+                        <button aria-label={`Adicionar ${p.nome}`} onClick={() => add(p)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand text-2xl text-brand-ink active:scale-95">+</button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </section>
