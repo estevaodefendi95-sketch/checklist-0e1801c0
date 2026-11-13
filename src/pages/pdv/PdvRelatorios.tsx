@@ -107,7 +107,22 @@ export function PdvRelatorios() {
       const d = ORD[new Date(c.aberta_em).getDay()]
       for (const [m, k] of [[faixas, f], [dias, d]] as const) { m[k] ??= { n: 0, v: 0, p: 0 }; m[k].n++; m[k].v += totC(c); m[k].p += c.pessoas }
     })
-    return { oper, horas, vendSemFicha, faixas, dias, ORD, mediaPessoas: fechadas.length ? pessoas / fechadas.length : 0, maq, couvert, rodizio, fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
+    // vendas por horário do pedido (itens de produto das comandas fechadas)
+    const hv: Record<string, { itens: number; v: number; cmds: Set<string> }> = {}
+    ativos.filter((i) => idsF.has(i.comanda_id) && i.tipo === 'produto').forEach((i) => {
+      const k = String(new Date(i.criado_em).getHours()).padStart(2, '0') + 'h'
+      hv[k] ??= { itens: 0, v: 0, cmds: new Set() }
+      hv[k].itens += num(i.qtd); hv[k].v += i.qtd * i.preco_unit; hv[k].cmds.add(i.comanda_id)
+    })
+    // giro e pessoas por mesa no período (comandas fechadas)
+    const pm: Record<string, { giros: number; pessoas: number; v: number; min: number }> = {}
+    fechadas.filter((c) => c.mesa_id).forEach((c) => {
+      const k = c.mesa_id as string
+      pm[k] ??= { giros: 0, pessoas: 0, v: 0, min: 0 }
+      pm[k].giros++; pm[k].pessoas += c.pessoas; pm[k].v += totC(c)
+      pm[k].min += c.fechada_em ? Math.max(0, (new Date(c.fechada_em).getTime() - new Date(c.aberta_em).getTime()) / 60000) : 0
+    })
+    return { hv, pm, oper, horas, vendSemFicha, faixas, dias, ORD, mediaPessoas: fechadas.length ? pessoas / fechadas.length : 0, maq, couvert, rodizio, fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
   }, [comandas, itens, pags, catDe, operadores, semFicha])
 
   function csv() {
@@ -173,6 +188,24 @@ export function PdvRelatorios() {
             <Bloco t="Recebido por operador de caixa">
               {Object.entries(r.oper).sort((a, b) => b[1] - a[1]).map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}
               {!Object.keys(r.oper).length && <p className="text-sm text-ink-soft">Sem recebimentos.</p>}
+            </Bloco>
+            <Bloco t="Vendas por horário (hora do pedido)">
+              {(() => {
+                const ent = Object.entries(r.hv).sort(), max = Math.max(1, ...ent.map(([, x]) => x.v))
+                return ent.map(([k, x]) => (
+                  <div key={k} className="py-1 text-sm">
+                    <div className="flex justify-between"><span><b>{k}</b> · {x.itens} item(ns) · {x.cmds.size} comanda(s)</span><b>{reais(x.v)}</b></div>
+                    <div className="mt-0.5 h-1.5 rounded-full bg-line"><div className="h-1.5 rounded-full bg-brand" style={{ width: `${(x.v / max) * 100}%` }} /></div>
+                  </div>
+                ))
+              })()}
+              {!Object.keys(r.hv).length && <p className="text-sm text-ink-soft">Sem vendas no período.</p>}
+            </Bloco>
+            <Bloco t="Pessoas por mesa no período">
+              {Object.entries(r.pm).sort((a, b) => b[1].pessoas - a[1].pessoas).map(([id, x]) => (
+                <Linha key={id} a={`Mesa ${mesas[id]?.numero ?? '?'} · ${x.giros} giro(s) · ${x.pessoas} pessoa(s)`} b={`${reais(x.v)} · ${Math.round(x.min / Math.max(1, x.giros))} min/giro`} />
+              ))}
+              {!Object.keys(r.pm).length && <p className="text-sm text-ink-soft">Sem mesas fechadas no período.</p>}
             </Bloco>
             <Bloco t="Faturamento por hora de abertura">
               {Object.entries(r.horas).sort().map(([k, v]) => <Linha key={k} a={k} b={reais(v)} />)}

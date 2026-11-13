@@ -10,8 +10,8 @@ import { CheckinModal } from './CheckinRapido'
 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
-  aberta: 'border-brand bg-brand-soft text-ink',
-  pedindo_conta: 'border-alert bg-alert-soft text-alert',
+  aberta: 'border-emerald-500 bg-emerald-100 text-emerald-900',
+  pedindo_conta: 'border-red-500 bg-red-100 text-red-800',
 }
 
 export function PdvSalao() {
@@ -68,6 +68,12 @@ export function PdvSalao() {
     if (error) return setErro(error.message)
     setSelId(data.id); carregar()
   }
+  async function espacar(f: number) {
+    const lista = mesas.filter((m) => m.sala_id === sala)
+    const novas = lista.map((m) => ({ id: m.id, pos_x: Math.max(0, Math.round((m.pos_x * f) / 10) * 10), pos_y: Math.max(0, Math.round((m.pos_y * f) / 10) * 10) }))
+    setMesas((ms) => ms.map((m) => novas.find((n) => n.id === m.id) ? { ...m, ...novas.find((n) => n.id === m.id)! } : m))
+    await Promise.all(novas.map((n) => db.from('pdv_mesas').update({ pos_x: n.pos_x, pos_y: n.pos_y }).eq('id', n.id)))
+  }
   async function removerMesa(m: Mesa) {
     if (porMesa.has(m.id)) return setErro('Esta mesa tem comanda aberta.')
     if (!window.confirm(`Remover a mesa ${m.numero}? Se ela tiver histórico, será apenas desativada.`)) return
@@ -105,6 +111,8 @@ export function PdvSalao() {
         acoes={
           <>
             <button className={editando ? btnCls : btnSecCls} onClick={() => { setEditando((v) => !v); setSelId(null) }}>{editando ? 'Concluir edição' : 'Editar mesas'}</button>
+            {editando && <button className={btnSecCls} onClick={() => espacar(1.2)}>Espaçar</button>}
+            {editando && <button className={btnSecCls} onClick={() => espacar(1 / 1.2)}>Aproximar</button>}
             {!editando && <button className={btnCls} onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)}>Check-in rápido</button>}
             {!editando && <button className={btnSecCls} onClick={() => nav('/pdv/comandas')}>Todas as comandas</button>}
           </>
@@ -180,7 +188,7 @@ export function PdvSalao() {
         </div>
       )}
       <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-soft">
-        <span>▢ livre</span><span className="text-brand">▣ ocupada</span><span className="text-alert">▣ pediu a conta</span>
+        <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-red-700">▣ conta fechada (aguardando pagamento)</span>
       </div>
       {semMesa.length > 0 && (
         <section className="mt-6">

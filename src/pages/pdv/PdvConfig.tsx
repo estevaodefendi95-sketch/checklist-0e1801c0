@@ -97,6 +97,11 @@ function Salao() {
     const { error } = await db.from('pdv_mesas').insert({ sala_id: sala, numero: String(n), capacidade: Number(lote.cap) || 4, pos_x: 20 + (k % 6) * 120, pos_y: 20 + Math.floor(k / 6) * 120 })
     if (error) s.falha(error.message); else carregar()
   }
+  async function espacar(f: number) {
+    const lista = mesas.filter((m) => m.sala_id === sala)
+    await Promise.all(lista.map((m) => db.from('pdv_mesas').update({ pos_x: Math.max(0, Math.round((m.pos_x * f) / 10) * 10), pos_y: Math.max(0, Math.round((m.pos_y * f) / 10) * 10) }).eq('id', m.id)))
+    carregar()
+  }
   async function renumerar(m: Mesa, v: string) {
     const n = v.trim()
     if (!n || n === m.numero) return
@@ -143,6 +148,8 @@ function Salao() {
             <Campo r="Lugares"><input className={inputCls + ' !w-24'} value={lote.cap} onChange={(e) => setLote({ ...lote, cap: e.target.value })} /></Campo>
             <button className={btnCls} onClick={gerarMesas}>Gerar mesas em lote</button>
             <button className={btnSecCls} onClick={novaMesaUnica}>+ Uma mesa</button>
+            <button className={btnSecCls} onClick={() => espacar(1.2)}>Espaçar</button>
+            <button className={btnSecCls} onClick={() => espacar(1 / 1.2)}>Aproximar</button>
           </section>
           <p className="text-sm text-ink-soft">Arraste as mesas para montar o mapa do salão.</p>
           <div ref={area} className={`${cartaoCls} relative overflow-auto`} style={{ height: 480, touchAction: 'none' }} onPointerMove={mover} onPointerUp={soltar} onPointerLeave={soltar}>
