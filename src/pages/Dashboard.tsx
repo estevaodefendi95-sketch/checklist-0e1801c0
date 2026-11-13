@@ -7,6 +7,7 @@ import { format } from 'date-fns'
 import { dataReferencia } from '../lib/periodo'
 import { usePermissoes } from '../context/PermissoesContext'
 import { PainelCustos } from '../components/PainelCustos'
+import { PainelInicio } from '../components/PainelInicio'
 import { Cabecalho } from '../components/Cabecalho'
 import { Carregando, Erro, Vazio, cartaoCls } from '../components/Estado'
 
@@ -99,6 +100,7 @@ export function Dashboard({ modo }: { modo: 'hoje' | 'areas' }) {
 
   return (
     <div>
+      {modo === 'hoje' && <PainelInicio />}
       {modo === 'hoje' && pode('ver_custos') && <PainelCustos />}
       <Cabecalho
         titulo={modo === 'hoje' ? 'Checklists de hoje' : 'Áreas'}
