@@ -143,7 +143,14 @@ export function PdvSalao() {
                   {(['quadrada', 'redonda', 'retangular'] as const).map((f) => <button key={f} className={`min-h-[44px] rounded-lg border px-3 text-sm ${m.forma === f ? 'border-brand bg-brand-soft text-brand' : 'border-line text-ink-soft'}`} onClick={() => upd(m, { forma: f, largura: f === 'retangular' ? 160 : 100, altura: 100 })}>{f}</button>)}
                 </div>
               </div>
-              <button className={btnSecCls + ' !text-alert'} onClick={() => removerMesa(m)}>Remover mesa</button>
+              <div className="text-xs text-ink-soft">Tamanho
+                <div className="mt-1 flex gap-1.5">
+                  <button className="h-11 rounded-lg border border-line px-3 text-sm" onClick={() => upd(m, { largura: Math.max(60, m.largura - 20), altura: Math.max(60, m.altura - 20) })}>− menor</button>
+                  <button className="h-11 rounded-lg border border-line px-3 text-sm" onClick={() => upd(m, { largura: Math.min(300, m.largura + 20), altura: Math.min(300, m.altura + 20) })}>maior +</button>
+                </div>
+              </div>
+              {salas.length > 1 && <label className="text-xs text-ink-soft">Sala<select className={inputCls + ' !w-36'} value={m.sala_id ?? ''} onChange={(e) => upd(m, { sala_id: e.target.value || null, pos_x: 20, pos_y: 20 })}>{salas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></label>}
+              <button className={btnSecCls + ' !text-alert'} onClick={() => removerMesa(m)}>Excluir mesa</button>
             </div>) })()}
         </section>
       )}

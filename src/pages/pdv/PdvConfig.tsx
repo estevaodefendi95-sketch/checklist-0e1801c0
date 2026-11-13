@@ -96,10 +96,27 @@ function Salao() {
     const { error } = await db.from('pdv_mesas').update(p).eq('id', m.id)
     if (error) s.falha(error.message)
   }
+  async function novaMesaUnica() {
+    if (!sala) return s.falha('Crie uma sala primeiro.')
+    const n = Math.max(0, ...mesas.map((m) => parseInt(m.numero, 10) || 0)) + 1
+    const k = mesas.filter((m) => m.sala_id === sala).length
+    const { error } = await db.from('pdv_mesas').insert({ sala_id: sala, numero: String(n), capacidade: Number(lote.cap) || 4, pos_x: 20 + (k % 6) * 100, pos_y: 20 + Math.floor(k / 6) * 100 })
+    if (error) s.falha(error.message); else carregar()
+  }
+  async function renumerar(m: Mesa, v: string) {
+    const n = v.trim()
+    if (!n || n === m.numero) return
+    const { error } = await db.from('pdv_mesas').update({ numero: n }).eq('id', m.id)
+    if (error) { s.falha(error.code === '23505' ? `Já existe a mesa ${n}.` : error.message); carregar() } else carregar()
+  }
   async function remover(m: Mesa) {
     if (!window.confirm(`Remover mesa ${m.numero}?`)) return
     const { error } = await db.from('pdv_mesas').delete().eq('id', m.id)
-    if (error) s.falha('Não dá para remover mesa com histórico. Desative-a.'); else carregar()
+    if (error) {
+      // mesa com histórico não pode ser apagada: sai do salão (desativada) e o histórico continua intacto
+      const r = await db.from('pdv_mesas').update({ ativo: false }).eq('id', m.id)
+      if (r.error) s.falha(r.error.message); else { s.ok(`Mesa ${m.numero} tem histórico e foi desativada (some do salão).`); carregar() }
+    } else carregar()
   }
   function mover(e: React.PointerEvent) {
     const d = drag.current; if (!d || !area.current) return
@@ -131,6 +148,7 @@ function Salao() {
             <Campo r="1º número"><input className={inputCls + ' !w-24'} value={lote.inicio} onChange={(e) => setLote({ ...lote, inicio: e.target.value })} /></Campo>
             <Campo r="Lugares"><input className={inputCls + ' !w-24'} value={lote.cap} onChange={(e) => setLote({ ...lote, cap: e.target.value })} /></Campo>
             <button className={btnCls} onClick={gerarMesas}>Gerar mesas em lote</button>
+            <button className={btnSecCls} onClick={novaMesaUnica}>+ Uma mesa</button>
           </section>
           <p className="text-sm text-ink-soft">Arraste as mesas para montar o mapa do salão.</p>
           <div ref={area} className={`${cartaoCls} relative overflow-auto`} style={{ height: 480, touchAction: 'none' }} onPointerMove={mover} onPointerUp={soltar} onPointerLeave={soltar}>
@@ -139,7 +157,7 @@ function Salao() {
                 onPointerDown={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); drag.current = { id: m.id, dx: e.clientX - r.left, dy: e.clientY - r.top } }}
                 style={{ left: m.pos_x, top: m.pos_y, width: m.largura, height: m.altura, opacity: m.ativo ? 1 : 0.4 }}
                 className={`absolute flex cursor-grab select-none items-center justify-center border-2 border-brand bg-brand-soft font-semibold ${m.forma === 'redonda' ? 'rounded-full' : 'rounded-xl'}`}>
-                {m.numero}
+                <span className="pointer-events-none text-center leading-tight">{m.numero}<small className="block text-[10px] font-normal opacity-70">{m.capacidade} lug.</small></span>
               </div>
             ))}
           </div>
@@ -149,13 +167,21 @@ function Salao() {
               <ul className="divide-y divide-line text-sm">
                 {doSala.map((m) => (
                   <li key={m.id} className="flex flex-wrap items-center gap-2 py-2">
-                    <b className="w-10">{m.numero}</b>
-                    <input className={inputCls + ' !w-20'} defaultValue={m.capacidade} onBlur={(e) => upd(m, { capacidade: Number(e.target.value) || 1 })} title="lugares" />
+                    <input className={inputCls + ' !w-20 font-semibold'} defaultValue={m.numero} key={m.id + m.numero} onBlur={(e) => renumerar(m, e.target.value)} title="número da mesa" />
+                    <span className="flex items-center gap-1" title="lugares">
+                      <button className="h-10 w-10 rounded-lg border border-line text-lg" onClick={() => upd(m, { capacidade: Math.max(1, m.capacidade - 1) })}>−</button>
+                      <b className="w-14 text-center">{m.capacidade} lug.</b>
+                      <button className="h-10 w-10 rounded-lg bg-brand text-lg text-brand-ink" onClick={() => upd(m, { capacidade: m.capacidade + 1 })}>+</button>
+                    </span>
+                    <select className={inputCls + ' !w-36'} value={m.sala_id ?? ''} onChange={(e) => upd(m, { sala_id: e.target.value || null, pos_x: 20, pos_y: 20 })} title="sala">
+                      {salas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+                    </select>
+                    <span className="flex items-center gap-1 text-xs text-ink-soft">L<input className={inputCls + ' !w-16'} defaultValue={m.largura} onBlur={(e) => upd(m, { largura: Math.min(300, Math.max(50, Number(e.target.value) || 80)) })} />A<input className={inputCls + ' !w-16'} defaultValue={m.altura} onBlur={(e) => upd(m, { altura: Math.min(300, Math.max(50, Number(e.target.value) || 80)) })} /></span>
                     <select className={inputCls + ' !w-32'} value={m.forma} onChange={(e) => upd(m, { forma: e.target.value as Mesa['forma'], largura: e.target.value === 'retangular' ? 140 : 80 })}>
                       <option value="quadrada">quadrada</option><option value="redonda">redonda</option><option value="retangular">retangular</option>
                     </select>
                     <label className="flex items-center gap-1"><input type="checkbox" checked={m.ativo} onChange={(e) => upd(m, { ativo: e.target.checked })} />ativa</label>
-                    <button className={btnPerigoCls + ' !min-h-[36px]'} onClick={() => remover(m)}>remover</button>
+                    <button className={btnPerigoCls + ' !min-h-[36px]'} onClick={() => remover(m)}>excluir</button>
                   </li>
                 ))}
               </ul>
