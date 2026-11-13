@@ -28,7 +28,6 @@ export function MesaPublica() {
   const [acesso, setAcesso] = useState<null | 'trocar' | 'sair' | 'reservar' | 'liberar'>(null)
   const saindo = useRef(false)
   const [menuEquipe, setMenuEquipe] = useState(false)
-  const segTopoRes = useSegurar(() => setMenuEquipe(true))
   const segLogoRes = useSegurar(() => setMenuEquipe(true))
   const [e, setE] = useState<Estado | null>(null)
   const [car, setCar] = useState<Linha[]>([])
@@ -245,15 +244,23 @@ export function MesaPublica() {
     if (r.erro) setMsg(r.erro); else carregar()
   }
   if (e.qr_ativo && e.reserva && !e.reserva.liberada) {
+    const rv = e.reserva
     return (
-      <div className="relative flex h-[100dvh] cursor-pointer select-none flex-col items-center justify-center gap-4 p-6 text-center text-white" style={{ ...vars, background: 'var(--p)' }} onClick={liberarReserva}>
-        <div {...segTopoRes} onClick={(x) => x.stopPropagation()} className="absolute inset-x-0 top-0 h-24" />
-        <img {...segLogoRes} onClick={(x) => x.stopPropagation()} draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="h-20 w-auto object-contain" />
-        <div className="absolute left-5 top-5 rounded-2xl bg-white/15 px-5 py-2 text-left leading-none ring-1 ring-white/40"><span className="block text-[11px] uppercase tracking-[0.25em] opacity-80">Mesa</span><b className="text-4xl">{e.mesa}</b></div>
-        <h1 className="text-4xl font-semibold">Mesa reservada</h1>
-        <p className="text-3xl">{e.reserva.nome}</p>
-        {!e.reserva.manual && <p className="opacity-80">{e.reserva.hora} · {e.reserva.pessoas} {e.reserva.pessoas === 1 ? 'pessoa' : 'pessoas'}</p>}
-        <p className="mt-6 rounded-full border border-white/60 px-5 py-2 text-sm">{e.reserva.manual ? 'Toque para a equipe liberar a mesa' : 'Toque na tela para liberar'}</p>
+      <div className="relative flex h-[100dvh] cursor-pointer select-none flex-col justify-end overflow-hidden p-8 text-white" style={{ ...vars, background: 'radial-gradient(120% 90% at 20% 0%, color-mix(in srgb, var(--p) 38%, #0b0b0d) 0%, #09090b 70%)' }} onClick={liberarReserva}>
+        <div className="absolute left-5 top-5 z-10 flex items-center gap-4 rounded-3xl bg-white/[0.07] py-3 pl-4 pr-5 ring-1 ring-white/10" {...segLogoRes} onClick={(x) => x.stopPropagation()}>
+          <img draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="h-12 w-auto object-contain" />
+          <span className="h-9 w-px bg-white/25" />
+          <span className="text-left leading-none"><span className="block text-[11px] uppercase tracking-[0.25em] opacity-70">Mesa</span><b className="text-4xl">{e.mesa}</b></span>
+        </div>
+        <div className="relative z-10 space-y-3 pb-16">
+          <span className="inline-block rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.3em] text-black" style={{ background: 'var(--d)' }}>Reservada</span>
+          <p className="text-6xl font-semibold leading-tight">{rv.nome}</p>
+          <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-2xl opacity-80">
+            {rv.hora && <span>às {rv.hora}</span>}
+            {!rv.manual && rv.pessoas > 0 && <span>{rv.pessoas} {rv.pessoas === 1 ? 'pessoa' : 'pessoas'}</span>}
+          </p>
+        </div>
+        <p className="absolute bottom-6 right-6 z-10 rounded-full border border-white/25 px-5 py-2 text-sm opacity-70">{rv.manual ? 'Toque para a equipe liberar' : 'Toque para liberar'}</p>
         {dialogoAcesso}{dialogoEquipe}
       </div>
     )

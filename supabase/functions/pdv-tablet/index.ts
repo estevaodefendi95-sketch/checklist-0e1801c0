@@ -29,7 +29,7 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token, aparelho, nivel, carregando } = await req.json();
+    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token, aparelho, nivel, carregando, hora } = await req.json();
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
     const uuidOk = (x: unknown) => /^[0-9a-f-]{36}$/i.test(String(x ?? ""));
@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
 
     if (!token || !uuidOk(token)) return json({ erro: "Endereço do tablet inválido." });
 
-    const { data: mesa } = await db.from("pdv_mesas").select("id,numero,reservado_nome").eq("qr_token", token).eq("ativo", true).maybeSingle();
+    const { data: mesa } = await db.from("pdv_mesas").select("id,numero,reservado_nome,reservado_hora").eq("qr_token", token).eq("ativo", true).maybeSingle();
     if (!mesa) return json({ erro: "Mesa não encontrada." });
     const { data: cfg } = await db.from("pdv_config").select("*").eq("id", 1).single();
 
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       const r: any = (rs.data ?? []).find((x: any) => agoraMin >= hm(x.hora) - 180 && agoraMin <= hm(x.hora) + x.duracao_min);
       const fmap = new Map((fch.data ?? []).map((f: any) => [f.id, f]));
       const reserva: any = r ? { id: r.id, nome: r.nome, telefone: r.telefone, pessoas: r.pessoas, hora: String(r.hora).slice(0, 5), liberada: !!r.liberada_tablet_em } : null;
-      const reservaManual = !reserva && mesa.reservado_nome ? { id: "manual", nome: mesa.reservado_nome, telefone: "", pessoas: 0, hora: "", liberada: false, manual: true } : null;
+      const reservaManual = !reserva && mesa.reservado_nome ? { id: "manual", nome: mesa.reservado_nome, telefone: "", pessoas: 0, hora: mesa.reservado_hora ?? "", liberada: false, manual: true } : null;
       const menuOk = new Map((mn.data ?? []).map((m: any) => [m.id, m.visivel && noHorario(m.horarios)]));
       const catOk = new Map((cats.data ?? []).filter((c: any) => c.visivel_tablet && noHorario(c.horarios) && (!c.menu_id || menuOk.get(c.menu_id) === true)).map((c: any) => [c.id, c]));
       const produtos = (prods.data ?? []).filter((p: any) => p.visivel_tablet && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorario(p.horarios))
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
       if ("erro" in r) return json({ erro: r.erro });
       const nm = String(nome ?? "").trim().slice(0, 60);
       if (acao === "reservar" && !nm) return json({ erro: "Informe o nome da reserva." });
-      const { error } = await db.from("pdv_mesas").update(acao === "reservar" ? { reservado_nome: nm, reservado_em: new Date().toISOString() } : { reservado_nome: null, reservado_em: null }).eq("id", mesa.id);
+      const { error } = await db.from("pdv_mesas").update(acao === "reservar" ? { reservado_nome: nm, reservado_hora: /^\d{2}:\d{2}$/.test(String(hora ?? "")) ? String(hora) : null, reservado_em: new Date().toISOString() } : { reservado_nome: null, reservado_hora: null, reservado_em: null }).eq("id", mesa.id);
       return error ? json({ erro: "Não foi possível salvar." }) : json({ ok: true });
     }
     if (acao === "liberar_reserva") {

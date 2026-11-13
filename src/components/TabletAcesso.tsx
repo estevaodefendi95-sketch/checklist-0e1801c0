@@ -31,12 +31,13 @@ export function AutorizarTablet({ token, modo, mesaAtual, onTrocar, onSair, onCa
   const [carga, setCarga] = useState(false)
   const [mesas, setMesas] = useState<MesaTk[] | null>(null)
   const [nome, setNome] = useState('')
+  const [hora, setHora] = useState('')
 
   async function entrar() {
     setErro(''); setCarga(true)
     // sem mesa definida ainda (endereço único do tablet): ação "configurar"
     const acao = modo === 'reservar' ? 'reservar' : modo === 'liberar' ? 'liberar_manual' : token ? 'autorizar' : 'configurar'
-    const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao, pin, nome } })
+    const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao, pin, nome, hora } })
     setCarga(false); setPin('')
     if (error) return setErro('Sem conexão. Tente de novo.')
     if (data?.erro) return setErro(data.erro)
@@ -51,7 +52,10 @@ export function AutorizarTablet({ token, modo, mesaAtual, onTrocar, onSair, onCa
           <>
             <h2 className="text-lg font-semibold">{modo === 'trocar' ? 'Trocar a mesa deste tablet' : modo === 'sair' ? 'Sair do cardápio' : modo === 'reservar' ? 'Marcar a mesa como reservada' : 'Liberar a mesa reservada'}</h2>
             <p className="text-sm opacity-70">Acesso da equipe: digite o PIN de supervisor.</p>
-            {modo === 'reservar' && <input className={campo} maxLength={60} placeholder="Nome da reserva" value={nome} onChange={(e) => setNome(e.target.value)} />}
+            {modo === 'reservar' && <>
+              <input className={campo} maxLength={60} placeholder="Nome da reserva" value={nome} onChange={(e) => setNome(e.target.value)} />
+              <label className="block text-sm opacity-70">Horário da reserva (opcional)<input className={campo + ' mt-1'} type="time" value={hora} onChange={(e) => setHora(e.target.value)} /></label>
+            </>}
             <input className={campo + ' text-center text-2xl tracking-[0.5em]'} type="password" inputMode="numeric" autoComplete="off" maxLength={6} placeholder="PIN" value={pin} autoFocus onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => e.key === 'Enter' && pin.length >= 4 && entrar()} />
             {erro && <p className="text-sm text-red-700">{erro}</p>}
             <div className="flex gap-2">
