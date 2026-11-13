@@ -266,13 +266,14 @@ export function MesaPublica() {
         onClick={() => { ultimoToque.current = Date.now(); setAberto(true) }}>
         {bn && <img key={bn.id} src={bn.imagem_url} alt={bn.titulo} className="absolute inset-0 h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/10 to-black/70" />
-        <div {...segTopoRes} onClick={(x) => x.stopPropagation()} className="absolute inset-x-0 top-0 z-10 h-24" />
-        <img {...segLogoRes} onClick={(x) => x.stopPropagation()} draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="relative z-10 h-20 w-auto object-contain" />
-        <div className="absolute left-5 top-5 z-10 rounded-2xl bg-black/35 px-5 py-2 text-left leading-none ring-1 ring-white/40 backdrop-blur"><span className="block text-[11px] uppercase tracking-[0.25em] opacity-90">Mesa</span><b className="text-4xl">{e.mesa}</b></div>
-        <div className="relative z-10 space-y-3">
-          <h1 className="text-4xl font-semibold drop-shadow">{e.boas_vindas || e.tema?.titulo || 'Bem-vindo'}</h1>
-          {bn?.patrocinador && <p className="text-xs uppercase tracking-wider opacity-80">Patrocinado · {bn.patrocinador}</p>}
+        <div className="absolute left-5 top-5 z-10 flex items-center gap-4 rounded-3xl bg-black/35 py-3 pl-4 pr-5 backdrop-blur" {...segLogoRes} onClick={(x) => x.stopPropagation()}>
+          <img draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="h-14 w-auto object-contain" />
+          <span className="h-10 w-px bg-white/40" />
+          <span className="text-left leading-none"><span className="block text-[11px] uppercase tracking-[0.25em] opacity-90">Mesa</span><b className="text-4xl">{e.mesa}</b></span>
         </div>
+        {bn?.patrocinador && <p className="absolute bottom-5 left-5 z-10 text-xs uppercase tracking-wider opacity-80">Patrocinado · {bn.patrocinador}</p>}
+        <span />
+        <span />
         <p className="relative z-10 animate-pulse rounded-full border border-white/80 bg-black/30 px-8 py-4 text-xl font-medium backdrop-blur">Toque na tela para ver o cardápio</p>
         {dialogoAcesso}{dialogoEquipe}
       </div>
@@ -293,7 +294,7 @@ export function MesaPublica() {
       )}
       {msg && !det && !carrinho && <p className="fixed inset-x-3 top-3 z-40 mx-auto max-w-xl rounded-xl bg-white p-3 text-sm shadow-lg" onClick={() => setMsg('')}>{msg}</p>}
       <CardapioCliente
-        tema={tema} banners={e.banners} onTopoSegurar={() => setMenuEquipe(true)} onLogoSegurar={() => setMenuEquipe(true)} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
+        tema={tema} banners={e.banners} onBanner={() => { setAdd(null); setAberto(false) }} onTopoSegurar={() => setMenuEquipe(true)} onLogoSegurar={() => setMenuEquipe(true)} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
         qtdDe={qtdProd} onAdd={(p) => mais(p as Prod)} onMenos={menos} onAbrir={(p) => setDet(e.produtos?.find((x) => x.id === p.id) ?? null)}
         acoes={<>
           {e.pode_chamar && <button className="rounded-2xl bg-black/[0.05] px-4 py-3 text-sm font-semibold text-[var(--t)]" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}

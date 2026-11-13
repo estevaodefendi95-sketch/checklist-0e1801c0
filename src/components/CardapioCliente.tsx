@@ -10,8 +10,8 @@ export interface CardProd { id: string; nome: string; descricao: string | null; 
 export interface CardBanner { id: string; titulo: string; patrocinador: string | null; imagem_url: string; produto_id: string | null }
 const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, lateral, qtdDe, onAdd, onMenos, acoes, rodape, sobrepor, somenteLeitura, onAbrir, banners, onTopoSegurar, onLogoSegurar }: {
-  banners?: CardBanner[]; onTopoSegurar?: () => void; onLogoSegurar?: () => void
+export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, lateral, qtdDe, onAdd, onMenos, acoes, rodape, sobrepor, somenteLeitura, onAbrir, banners, onTopoSegurar, onLogoSegurar, onBanner }: {
+  onBanner?: () => void; banners?: CardBanner[]; onTopoSegurar?: () => void; onLogoSegurar?: () => void
   onAbrir?: (p: CardProd) => void; somenteLeitura?: boolean; tema: CardTema; mesa?: string; boasVindas?: string | null; categorias: CardCat[]; produtos: CardProd[]; lateral: boolean
   qtdDe: (id: string) => number; onAdd: (p: CardProd) => void; onMenos: (id: string) => void
   acoes?: ReactNode; rodape?: ReactNode; sobrepor?: ReactNode
@@ -127,7 +127,7 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
             const b = banners[bi % nb]
             return (
               <section className="mb-4">
-                <div role="button" onClick={() => setTeloa(true)} className="relative cursor-pointer overflow-hidden rounded-3xl bg-black/5">
+                <div role="button" onClick={() => (onBanner ? onBanner() : setTeloa(true))} className="relative cursor-pointer overflow-hidden rounded-3xl bg-black/5">
                   <img key={b.id} src={b.imagem_url} alt={b.titulo} className="aspect-[3/1] w-full object-cover" />
                   <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white">{b.patrocinador ? `Patrocinado · ${b.patrocinador}` : 'Patrocinado'}</span>
                   {nb > 1 && <span className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">{banners.map((x, i) => <i key={x.id} className={`h-1.5 w-1.5 rounded-full ${i === bi % nb ? 'bg-white' : 'bg-white/50'}`} />)}</span>}
