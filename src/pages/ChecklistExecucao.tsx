@@ -444,15 +444,11 @@ function ItemCampo({
 
   const abaixo = abaixoDoMinimo(item, qtd)
 
-  // estimado = última contagem + entradas desde então + entrada digitada hoje
+  // diferença entre o que foi contado agora e a última contagem (sem previsão/estimativa)
   const num = (t: string) => (t.trim() === '' ? NaN : Number(t))
-  const entHoje = num(contEnt)
-  const estimado = referencia
-    ? referencia.qtd + referencia.entradas + (Number.isFinite(entHoje) ? entHoje : 0)
-    : null
   const contado = num(contQtd)
   const dif =
-    estimado != null && Number.isFinite(contado) ? Math.round((contado - estimado) * 1000) / 1000 : 0
+    referencia && Number.isFinite(contado) ? Math.round((contado - referencia.qtd) * 1000) / 1000 : 0
   const mostrarRef = contagem && referencia !== false
 
   return (
@@ -534,7 +530,6 @@ function ItemCampo({
       {mostrarRef && (
         <ColunaReferencia
           referencia={referencia}
-          estimado={estimado}
           unidade={item.unidade}
           apagada={somenteLeitura}
         />
@@ -564,7 +559,7 @@ function ItemCampo({
           ))}
           {mostrarRef && !somenteLeitura && dif !== 0 && (
             <p className={`col-span-2 text-[11px] font-medium ${dif < 0 ? 'text-warn' : 'text-ok'}`}>
-              {dif < 0 ? `−${numBR(-dif)}` : `+${numBR(dif)}`} em relação ao estimado
+              {dif < 0 ? `−${numBR(-dif)}` : `+${numBR(dif)}`} desde a última contagem
             </p>
           )}
         </div>
@@ -573,42 +568,33 @@ function ItemCampo({
   )
 }
 
-/** coluna de referência (tablet) ou linha única acima dos campos (celular) */
+/** última contagem (quantidade + dia da semana e data) e entradas desde então, em texto discreto */
 function ColunaReferencia({
   referencia,
-  estimado,
   unidade,
   apagada,
 }: {
   referencia: Referencia | null | undefined
-  estimado: number | null
   unidade?: string | null
   apagada: boolean
 }) {
   const cor = apagada ? 'text-ink-soft/60' : 'text-ink-soft'
   if (referencia === undefined)
-    return <p className="text-[11px] text-ink-soft/70 sm:w-28 sm:shrink-0">buscando referência…</p>
+    return <p className="text-[11px] text-ink-soft/70 sm:w-32 sm:shrink-0">buscando última contagem…</p>
   if (referencia === null)
-    return <p className={`text-[11px] ${cor} sm:w-28 sm:shrink-0`}>sem referência</p>
-  const [, mes, dia] = referencia.data.split('-')
+    return <p className={`text-[11px] ${cor} sm:w-32 sm:shrink-0`}>sem contagem anterior</p>
+  const [ano, mes, dia] = referencia.data.split('-')
+  const semana = new Date(Number(ano), Number(mes) - 1, Number(dia))
+    .toLocaleDateString('pt-BR', { weekday: 'short' })
+    .replace('.', '')
   const un = unidade ? ` ${unidade}` : ''
-  const contagem = `${numBR(referencia.qtd)}${un} · ${dia}/${mes}`
   const ent = referencia.entradas
   return (
-    <>
-      <p className={`text-[11px] ${cor} sm:hidden`}>
-        ref. {contagem}
-        {ent > 0 && ` · +${numBR(ent)} ent.`} · ≈ {numBR(estimado ?? referencia.qtd)}
-        {un}
+    <div className={`text-[11px] leading-snug ${cor} sm:w-32 sm:shrink-0`}>
+      <p>
+        Última contagem ({semana} {dia}/{mes}): <b className="font-semibold">{numBR(referencia.qtd)}{un}</b>
       </p>
-      <div className={`hidden text-[11px] leading-snug ${cor} sm:block sm:w-28 sm:shrink-0`}>
-        <p>{contagem}</p>
-        {ent > 0 && <p>+{numBR(ent)} entradas</p>}
-        <p>
-          ≈ {numBR(estimado ?? referencia.qtd)}
-          {un} estimado
-        </p>
-      </div>
-    </>
+      {ent > 0 && <p>+{numBR(ent)} de entrada desde então</p>}
+    </div>
   )
 }
