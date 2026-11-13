@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { inicioAtendimento } from '../../lib/modo'
+import { AvisoBateriaTablets } from './BateriaTablets'
 import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, btnCls, cartaoCls } from '../../components/Estado'
@@ -65,6 +66,7 @@ export function DashboardSalao() {
         subtitulo={`${comandas.length} comanda(s) aberta(s) · ${reais(consumo)} em consumo · atualiza sozinho`}
         acoes={<Link to={inicioAtendimento()} className={btnCls}>Ir para o Salão e mesas</Link>}
       />
+      <AvisoBateriaTablets />
       {erro && <Erro texto={erro} />}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Num rotulo="Comandas abertas" valor={comandas.length} />

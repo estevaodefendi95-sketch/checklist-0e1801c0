@@ -43,18 +43,28 @@ export function LeitorQr({ onLido, onCancelar, titulo, camera = 'environment' }:
     return () => { parado = true; clearTimeout(raf); stream?.getTracks().forEach((t) => t.stop()) }
   }, [cam])
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/90 p-4 text-white">
-      <h2 className="text-center text-xl font-semibold">{titulo ?? 'Aponte a câmera para o QR Code da sua mesa'}</h2>
-      {erro ? <p className="max-w-sm text-center text-sm">{erro}</p> : (
-        <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border-4 border-white/70">
-          <video ref={video} playsInline muted className="aspect-square w-full object-cover" style={cam === 'user' ? { transform: 'scaleX(-1)' } : undefined} />
-          <div className="pointer-events-none absolute inset-8 rounded-2xl border-2 border-dashed border-white/80" />
+    <div className="fixed inset-0 z-50 bg-black text-white">
+      <style>{`@keyframes qr-varrer{0%{top:6%}50%{top:92%}100%{top:6%}}`}</style>
+      {!erro && <video ref={video} playsInline muted className="absolute inset-0 h-full w-full object-cover" style={cam === 'user' ? { transform: 'scaleX(-1)' } : undefined} />}
+      {/* moldura: escurece em volta e destaca o quadrado de leitura */}
+      {!erro && (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 aspect-square w-[min(72vw,52vh,420px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl shadow-[0_0_0_100vmax_rgba(0,0,0,0.62)]">
+          {['left-0 top-0 border-l-4 border-t-4 rounded-tl-3xl', 'right-0 top-0 border-r-4 border-t-4 rounded-tr-3xl', 'left-0 bottom-0 border-l-4 border-b-4 rounded-bl-3xl', 'right-0 bottom-0 border-r-4 border-b-4 rounded-br-3xl'].map((c) => (
+            <span key={c} className={`absolute h-14 w-14 border-emerald-400 ${c}`} />
+          ))}
+          <span className="absolute inset-x-4 h-0.5 rounded-full bg-emerald-400/90 shadow-[0_0_12px_2px_rgba(52,211,153,0.8)]" style={{ animation: 'qr-varrer 2.4s ease-in-out infinite' }} />
         </div>
       )}
-      <p className="max-w-sm text-center text-sm opacity-80">Segure o cartão da comanda de frente para a câmera, bem iluminado. Ao ler, enviamos o pedido para a sua comanda.</p>
-      <div className="flex gap-3">
-        <button className="min-h-[48px] rounded-xl border border-white/60 px-6" onClick={() => { setErro(''); setCam((c) => (c === 'user' ? 'environment' : 'user')) }}>Trocar câmera</button>
-        <button className="min-h-[48px] rounded-xl border border-white/60 px-6" onClick={onCancelar}>Cancelar</button>
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 to-transparent p-5 pt-8">
+        <h2 className="mx-auto max-w-md text-center text-xl font-semibold drop-shadow">{titulo ?? 'Aponte a câmera para o QR Code da sua mesa'}</h2>
+      </div>
+      {erro && <p className="absolute inset-0 grid place-items-center p-8 text-center text-base">{erro}</p>}
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 bg-gradient-to-t from-black/85 to-transparent p-5 pb-8">
+        <p className="max-w-sm text-center text-sm opacity-90">Encaixe o QR Code do cartão dentro da moldura, com boa luz. A leitura é automática.</p>
+        <div className="flex gap-3">
+          <button className="min-h-[52px] rounded-xl border border-white/70 bg-black/30 px-6 backdrop-blur" onClick={() => { setErro(''); setCam((c) => (c === 'user' ? 'environment' : 'user')) }}>Trocar câmera</button>
+          <button className="min-h-[52px] rounded-xl border border-white/70 bg-black/30 px-6 backdrop-blur" onClick={onCancelar}>Cancelar</button>
+        </div>
       </div>
     </div>
   )

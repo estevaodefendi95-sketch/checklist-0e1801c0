@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../integrations/supabase/client'
 import { CardapioCliente } from '../../components/CardapioCliente'
@@ -18,7 +18,7 @@ interface It { nome: string; qtd: number; preco_unit: number; status: string; op
 interface Estado {
   erro?: string; mesa?: string; boas_vindas?: string; qr_ativo?: boolean
   banners?: CardBanner[]; reserva?: { id: string; nome: string; telefone: string; pessoas: number; hora: string; liberada: boolean } | null
-  itens?: It[]; tema?: { primaria?: string; fundo?: string; texto?: string; destaque?: string; titulo?: string; subtitulo?: string; colunas?: number; mostrar_fotos?: boolean }; categorias?: Cat[]; produtos?: Prod[]; pode_chamar?: boolean; pode_conta?: boolean
+  itens?: It[]; tema?: { primaria?: string; fundo?: string; texto?: string; destaque?: string; titulo?: string; subtitulo?: string; colunas?: number; mostrar_fotos?: boolean }; categorias?: Cat[]; produtos?: Prod[]; pode_chamar?: boolean; pode_conta?: boolean; inatividade_min?: number
 }
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -81,6 +81,43 @@ export function MesaPublica() {
     return data as Estado
   }, [token])
   const carregar = useCallback(async () => { const d = await chamar('menu'); setE(d) }, [chamar])
+  // Bateria: o tablet avisa o nível a cada minuto (Chrome/Android). A gestão vê todos em Configurações › Tablet.
+  useEffect(() => {
+    if (!token) return
+    type Bat = { level: number; charging: boolean; addEventListener: (t: string, f: () => void) => void; removeEventListener: (t: string, f: () => void) => void }
+    const navb = navigator as Navigator & { getBattery?: () => Promise<Bat> }
+    if (!navb.getBattery) return
+    let id = ''
+    try { id = localStorage.getItem('paggio-aparelho') || ''; if (!id) { id = crypto.randomUUID(); localStorage.setItem('paggio-aparelho', id) } } catch { id = 'tmp-' + Math.random().toString(36).slice(2) }
+    let bat: Bat | null = null
+    let timer: ReturnType<typeof setInterval> | undefined
+    const enviar = () => { if (bat) chamar('bateria', { aparelho: id, nivel: Math.round(bat.level * 100), carregando: bat.charging }) }
+    navb.getBattery().then((b) => { bat = b; enviar(); b.addEventListener('levelchange', enviar); b.addEventListener('chargingchange', enviar); timer = setInterval(enviar, 60000) }).catch(() => { /* sem acesso à bateria */ })
+    return () => { clearInterval(timer); bat?.removeEventListener('levelchange', enviar); bat?.removeEventListener('chargingchange', enviar) }
+  }, [token, chamar])
+  // Tela de abertura: banner em tela cheia; o cardápio só abre ao tocar e a tela volta sozinha depois de um tempo parada.
+  const [aberto, setAberto] = useState(false)
+  const [bi, setBi] = useState(0)
+  const ultimoToque = useRef(Date.now())
+  useEffect(() => {
+    const marca = () => { ultimoToque.current = Date.now() }
+    window.addEventListener('pointerdown', marca); window.addEventListener('keydown', marca); window.addEventListener('scroll', marca, true)
+    return () => { window.removeEventListener('pointerdown', marca); window.removeEventListener('keydown', marca); window.removeEventListener('scroll', marca, true) }
+  }, [])
+  useEffect(() => {
+    const min = e?.inatividade_min ?? 5
+    if (!aberto || !min) return
+    const t = setInterval(() => {
+      if (Date.now() - ultimoToque.current > min * 60000 && !car.length && !det && !carrinho && !leitor && !minha && !acesso) { setAberto(false); setMsg('') }
+    }, 5000)
+    return () => clearInterval(t)
+  }, [aberto, e?.inatividade_min, car.length, det, carrinho, leitor, minha, acesso])
+  const nBanners = e?.banners?.length ?? 0
+  useEffect(() => {
+    if (aberto || nBanners < 2) return
+    const t = setInterval(() => setBi((i) => i + 1), 6000)
+    return () => clearInterval(t)
+  }, [aberto, nBanners])
   useEffect(() => { carregar(); const t = setInterval(carregar, 10000); return () => clearInterval(t) }, [carregar])
 
   const prodsCard = useMemo(() => (e?.produtos ?? []).map((p) => ({ ...p, personalizavel: !!p.grupos?.length })), [e])
@@ -186,6 +223,25 @@ export function MesaPublica() {
     )
   }
   if (!e.qr_ativo) return <p className="p-6 text-center">Pedidos pelo QR Code indisponíveis. Chame o garçom.</p>
+  if (!aberto) {
+    const bn = e.banners?.length ? e.banners[bi % e.banners.length] : null
+    return (
+      <div className="relative flex h-[100dvh] cursor-pointer select-none flex-col items-center justify-between overflow-hidden p-8 text-center text-white" style={{ ...vars, background: 'var(--p)' }}
+        onClick={() => { ultimoToque.current = Date.now(); setAberto(true) }}>
+        {bn && <img key={bn.id} src={bn.imagem_url} alt={bn.titulo} className="absolute inset-0 h-full w-full object-cover" />}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/10 to-black/70" />
+        <div {...segTopoRes} onClick={(x) => x.stopPropagation()} className="absolute inset-x-0 top-0 z-10 h-24" />
+        <img {...segLogoRes} onClick={(x) => x.stopPropagation()} draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="relative z-10 h-20 w-auto object-contain" />
+        <div className="relative z-10 space-y-3">
+          <div className="text-sm uppercase tracking-[0.3em] opacity-90">Mesa {e.mesa}</div>
+          <h1 className="text-4xl font-semibold drop-shadow">{e.boas_vindas || e.tema?.titulo || 'Bem-vindo'}</h1>
+          {bn?.patrocinador && <p className="text-xs uppercase tracking-wider opacity-80">Patrocinado · {bn.patrocinador}</p>}
+        </div>
+        <p className="relative z-10 animate-pulse rounded-full border border-white/80 bg-black/30 px-8 py-4 text-xl font-medium backdrop-blur">Toque na tela para ver o cardápio</p>
+        {dialogoAcesso}
+      </div>
+    )
+  }
   return (
     <div className="mx-auto h-[100dvh] w-full">
       {add && !det && !carrinho && !leitor && qtd > 0 && (

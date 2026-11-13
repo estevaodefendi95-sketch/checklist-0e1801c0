@@ -29,7 +29,7 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token } = await req.json();
+    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token, aparelho, nivel, carregando } = await req.json();
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
     const uuidOk = (x: unknown) => /^[0-9a-f-]{36}$/i.test(String(x ?? ""));
@@ -90,6 +90,15 @@ Deno.serve(async (req) => {
       if ("erro" in r) return json({ erro: r.erro });
       return json({ ok: true, mesas: await listaMesas() });
     }
+    // bateria do tablet: o aparelho avisa o nível a cada minuto; a gestão vê todos em Configurações › Tablet
+    if (acao === "bateria") {
+      const ap = String(aparelho ?? "").slice(0, 64);
+      const n = Math.round(Number(nivel));
+      if (!ap || !Number.isFinite(n) || n < 0 || n > 100) return json({ erro: "Dados inválidos." });
+      await db.from("pdv_tablet_bateria").upsert({ aparelho: ap, mesa_id: mesa.id, nivel: n, carregando: !!carregando, atualizado_em: new Date().toISOString() });
+      return json({ ok: true });
+    }
+
     if (!cfg.tablet_qr_ativo) return json({ mesa: mesa.numero, qr_ativo: false, boas_vindas: cfg.tablet_mensagem_boas_vindas, tema: cfg.tablet_tema });
 
     if (acao === "menu") {
@@ -121,7 +130,7 @@ Deno.serve(async (req) => {
       const categorias = [...catOk.values()].filter((c: any) => produtos.some((p: any) => p.categoria_id === c.id)).map((c: any) => ({ id: c.id, nome: c.nome }));
       return json({
         mesa: mesa.numero, qr_ativo: true, tema: cfg.tablet_tema, boas_vindas: cfg.tablet_mensagem_boas_vindas, exige_checkin: cfg.tablet_exige_checkin,
-        pode_chamar: cfg.tablet_pode_chamar_garcom, pode_conta: cfg.tablet_pode_pedir_conta,
+        pode_chamar: cfg.tablet_pode_chamar_garcom, pode_conta: cfg.tablet_pode_pedir_conta, inatividade_min: cfg.tablet_tempo_inatividade_min,
         categorias, produtos, banners, reserva,
       });
     }

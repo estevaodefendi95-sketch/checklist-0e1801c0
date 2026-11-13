@@ -4,6 +4,7 @@ import { Carregando, Vazio, btnCls, btnSecCls, cartaoCls, inputCls } from '../..
 import { lerNumero } from '../../lib/formato'
 import { Mesa } from '../../lib/pdv'
 import { LeitorQr } from '../../components/LeitorQr'
+import { BateriaTablets } from './BateriaTablets'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 
 interface Cfg { taxa_servico_pct: number; couvert: number; tablet_qr_ativo: boolean; tablet_exige_checkin: boolean; tablet_url_base: string | null; tablet_mensagem_boas_vindas: string | null; tablet_tempo_inatividade_min: number; tablet_pode_chamar_garcom: boolean; tablet_pode_pedir_conta: boolean }
@@ -146,6 +147,8 @@ export function Tablet() {
           </div>
         )}
       </section>
+
+      <BateriaTablets />
 
       <section className={`${cartaoCls} space-y-3 p-5`}>
         <Titulo n={4} t="Dispositivos" d="Tablets, celulares de garçom e agentes de impressão/WhatsApp conectados ao sistema." />
