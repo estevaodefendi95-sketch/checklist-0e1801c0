@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { db, supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { PERMISSOES, Permissao, usePermissoes } from '../context/PermissoesContext'
+import { GRUPOS_PERMISSOES, PERMISSOES, Permissao, usePermissoes } from '../context/PermissoesContext'
 import { Area, Profile, UserRole } from '../lib/types'
 import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, chipCls, inputCls } from '../components/Estado'
 
@@ -19,6 +19,9 @@ const SEM_PERMS: Perms = {
   pdv_gerir: false,
   pdv_fiscal: false,
   pdv_caixa_abrir: false,
+  pdv_desconto: false,
+  pdv_tirar_servico: false,
+  pdv_tirar_couvert: false,
   // telas: um usuário novo vê tudo por padrão; o administrador desmarca o que quiser esconder
   pdv_ver_vendas: true,
   pdv_ver_crm: true,
@@ -413,27 +416,38 @@ function CamposAcesso({
         )}
       </fieldset>
 
-      <fieldset>
-        <legend className="mb-1 text-xs text-ink-soft">permissões</legend>
-        {admin && <p className="mb-1 text-xs text-ink-soft">Administrador já tem todas as permissões.</p>}
-        <div className="flex flex-wrap gap-2">
-          {PERMISSOES.map(({ key, label }) => {
-            const on = admin || perms[key]
-            return (
-              <button
-                key={key}
-                type="button"
-                disabled={admin}
-                aria-pressed={on}
-                onClick={() => setPerms({ ...perms, [key]: !perms[key] })}
-                className={`${chipCls(on)} disabled:opacity-70`}
-              >
-                {on ? '● ' : '○ '}
-                {label}
-              </button>
-            )
-          })}
-        </div>
+      <fieldset className="space-y-3">
+        <legend className="mb-1 text-xs text-ink-soft">o que esta pessoa pode fazer</legend>
+        {admin && <p className="rounded-xl bg-brand-soft px-3 py-2 text-xs">Administrador já tem todas as permissões.</p>}
+        {GRUPOS_PERMISSOES.map((g) => {
+          const itens = PERMISSOES.filter((p) => p.grupo === g.id)
+          const todas = itens.every((p) => admin || perms[p.key])
+          return (
+            <div key={g.id} className="rounded-xl border border-line">
+              <div className="flex items-center justify-between gap-2 border-b border-line bg-paper-dim px-3 py-2">
+                <b className="text-sm">{g.titulo}</b>
+                {!admin && (
+                  <button type="button" className="text-xs font-medium text-brand" onClick={() => setPerms({ ...perms, ...Object.fromEntries(itens.map((p) => [p.key, !todas])) })}>
+                    {todas ? 'Limpar' : 'Marcar tudo'}
+                  </button>
+                )}
+              </div>
+              <ul className="divide-y divide-line">
+                {itens.map(({ key, label, desc }) => {
+                  const on = admin || perms[key]
+                  return (
+                    <li key={key}>
+                      <label className={`flex min-h-[48px] cursor-pointer items-center justify-between gap-3 px-3 py-2 ${admin ? 'opacity-70' : ''}`}>
+                        <span className="min-w-0 text-sm"><b className="block font-medium">{label}</b>{desc && <span className="block text-xs text-ink-soft">{desc}</span>}</span>
+                        <input type="checkbox" role="switch" className="h-5 w-9 shrink-0 accent-[var(--color-brand,#16a34a)]" disabled={admin} checked={on} onChange={() => setPerms({ ...perms, [key]: !perms[key] })} />
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )
+        })}
       </fieldset>
     </>
   )

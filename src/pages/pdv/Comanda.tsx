@@ -120,6 +120,8 @@ export function Comanda() {
   useAoVivo(['pdv_pedido_itens', 'pdv_pagamentos', 'pdv_comandas'], carregar, 10000)
 
   const aberta = c && (c.status === 'aberta' || c.status === 'pedindo_conta')
+  const podeDesc = pode('pdv_desconto'), podeServ = pode('pdv_tirar_servico'), podeCouv = pode('pdv_tirar_couvert')
+  const algumDesc = podeDesc || podeServ || podeCouv
   const lancavel = c?.status === 'aberta'   // conta fechada (aguardando recebimento) não recebe produto novo
   const refDesc = useRef<HTMLInputElement | null>(null)
   const restante = Math.max(0, num(tot?.total) - num(tot?.pago))
@@ -384,7 +386,7 @@ export function Comanda() {
       if (e.key === 'F4' && lancavel && (pode('pdv_operar') || pode('pdv_caixa'))) return faz(() => pedirConta())
       if (e.key === 'F5' && aberta && pode('pdv_caixa') && !c.funcionario_id) return faz(() => fechar())
       if (e.key === 'F6' && c.status === 'pedindo_conta' && (pode('pdv_operar') || pode('pdv_caixa'))) return faz(() => reabrir())
-      if (e.key === 'F7' && aberta && pode('pdv_caixa')) return faz(() => { setAba('pagamento'); setTimeout(() => refDesc.current?.focus(), 80) })
+      if (e.key === 'F7' && aberta && podeDesc) return faz(() => { setAba('pagamento'); setTimeout(() => refDesc.current?.focus(), 80) })
       if (e.key === 'F8' && lancavel && carrinho.length) return faz(() => enviar())
       if (e.key === 'Escape' && digitando) alvo.blur()
       if (!digitando && aba === 'pagamento' && aberta && /^[1-6]$/.test(e.key)) setForma(FORMAS[Number(e.key) - 1].v)
@@ -535,7 +537,7 @@ export function Comanda() {
             <h2 className="font-semibold">Receber</h2>
             {aberta ? (
               <>
-                {pode('pdv_caixa') && <DescontoRapido c={c} itens={itens} inputRef={refDesc} onMais={abrirDescontos} onSalvo={() => { setMsg('Desconto aplicado.'); carregar() }} />}
+                {podeDesc && <DescontoRapido c={c} itens={itens} inputRef={refDesc} onMais={abrirDescontos} onSalvo={() => { setMsg('Desconto aplicado.'); carregar() }} />}
                 <div className="flex flex-wrap gap-2">
                   {FORMAS.map((f) => (
                     <button key={f.v} className={forma === f.v ? btnCls : btnSecCls} onClick={() => setForma(f.v)}>{f.r} <Tecla t={String(FORMAS.findIndex((x) => x.v === f.v) + 1)} /></button>
@@ -637,8 +639,8 @@ export function Comanda() {
           )}
           <dl className="space-y-1 border-t border-line pt-3 text-sm">
             <div className="flex justify-between"><dt>Subtotal</dt><dd>{reais(num(tot?.subtotal))}</dd></div>
-            <div className="flex justify-between"><dt>Serviço {c.taxa_servico_pct}%{aberta && pode('pdv_caixa') && <button className="ml-1 text-brand" onClick={abrirDescontos}>alterar</button>}</dt><dd>{reais(num(tot?.servico))}</dd></div>
-            <div className="flex justify-between"><dt>Desconto{aberta && pode('pdv_caixa') && <button className="ml-1 text-brand" onClick={abrirDescontos}>{c.desconto > 0 ? 'alterar' : 'aplicar'}</button>}{(c.desconto_detalhe as DescontoDetalhe | null)?.regra_nome ? <em className="block text-xs not-italic text-ink-soft">{(c.desconto_detalhe as DescontoDetalhe).regra_nome}</em> : null}</dt><dd>−{reais(c.desconto)}</dd></div>
+            <div className="flex justify-between"><dt>Serviço {c.taxa_servico_pct}%{aberta && algumDesc && <button className="ml-1 text-brand" onClick={abrirDescontos}>alterar</button>}</dt><dd>{reais(num(tot?.servico))}</dd></div>
+            <div className="flex justify-between"><dt>Desconto{aberta && algumDesc && <button className="ml-1 text-brand" onClick={abrirDescontos}>{c.desconto > 0 ? 'alterar' : 'aplicar'}</button>}{(c.desconto_detalhe as DescontoDetalhe | null)?.regra_nome ? <em className="block text-xs not-italic text-ink-soft">{(c.desconto_detalhe as DescontoDetalhe).regra_nome}</em> : null}</dt><dd>−{reais(c.desconto)}</dd></div>
             <div className="flex justify-between text-base font-semibold"><dt>Total</dt><dd>{reais(num(tot?.total))}</dd></div>
             <div className="flex items-center justify-between"><dt>{mesa ? `Mesa ${mesa.numero}` : 'Sem mesa'}{aberta && pode('pdv_operar') && <button className="ml-1 text-brand" onClick={abrirMesas}>{mesa ? 'trocar' : 'vincular'}</button>}</dt><dd className="text-ink-soft">#{c.numero}</dd></div>
             <div className="flex items-center justify-between text-ink-soft"><dt>{c.pessoas} pessoa(s){aberta && <button className="ml-1 text-brand" onClick={() => setPessoasEd(String(c.pessoas))}>alterar</button>}</dt><dd>{reais(num(tot?.total) / Math.max(1, c.pessoas))} / pessoa</dd></div>
@@ -682,7 +684,7 @@ export function Comanda() {
           {mesa && <button className={btnSecCls + ' w-full'} onClick={() => vincularMesa(null)}>Tirar da mesa (balcão)</button>}
         </Modal>
       )}
-      {descAberto && <DescontosComanda c={c} itens={itens} onFechar={() => setDescAberto(false)} onSalvo={() => { setDescAberto(false); setMsg('Desconto aplicado.'); carregar() }} />}
+      {descAberto && <DescontosComanda perm={{ desconto: podeDesc, servico: podeServ, couvert: podeCouv }} c={c} itens={itens} onFechar={() => setDescAberto(false)} onSalvo={() => { setDescAberto(false); setMsg('Desconto aplicado.'); carregar() }} />}
       {arForm && (
         <Modal titulo="Deixar a receber" fechar={() => setArForm(null)}>
           <p className="text-sm text-ink-soft">Valor: <b>{reais(restante)}</b>. A comanda fecha e o cliente fica na tela "A receber" para cobrança.</p>

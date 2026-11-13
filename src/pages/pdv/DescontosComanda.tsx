@@ -40,7 +40,7 @@ export function calcularDesconto(itens: Item[], regra: RegraDesconto | null, tir
   return { subtotal, couvert, servicoPct, servico, dRegra, dCouvert, dManual, desconto, total: Math.max(0, r2(bruto - desconto)) }
 }
 
-export function DescontosComanda({ c, itens, onFechar, onSalvo }: { c: Comanda; itens: Item[]; onFechar: () => void; onSalvo: () => void }) {
+export function DescontosComanda({ c, itens, onFechar, onSalvo, perm }: { c: Comanda; itens: Item[]; onFechar: () => void; onSalvo: () => void; perm: { desconto: boolean; servico: boolean; couvert: boolean } }) {
   const { profile } = useAuth()
   const [regras, setRegras] = useState<RegraDesconto[]>([])
   const [servicoPadrao, setServicoPadrao] = useState(10)
@@ -89,9 +89,9 @@ export function DescontosComanda({ c, itens, onFechar, onSalvo }: { c: Comanda; 
         <div className="space-y-1.5">
           <b className="text-sm">Desconto automático</b>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={regraId === null ? btnCls : btnSecCls} onClick={() => setRegraId(null)}>Nenhum</button>
+            <button type="button" disabled={!perm.desconto} className={regraId === null ? btnCls : btnSecCls} onClick={() => setRegraId(null)}>Nenhum</button>
             {regras.map((r) => (
-              <button key={r.id} type="button" className={regraId === r.id ? btnCls : btnSecCls} onClick={() => setRegraId(r.id)}>
+              <button key={r.id} type="button" disabled={!perm.desconto} className={regraId === r.id ? btnCls : btnSecCls} onClick={() => setRegraId(r.id)}>
                 {r.nome} · {r.pct}%
               </button>
             ))}
@@ -105,19 +105,19 @@ export function DescontosComanda({ c, itens, onFechar, onSalvo }: { c: Comanda; 
         </div>
       )}
       <label className={`flex items-center gap-2 text-sm ${!temCouvert ? 'opacity-50' : ''}`}>
-        <input type="checkbox" disabled={!temCouvert} checked={tiraCouvert} onChange={(e) => setTiraCouvert(e.target.checked)} />
-        Retirar couvert{temCouvert ? ` (${reais(k.couvert)})` : ' (não há couvert nesta conta)'}
+        <input type="checkbox" disabled={!temCouvert || !perm.couvert} checked={tiraCouvert} onChange={(e) => setTiraCouvert(e.target.checked)} />
+        Retirar couvert{temCouvert ? ` (${reais(k.couvert)})` : ' (não há couvert nesta conta)'}{!perm.couvert && ' · sem permissão'}
       </label>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={tiraServico || !!regra?.remove_servico} disabled={!!regra?.remove_servico} onChange={(e) => setTiraServico(e.target.checked)} />
-        Não cobrar taxa de serviço ({servicoPadrao}%)
+        <input type="checkbox" checked={tiraServico || !!regra?.remove_servico} disabled={!!regra?.remove_servico || !perm.servico} onChange={(e) => setTiraServico(e.target.checked)} />
+        Não cobrar taxa de serviço ({servicoPadrao}%){!perm.servico && ' · sem permissão'}
       </label>
       <div className="space-y-1.5">
         <b className="text-sm">Desconto manual</b>
         <div className="flex gap-2">
-          <button type="button" className={manualTipo === 'valor' ? btnCls : btnSecCls} onClick={() => setManualTipo('valor')}>R$</button>
-          <button type="button" className={manualTipo === 'pct' ? btnCls : btnSecCls} onClick={() => setManualTipo('pct')}>%</button>
-          <input className={inputCls} inputMode="decimal" placeholder={manualTipo === 'pct' ? 'Ex.: 10' : 'Ex.: 25,00'} value={manualTxt} onChange={(e) => setManualTxt(e.target.value)} />
+          <button type="button" disabled={!perm.desconto} className={manualTipo === 'valor' ? btnCls : btnSecCls} onClick={() => setManualTipo('valor')}>R$</button>
+          <button type="button" disabled={!perm.desconto} className={manualTipo === 'pct' ? btnCls : btnSecCls} onClick={() => setManualTipo('pct')}>%</button>
+          <input className={inputCls} disabled={!perm.desconto} inputMode="decimal" placeholder={manualTipo === 'pct' ? 'Ex.: 10' : 'Ex.: 25,00'} value={manualTxt} onChange={(e) => setManualTxt(e.target.value)} />
         </div>
         {manual > 0 && <input className={inputCls} placeholder="Motivo do desconto (obrigatório)" value={motivo} onChange={(e) => setMotivo(e.target.value)} />}
       </div>
