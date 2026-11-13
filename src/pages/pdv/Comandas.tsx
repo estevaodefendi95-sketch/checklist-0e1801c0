@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
-import { Carregando, Vazio, cartaoCls, chipCls, inputCls } from '../../components/Estado'
+import { Carregando, Vazio, cartaoCls, inputCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
 import { useAoVivo } from '../../lib/pdv'
 
@@ -12,6 +12,25 @@ const STATUS: { v: string; r: string }[] = [
 ]
 const ROTULO: Record<string, string> = { aberta: 'Aberta', pedindo_conta: 'Aguardando pagamento', fechada: 'Fechada', cancelada: 'Cancelada' }
 const COR: Record<string, string> = { aberta: 'bg-brand-soft text-brand', pedindo_conta: 'bg-alert-soft text-alert', fechada: 'bg-surface text-ink-soft ring-1 ring-line', cancelada: 'bg-surface text-ink-soft line-through ring-1 ring-line' }
+
+function Seg({ opcoes, valor, onChange, pequeno, className = '' }: { opcoes: { v: string; r: string; n?: number }[]; valor: string; onChange: (v: string) => void; pequeno?: boolean; className?: string }) {
+  return (
+    <div className={`max-w-full overflow-x-auto ${className}`}>
+      <div role="tablist" className="inline-flex gap-1 rounded-xl border border-line bg-surface p-1">
+        {opcoes.map((o) => {
+          const on = valor === o.v
+          return (
+            <button key={o.v} role="tab" aria-selected={on} onClick={() => onChange(o.v)}
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 text-sm transition-colors ${pequeno ? 'min-h-[34px]' : 'min-h-[40px]'} ${on ? 'bg-brand-soft font-semibold text-brand shadow-sm' : 'text-ink-soft hover:text-ink'}`}>
+              {o.r}
+              {o.n !== undefined && <span className={`rounded-full px-1.5 text-[11px] tabular-nums ${on ? 'bg-brand/15' : 'bg-line/60'}`}>{o.n}</span>}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 /** Busca de comandas com filtros por situação, rodízio e couvert artístico. */
 export function Comandas() {
@@ -51,15 +70,22 @@ export function Comandas() {
   return (
     <div>
       <Cabecalho titulo="Comandas" subtitulo={`${vis.length} comanda(s) · ${reais(soma)}`} voltar={{ para: '/pdv', rotulo: 'Salão' }} />
-      <input className={inputCls + ' mb-3'} placeholder="Buscar por nº (#123), nome, telefone ou mesa…" value={q} onChange={(e) => mudar('q', e.target.value)} />
-      <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
-        {STATUS.map((s) => <button key={s.v} className={chipCls(st === s.v)} onClick={() => mudar('st', s.v === 'abertas' ? '' : s.v)}>{s.r}{s.v === 'pedindo_conta' ? ` (${cont((c) => c.status === 'pedindo_conta')})` : ''}</button>)}
+      <div className="relative mb-3">
+        <svg className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-soft" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input className={inputCls + ' !pl-10'} placeholder="Buscar por nº (#123), nome, telefone ou mesa…" value={q} onChange={(e) => mudar('q', e.target.value)} />
       </div>
-      <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
-        {[['', 'Qualquer cobrança'], ['rodizio', `Rodízio (${cont((c) => c.tem_rodizio)})`], ['couvert', `Couvert artístico (${cont((c) => c.tem_couvert)})`], ['sem', 'Sem couvert/rodízio']].map(([v, r]) => <button key={v} className={chipCls(tipo === v)} onClick={() => mudar('tipo', v)}>{r}</button>)}
-      </div>
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        {[['hoje', 'Hoje'], ['7d', '7 dias'], ['30d', '30 dias'], ['todos', 'Tudo']].map(([v, r]) => <button key={v} className={chipCls(per === v)} onClick={() => mudar('per', v === 'hoje' ? '' : v)}>{r}</button>)}
+      <Seg className="mb-3" valor={st} onChange={(v) => mudar('st', v === 'abertas' ? '' : v)}
+        opcoes={STATUS.map((s) => ({ v: s.v, r: s.r, n: s.v === 'pedindo_conta' ? cont((c) => c.status === 'pedindo_conta') : s.v === 'abertas' ? cont((c) => ['aberta', 'pedindo_conta'].includes(c.status)) : undefined }))} />
+      <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-3">
+        <div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">Cobrança</div>
+          <Seg pequeno valor={tipo} onChange={(v) => mudar('tipo', v)} opcoes={[{ v: '', r: 'Todas' }, { v: 'rodizio', r: 'Rodízio', n: cont((c) => c.tem_rodizio) }, { v: 'couvert', r: 'Couvert', n: cont((c) => c.tem_couvert) }, { v: 'sem', r: 'Nenhuma' }]} />
+        </div>
+        <div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">Período</div>
+          <Seg pequeno valor={per === 'hoje' ? 'hoje' : per} onChange={(v) => mudar('per', v === 'hoje' ? '' : v)} opcoes={[{ v: 'hoje', r: 'Hoje' }, { v: '7d', r: '7 dias' }, { v: '30d', r: '30 dias' }, { v: 'todos', r: 'Tudo' }]} />
+        </div>
+        {(st !== 'abertas' || tipo || per !== 'hoje' || q) && <button className="mb-1 text-sm text-brand underline" onClick={() => setSp(new URLSearchParams(), { replace: true })}>Limpar filtros</button>}
       </div>
       {!vis.length ? <Vazio texto="Nenhuma comanda com esses filtros." /> : (
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
