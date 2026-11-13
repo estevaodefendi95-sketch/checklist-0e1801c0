@@ -121,7 +121,7 @@ export function Layout({ children }: { children: ReactNode }) {
         aria-label="Menu principal"
       >
         <div className={`flex items-center px-5 pb-4 pt-6 ${recolhido ? 'justify-center px-0' : ''}`}>
-          <Link to="/" className="leading-none" title="Paggio Operação">
+          <Link to="/" className="leading-none" title="Paggio">
             <b className="font-display text-2xl font-semibold">{recolhido ? 'P' : 'Paggio'}</b>
             {!recolhido && <small className="mt-1 block text-[11px] uppercase tracking-[0.08em] opacity-75">Operação</small>}
           </Link>
@@ -180,7 +180,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className={`transition-[padding] duration-200 ${recuo}`}>
         {/* celular/tablet retrato: só a marca; o título fica na própria página */}
         <div className="flex items-center justify-between px-4 pt-[calc(14px+env(safe-area-inset-top))] text-xs uppercase tracking-[0.08em] text-ink-soft md:px-6 lg:hidden">
-          <span>Paggio Operação</span>
+          <span>Paggio</span>
           <Sino className="text-brand" />
         </div>
         <main className="mx-auto max-w-6xl px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-3 md:px-6 lg:px-8 lg:pb-12 lg:pt-8">
