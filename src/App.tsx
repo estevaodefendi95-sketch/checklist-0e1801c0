@@ -40,22 +40,15 @@ import { WhatsApp } from './pages/pdv/WhatsApp'
 import { CardapioPublico, ReservarPublico } from './pages/pdv/PaginasPublicas'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
 import { Permissao, usePermissoes } from './context/PermissoesContext'
-import { ler } from './lib/armazenamento'
 import { AvisoOffline } from './components/AvisoOffline'
 import { AprovacoesAdmin } from './components/AprovacoesAdmin'
 import { ExigeOperador, OperadorProvider } from './context/OperadorContext'
 
-/** Ao abrir o app no celular em modo Atendimento, a primeira tela é o Salão (e não o painel de gestão). */
+/** Ao abrir o app, quem opera o salão vê o painel "Salão agora" (somente consulta), no computador e no celular. */
 function Abertura() {
   const { pode, carregado } = usePermissoes()
   if (!carregado) return null
-  let jaAbriu = true
-  try { jaAbriu = sessionStorage.getItem('paggio-abriu') === '1'; sessionStorage.setItem('paggio-abriu', '1') } catch { /* sem armazenamento */ }
-  const celular = window.matchMedia('(max-width: 1023px)').matches
-  const soAtendimento = pode('pdv_operar') && !pode('pdv_ver_gestao')
-  if (soAtendimento && celular) return <Navigate to="/atendimento" replace />
-  if (!celular && pode('pdv_operar')) return <DashboardSalao />
-  if (!jaAbriu && celular && pode('pdv_operar') && ler<string>('paggio-modo-mobile', 'atendimento') === 'atendimento') return <Navigate to="/atendimento" replace />
+  if (pode('pdv_operar')) return <DashboardSalao />   // computador e celular abrem no painel do salão (somente consulta)
   return <Dashboard modo="hoje" />
 }
 

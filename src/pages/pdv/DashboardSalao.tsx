@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { inicioAtendimento } from '../../lib/modo'
 import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, btnCls, cartaoCls } from '../../components/Estado'
@@ -62,7 +63,7 @@ export function DashboardSalao() {
       <Cabecalho
         titulo="Salão agora"
         subtitulo={`${comandas.length} comanda(s) aberta(s) · ${reais(consumo)} em consumo · atualiza sozinho`}
-        acoes={<Link to="/pdv" className={btnCls}>Ir para o Salão e mesas</Link>}
+        acoes={<Link to={inicioAtendimento()} className={btnCls}>Ir para o Salão e mesas</Link>}
       />
       {erro && <Erro texto={erro} />}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
