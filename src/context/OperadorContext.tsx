@@ -67,13 +67,21 @@ export function PinPad({ titulo, texto, erro, carga, onOk, onCancelar, extra }: 
   )
 }
 
+let saiuTimer: ReturnType<typeof setTimeout> | null = null
+
 /** Pede o PIN antes de mostrar o Salão e telas de operação. Mostra quem está operando, com "Trocar". */
 export function ExigeOperador({ children }: { children: ReactNode }) {
   const { operador, entrar, sair } = useOperador()
-  const { pode, carregado } = usePermissoes()
+  const { carregado } = usePermissoes()
   const [temPins, setTemPins] = useState<boolean | null>(null)
   const [erro, setErro] = useState('')
   const [carga, setCarga] = useState(false)
+  // Ao sair da área do Salão o operador é esquecido: quem entrar depois precisa digitar o próprio PIN.
+  // O atraso curto evita pedir de novo ao navegar entre as telas do Salão (mesas, comanda, caixa).
+  useEffect(() => {
+    if (saiuTimer) { clearTimeout(saiuTimer); saiuTimer = null }
+    return () => { saiuTimer = setTimeout(() => { saiuTimer = null; sair() }, 1500) }
+  }, [sair])
   useEffect(() => { db.rpc('pdv_tem_pins').then((r: { data: boolean | null }) => setTemPins(r.data === true)) }, [])
 
   async function conferir(pin: string) {
@@ -90,15 +98,7 @@ export function ExigeOperador({ children }: { children: ReactNode }) {
   // enquanto o administrador não cadastrou nenhum PIN, não trava a operação
   if (temPins && !operador) {
     return (
-      <PinPad titulo="Quem está operando?" texto="Digite o seu PIN para continuar." erro={erro} carga={carga} onOk={conferir}
-        extra={pode('pdv_gerir') ? (
-          <button className="w-full text-center text-xs text-ink-soft underline" onClick={async () => {
-            const { data } = await supabase.auth.getUser(); const id = data.user?.id
-            if (!id) return
-            const { data: p } = await db.from('profiles').select('nome').eq('id', id).maybeSingle()
-            entrar({ id, nome: p?.nome ?? 'Administrador', autoriza: true })
-          }}>Entrar como administrador (sem PIN)</button>
-        ) : undefined} />
+      <PinPad titulo="Quem está operando?" texto="Digite o seu PIN para continuar." erro={erro} carga={carga} onOk={conferir} />
     )
   }
   return (
