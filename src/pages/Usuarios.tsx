@@ -18,6 +18,7 @@ const SEM_PERMS: Perms = {
   pdv_caixa: false,
   pdv_gerir: false,
   pdv_fiscal: false,
+  pdv_caixa_abrir: false,
   // telas: um usuário novo vê tudo por padrão; o administrador desmarca o que quiser esconder
   pdv_ver_vendas: true,
   pdv_ver_crm: true,

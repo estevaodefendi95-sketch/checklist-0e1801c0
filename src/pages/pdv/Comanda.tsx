@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { db, supabase } from '../../lib/supabase'
+import { db } from '../../lib/supabase'
 import { idOperador } from '../../context/OperadorContext'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
@@ -100,8 +100,7 @@ export function Comanda() {
     setTot(tt.data as Totais)
     setCats((ct.data ?? []) as Categoria[])
     setProds((pr.data ?? []) as Produto[])
-    const uid = (await supabase.auth.getUser()).data.user?.id
-    setSessao(((ss.data ?? []) as Sessao[]).find((x) => x.aberto_por === uid) ?? null)
+    setSessao(((ss.data ?? []) as Sessao[])[0] ?? null)
     if (cmd.funcionario_id) {
       const [fu, cf] = await Promise.all([db.from('pdv_funcionarios').select('nome').eq('id', cmd.funcionario_id).maybeSingle(), db.from('pdv_config').select('consumo_func_desconto_pct').eq('id', 1).maybeSingle()])
       setFunc({ nome: fu.data?.nome ?? 'Funcionário', pct: num(cf.data?.consumo_func_desconto_pct ?? 100) })
@@ -114,7 +113,7 @@ export function Comanda() {
     cacheGravar('comanda:' + id, {
       c: cmd, mesa: ((cmd.mesa_id && (await db.from('pdv_mesas').select('*').eq('id', cmd.mesa_id).single()).data) as Mesa) ?? null,
       itens: it.data ?? [], tot: tt.data, pags: pg.data ?? [], cats: ct.data ?? [], prods: pr.data ?? [], grupos: gruposCarregados,
-      sessao: ((ss.data ?? []) as Sessao[]).find((x) => x.aberto_por === uid) ?? null, func: null,
+      sessao: ((ss.data ?? []) as Sessao[])[0] ?? null, func: null,
     })
     setFim(true)
   }, [id])
@@ -236,7 +235,7 @@ export function Comanda() {
   async function pagar(restanteTudo = false): Promise<boolean> {
     if (!c) return false
     if (semRede()) return false
-    if (!sessao) return fail('Abra o seu caixa do dia antes de receber pagamentos (PDV · Caixa).')
+    if (!sessao) return fail('O caixa está fechado. Só quem tem permissão pode abri-lo (PDV · Caixa).')
     const v = restanteTudo ? restante : lerNumero(valor || String(restante))
     if (!v || v <= 0) return fail('Informe o valor.')
     let troco = 0
@@ -267,7 +266,7 @@ export function Comanda() {
     if (!c) return
     if (restante > 0.005) {
       // falta receber: oferece registrar o restante na forma de pagamento escolhida e fechar de uma vez
-      if (!sessao) return setErro('Abra o seu caixa do dia antes de receber (PDV · Caixa).')
+      if (!sessao) return setErro('O caixa está fechado. Só quem tem permissão pode abri-lo (PDV · Caixa).')
       if (!window.confirm(`Falta receber ${reais(restante)}.\nRegistrar ${reais(restante)} em ${rotuloForma(forma)} e encerrar a conta?`)) return
       setValor(String(restante).replace('.', ','))
       const ok = await pagar(true)
@@ -572,7 +571,7 @@ export function Comanda() {
                     </div>
                   </div>
                 )}
-                {!sessao && <p className="text-sm text-alert">Caixa fechado: abra em PDV · Caixa para receber.</p>}
+                {!sessao && <p className="text-sm text-alert">Caixa fechado: só quem tem permissão (ou o agendamento) abre o caixa, em PDV · Caixa.</p>}
               </>
             ) : (
               <p className="text-sm text-ink-soft">Comanda encerrada.</p>

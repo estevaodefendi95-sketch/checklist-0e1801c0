@@ -1,18 +1,15 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { db, supabase } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais, lerNumero } from '../../lib/formato'
 import { FORMAS, Sessao, enfileirar, hora, num, rotuloForma, useAoVivo } from '../../lib/pdv'
-import { useAuth } from '../../context/AuthContext'
 import { usePermissoes } from '../../context/PermissoesContext'
 
 interface Mov { id: string; tipo: 'sangria' | 'suprimento'; valor: number; motivo: string | null; criado_em: string }
 
 export function PdvCaixa() {
-  const { profile } = useAuth()
   const { pode } = usePermissoes()
-  const [outros, setOutros] = useState<{ s: Sessao; nome: string; total: number }[]>([])
   const [sessao, setSessao] = useState<Sessao | null>(null)
   const [movs, setMovs] = useState<Mov[]>([])
   const [porForma, setPorForma] = useState<Record<string, number>>({})
@@ -24,29 +21,17 @@ export function PdvCaixa() {
   const [mValor, setMValor] = useState('')
   const [mMotivo, setMMotivo] = useState('')
   const [fechando, setFechando] = useState(false)
+  const [fundoTxt, setFundoTxt] = useState('')
+  const abreFecha = pode('pdv_caixa_abrir')
   const [contado, setContado] = useState<Record<string, string>>({})
   const [obs, setObs] = useState('')
   const [naoCobrado, setNaoCobrado] = useState<Record<string, number>>({})
 
   const carregar = useCallback(async () => {
-    const uid = (await supabase.auth.getUser()).data.user?.id
     const { data: s } = await db.from('pdv_caixa_sessoes').select('*').eq('status', 'aberto').order('aberto_em')
-    const abertas = (s ?? []) as Sessao[]
-    const atual = abertas.find((x) => x.aberto_por === uid) ?? null
+    const atual = ((s ?? []) as Sessao[])[0] ?? null   // caixa único do dia
     setSessao(atual)
-    // gestor enxerga os caixas abertos dos outros operadores
-    const dos = abertas.filter((x) => x.id !== atual?.id)
-    if (dos.length && pode('pdv_gerir')) {
-      const [pn, pg] = await Promise.all([
-        db.from('profiles').select('id,nome').in('id', dos.map((x) => x.aberto_por).filter(Boolean) as string[]),
-        db.from('pdv_pagamentos').select('sessao_id,valor,troco').in('sessao_id', dos.map((x) => x.id)).eq('estornado', false).not('forma', 'in', '(folha,a_receber,cortesia)'),
-      ])
-      const nomes = Object.fromEntries(((pn.data ?? []) as { id: string; nome: string }[]).map((x) => [x.id, x.nome]))
-      setOutros(dos.map((x) => ({ s: x, nome: nomes[x.aberto_por ?? ''] ?? 'Operador', total: ((pg.data ?? []) as { sessao_id: string; valor: number; troco: number }[]).filter((p) => p.sessao_id === x.id).reduce((t, p) => t + num(p.valor) - num(p.troco), 0) })))
-    } else setOutros([])
-    let rq = db.from('pdv_caixa_sessoes').select('*').eq('status', 'fechado').order('fechado_em', { ascending: false }).limit(10)
-    if (!pode('pdv_gerir') && uid) rq = rq.eq('aberto_por', uid)
-    const rec = await rq
+    const rec = await db.from('pdv_caixa_sessoes').select('*').eq('status', 'fechado').order('fechado_em', { ascending: false }).limit(10)
     setRecentes((rec.data ?? []) as Sessao[])
     if (atual) {
       const [m, p, c, sc] = await Promise.all([
@@ -75,16 +60,12 @@ export function PdvCaixa() {
 
   async function abrir() {
     setErro('')
+    const fundo = lerNumero(fundoTxt) ?? 0
     const { error } = await db.from('pdv_caixa_sessoes').insert({
-      caixa: profile?.nome ?? 'Caixa', fundo_inicial: 0, aberto_por: (await supabase.auth.getUser()).data.user?.id,
+      caixa: 'Caixa do dia', fundo_inicial: fundo, aberto_por: (await supabase.auth.getUser()).data.user?.id,
     })
-    if (error) return setErro(error.code === '23505' ? 'Você já tem um caixa aberto.' : error.message)
-    carregar()
-  }
-  async function fecharOutro(o: Sessao) {
-    if (!window.confirm('Encerrar o caixa deste operador? O fechamento fica sem contagem de dinheiro.')) return
-    const { error } = await db.from('pdv_caixa_sessoes').update({ status: 'fechado', fechado_em: new Date().toISOString(), fechado_por: (await supabase.auth.getUser()).data.user?.id, observacao: 'Encerrado pelo gestor' }).eq('id', o.id)
-    if (error) setErro(error.message)
+    if (error) return setErro(error.code === '23505' ? 'O caixa já está aberto.' : error.message)
+    setFundoTxt('')
     carregar()
   }
   async function lancarMov() {
@@ -122,14 +103,21 @@ export function PdvCaixa() {
   if (!sessao)
     return (
       <div>
-        <Cabecalho titulo="Caixa" subtitulo={`Seu caixa está fechado · ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}`} />
+        <Cabecalho titulo="Caixa" subtitulo={`Caixa fechado · ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}`} />
         {erro && <Erro texto={erro} />}
         <section className={`${cartaoCls} max-w-md space-y-3 p-5`}>
-          <h2 className="font-semibold">Abertura de caixa do dia</h2>
-          <p className="text-sm text-ink-soft">Cada operador abre o próprio caixa uma vez por dia. Tudo que você receber fica no seu fechamento.</p>
-          <button className={btnCls} onClick={abrir}>Abrir meu caixa</button>
+          <h2 className="font-semibold">Caixa do dia</h2>
+          {abreFecha ? (
+            <>
+              <p className="text-sm text-ink-soft">Existe um único caixa por dia. Depois de aberto, todos que têm permissão de caixa recebem dentro dele e cada pagamento fica no nome de quem recebeu.</p>
+              <label className="block text-sm">Fundo de troco (opcional)<input className={inputCls} inputMode="decimal" placeholder="0,00" value={fundoTxt} onChange={(e) => setFundoTxt(e.target.value)} /></label>
+              <button className={btnCls} onClick={abrir}>Abrir o caixa</button>
+            </>
+          ) : (
+            <p className="text-sm text-ink-soft">O caixa está fechado. Ele abre no horário agendado ou por quem tem permissão para abrir e fechar o caixa.</p>
+          )}
         </section>
-        <Outros lista={outros} fechar={fecharOutro} />
+        {abreFecha && <AgendaCaixa />}
         {recentes.length > 0 && <Historico lista={recentes} />}
       </div>
     )
@@ -139,11 +127,11 @@ export function PdvCaixa() {
       <Cabecalho
         titulo="Caixa"
         subtitulo={`${sessao.caixa} · aberto ${new Date(sessao.aberto_em).toLocaleDateString('pt-BR')} às ${hora(sessao.aberto_em)}`}
-        acoes={<button className={btnPerigoCls} onClick={() => setFechando(true)}>Fechar caixa</button>}
+        acoes={abreFecha ? <button className={btnPerigoCls} onClick={() => setFechando(true)}>Fechar caixa</button> : undefined}
       />
       {erro && <Erro texto={erro} />}
       {new Date(sessao.aberto_em).toLocaleDateString('sv-SE') !== new Date().toLocaleDateString('sv-SE') && (
-        <p className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">Este caixa foi aberto em {new Date(sessao.aberto_em).toLocaleDateString('pt-BR')}. Feche-o e abra o caixa de hoje para manter o fechamento diário.</p>
+        <p className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">Este caixa foi aberto em {new Date(sessao.aberto_em).toLocaleDateString('pt-BR')}. Ele deve ser fechado e o caixa de hoje aberto para manter o fechamento diário.</p>
       )}
       <div className="grid gap-4 md:grid-cols-2">
         <section className={`${cartaoCls} p-4`}>
@@ -202,26 +190,9 @@ export function PdvCaixa() {
           <button className={btnPerigoCls} onClick={fechar}>Confirmar fechamento</button>
         </Modal>
       )}
-      <Outros lista={outros} fechar={fecharOutro} />
+      {abreFecha && <AgendaCaixa />}
       {recentes.length > 0 && <Historico lista={recentes} />}
     </div>
-  )
-}
-
-function Outros({ lista, fechar }: { lista: { s: Sessao; nome: string; total: number }[]; fechar: (s: Sessao) => void }) {
-  if (!lista.length) return null
-  return (
-    <section className="mt-6">
-      <h2 className="mb-2 text-sm font-semibold">Caixas abertos de outros operadores</h2>
-      <ul className={`${cartaoCls} divide-y divide-line text-sm`}>
-        {lista.map(({ s, nome, total }) => (
-          <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
-            <span><b>{nome}</b> · aberto {new Date(s.aberto_em).toLocaleDateString('pt-BR')} {hora(s.aberto_em)} · recebido {reais(total)}</span>
-            <button className={btnPerigoCls + ' !min-h-[36px]'} onClick={() => fechar(s)}>Encerrar caixa</button>
-          </li>
-        ))}
-      </ul>
-    </section>
   )
 }
 
@@ -251,5 +222,44 @@ export function Modal({ titulo, fechar, children }: { titulo: string; fechar: ()
         {children}
       </div>
     </div>
+  )
+}
+
+const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+interface Agenda { ativo: boolean; abrir_hora: string; fechar_hora: string; dias: number[]; fundo_inicial: number }
+
+/** Abertura e fechamento automáticos do caixa do dia (roda no servidor a cada 5 minutos). */
+function AgendaCaixa() {
+  const [a, setA] = useState<Agenda | null>(null)
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    db.from('pdv_caixa_agenda').select('*').eq('id', 1).maybeSingle().then((r: { data: Agenda | null }) => {
+      if (r.data) setA({ ...r.data, abrir_hora: r.data.abrir_hora.slice(0, 5), fechar_hora: r.data.fechar_hora.slice(0, 5), fundo_inicial: num(r.data.fundo_inicial) })
+    })
+  }, [])
+  if (!a) return null
+  async function salvar() {
+    if (!a) return
+    const { error } = await db.from('pdv_caixa_agenda').update({ ativo: a.ativo, abrir_hora: a.abrir_hora, fechar_hora: a.fechar_hora, dias: a.dias, fundo_inicial: a.fundo_inicial, atualizado_em: new Date().toISOString() }).eq('id', 1)
+    setMsg(error ? error.message : 'Agenda salva.')
+  }
+  return (
+    <section className={`${cartaoCls} mt-6 max-w-xl space-y-3 p-5`}>
+      <h2 className="font-semibold">Abertura e fechamento automáticos</h2>
+      <p className="text-sm text-ink-soft">O sistema abre o caixa no horário de abertura e fecha depois do horário de fechamento, sem contagem de dinheiro (o esperado vira o conferido) e imprime o resumo. Se ainda houver comanda aberta, espera até 1 hora antes de fechar.</p>
+      <label className="flex min-h-[44px] items-center gap-2 text-sm"><input type="checkbox" checked={a.ativo} onChange={(e) => setA({ ...a, ativo: e.target.checked })} /> Agendamento ligado</label>
+      <div className="grid grid-cols-3 gap-2 text-sm">
+        <label>Abre às<input type="time" className={inputCls} value={a.abrir_hora} onChange={(e) => setA({ ...a, abrir_hora: e.target.value })} /></label>
+        <label>Fecha às<input type="time" className={inputCls} value={a.fechar_hora} onChange={(e) => setA({ ...a, fechar_hora: e.target.value })} /></label>
+        <label>Fundo (R$)<input className={inputCls} inputMode="decimal" value={String(a.fundo_inicial).replace('.', ',')} onChange={(e) => setA({ ...a, fundo_inicial: lerNumero(e.target.value) ?? 0 })} /></label>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {DIAS.map((d, i) => (
+          <button key={d} type="button" className={a.dias.includes(i) ? btnCls : btnSecCls} onClick={() => setA({ ...a, dias: a.dias.includes(i) ? a.dias.filter((x) => x !== i) : [...a.dias, i].sort() })}>{d}</button>
+        ))}
+      </div>
+      <button className={btnCls} onClick={salvar}>Salvar agenda</button>
+      {msg && <p className="text-sm text-ink-soft">{msg}</p>}
+    </section>
   )
 }
