@@ -38,6 +38,14 @@ export function MesaPublica() {
   useEffect(() => { const f = () => setLateral(window.innerWidth >= 768); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f) }, [])
   const [msg, setMsg] = useState('')
   const [env, setEnv] = useState(false)
+  // Totem: no navegador, o primeiro toque na tela liga a tela cheia (esconde abas e barra de endereço). Instalado como app, já abre em tela cheia.
+  useEffect(() => {
+    const instalado = window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches
+    if (instalado || !document.documentElement.requestFullscreen) return
+    const ligar = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => { /* o navegador recusou */ }) }
+    document.addEventListener('pointerup', ligar)
+    return () => document.removeEventListener('pointerup', ligar)
+  }, [])
   // depois de adicionar um item: "continuar pedindo" ou "enviar pedido" (abre a câmera na hora)
   const [add, setAdd] = useState<{ nome: string; n: number } | null>(null)
   useEffect(() => {
@@ -130,23 +138,24 @@ export function MesaPublica() {
   const vars = { ['--p' as string]: e.tema?.primaria ?? '#7a1f2b', ['--f' as string]: e.tema?.fundo ?? '#faf7f2', ['--t' as string]: e.tema?.texto ?? '#222' }
   const tema = { colunas: 2, ...(e.tema ?? {}) }
   const sacola = carrinho && (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50" onClick={() => setCarrinho(false)}>
-      <div className="max-h-[85vh] w-full max-w-xl space-y-3 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" style={vars} onClick={(x) => x.stopPropagation()}>
-        <h2 className="text-lg font-semibold">Seu pedido</h2>
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-4" onClick={() => setCarrinho(false)}>
+      <div className="max-h-[88dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-3xl bg-white p-6 text-[#222] shadow-2xl" style={vars} onClick={(x) => x.stopPropagation()}>
+        <div className="flex items-center justify-between"><h2 className="text-2xl font-semibold">Seu pedido</h2><button className="grid h-10 w-10 place-items-center rounded-full border text-xl" onClick={() => setCarrinho(false)} aria-label="Fechar">×</button></div>
         {car.map((l) => (
           <div key={l.key} className="space-y-1 border-b pb-2">
             <div className="flex items-start justify-between gap-2">
-              <span><b>{l.qtd}× {l.p.nome}</b>{l.opcoes.length > 0 && <em className="block text-xs opacity-70">{(l.p.grupos ?? []).flatMap((g) => g.opcoes).filter((o) => l.opcoes.includes(o.id)).map((o) => o.nome).join(', ')}</em>}</span>
-              <span className="flex items-center gap-2"><b>{brl(l.qtd * (Number(l.p.preco) + adic(l)))}</b>
-                <button className="grid h-8 w-8 place-items-center rounded-full border" onClick={() => setCar((c) => c.map((k) => (k.key === l.key ? { ...k, qtd: k.qtd - 1 } : k)).filter((k) => k.qtd > 0))}>−</button>
-                <button className="grid h-8 w-8 place-items-center rounded-full border" onClick={() => setCar((c) => c.map((k) => (k.key === l.key ? { ...k, qtd: k.qtd + 1 } : k)))}>+</button></span>
+              <span className="text-lg"><b>{l.qtd}× {l.p.nome}</b>{l.opcoes.length > 0 && <em className="block text-xs opacity-70">{(l.p.grupos ?? []).flatMap((g) => g.opcoes).filter((o) => l.opcoes.includes(o.id)).map((o) => o.nome).join(', ')}</em>}</span>
+              <span className="flex items-center gap-3 text-lg"><b>{brl(l.qtd * (Number(l.p.preco) + adic(l)))}</b>
+                <button className="grid h-11 w-11 place-items-center rounded-full border text-xl" onClick={() => setCar((c) => c.map((k) => (k.key === l.key ? { ...k, qtd: k.qtd - 1 } : k)).filter((k) => k.qtd > 0))}>−</button>
+                <button className="grid h-11 w-11 place-items-center rounded-full border text-xl" onClick={() => setCar((c) => c.map((k) => (k.key === l.key ? { ...k, qtd: k.qtd + 1 } : k)))}>+</button></span>
             </div>
-            <input className="w-full rounded-lg border p-2 text-sm" placeholder="Observação (sem cebola…)" value={l.obs} onChange={(x) => setCar((c) => c.map((k) => (k.key === l.key ? { ...k, obs: x.target.value } : k)))} />
+            <input className="w-full rounded-xl border p-3 text-base" placeholder="Observação (sem cebola…)" value={l.obs} onChange={(x) => setCar((c) => c.map((k) => (k.key === l.key ? { ...k, obs: x.target.value } : k)))} />
           </div>
         ))}
         {!car.length && <p className="text-sm opacity-70">Sacola vazia.</p>}
         {msg && <p className="text-sm text-[var(--p)]">{msg}</p>}
-        <button className={btn + ' w-full'} disabled={env || !car.length} onClick={() => { setCarrinho(false); setMsg(''); setLeitor('pedido') }}>Ler QR da comanda e enviar · {brl(total)}</button>
+        <div className="flex items-center justify-between border-t pt-3 text-xl"><span>Total</span><b>{brl(total)}</b></div>
+        <button className={btn + ' min-h-[60px] w-full text-lg'} disabled={env || !car.length} onClick={() => { setCarrinho(false); setMsg(''); setLeitor('pedido') }}>Enviar pedido · ler o QR do cartão</button>
       </div>
     </div>
   )
@@ -205,8 +214,8 @@ export function MesaPublica() {
           {qtd > 0 && <button className={btn + ' flex w-full items-center justify-between shadow-lg'} onClick={() => setCarrinho(true)}><span>Ver pedido · {qtd} {qtd === 1 ? 'item' : 'itens'}</span><span>{brl(total)}</span></button>}
         </>}
         sobrepor={<>{dialogoAcesso}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr camera="user" titulo="Mostre o QR Code do cartão da sua comanda para a câmera da frente" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
-          <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50" onClick={() => setMinha(null)}>
-            <div className="max-h-[85vh] w-full max-w-xl space-y-2 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" onClick={(x) => x.stopPropagation()}>
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setMinha(null)}>
+            <div className="max-h-[88dvh] w-full max-w-2xl space-y-2 overflow-y-auto rounded-3xl bg-white p-6 text-[#222] shadow-2xl" onClick={(x) => x.stopPropagation()}>
               <h2 className="text-lg font-semibold">Comanda {minha.numero}{minha.nome ? ` · ${minha.nome}` : ''}</h2>
               {minha.itens.map((i, k) => <div key={k} className="flex justify-between py-1 text-sm"><span>{i.qtd}× {i.nome}{i.opcoes?.length ? <em className="block text-xs opacity-70">{i.opcoes.map((o) => o.nome).join(', ')}</em> : null} <em className="opacity-60">({i.status})</em></span><span>{brl(i.qtd * i.preco_unit)}</span></div>)}
               {!minha.itens.length && <p className="text-sm opacity-70">Nenhum item ainda.</p>}
