@@ -23,7 +23,7 @@ export function Tablet() {
   const carregar = useCallback(async () => {
     const [a, b, c, k] = await Promise.all([db.from('pdv_config').select('*').single(), db.from('pdv_mesas').select('*').eq('ativo', true).order('numero'), db.from('pdv_dispositivos').select('*').order('criado_em'), db.from('pdv_cartoes').select('numero,token').order('numero')])
     setCartoes((k.data ?? []) as { numero: number; token: string }[])
-    setCfg(a.data as Cfg); setMesas((b.data ?? []) as Mesa[]); setDisps((c.data ?? []) as Disp[])
+    setCfg(a.data as Cfg); setMesas(((b.data ?? []) as Mesa[]).sort((x, y) => String(x.numero).localeCompare(String(y.numero), 'pt-BR', { numeric: true }))); setDisps((c.data ?? []) as Disp[])
   }, [])
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => {
