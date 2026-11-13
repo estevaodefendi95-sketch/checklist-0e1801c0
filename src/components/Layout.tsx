@@ -94,7 +94,7 @@ export function Layout({ children }: { children: ReactNode }) {
       ? [{ to: '/admin/templates', rotulo: 'Áreas e modelos', icone: 'modelos', grupo: 'admin' } as Item]
       : []),
   ]
-  const NA_BARRA = pode('pdv_operar') ? ['/pdv', '/', '/relatorio/estoque'] : ['/', '/areas', '/fichas']
+  const NA_BARRA = pode('pdv_operar') ? ['/pdv', '/pdv/comandas', '/pdv/reservas'] : ['/', '/areas', '/fichas']
 
   useEffect(() => setMaisAberto(false), [pathname])
 

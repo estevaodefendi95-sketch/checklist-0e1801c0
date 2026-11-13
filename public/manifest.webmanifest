@@ -1,13 +1,13 @@
 {
-  "name": "Checklist — Cozinha, Bar & Salão",
-  "short_name": "Checklist",
-  "description": "Checklists operacionais diários de cozinha, bar e salão com histórico e relatórios.",
+  "name": "Paggio Operação",
+  "short_name": "Paggio",
+  "description": "Paggio Gastrobar: salão, comandas, caixa, reservas, estoque e checklists da operação.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "lang": "pt-BR",
-  "background_color": "#faf9f6",
+  "background_color": "#1a1a1a",
   "theme_color": "#1a1a1a",
   "icons": [
     {
@@ -27,6 +27,54 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "id": "/",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "shortcuts": [
+    {
+      "name": "Salão e mesas",
+      "short_name": "Salão",
+      "url": "/pdv",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Comandas",
+      "url": "/pdv/comandas",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Reservas",
+      "url": "/pdv/reservas",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Caixa",
+      "url": "/pdv/caixa",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

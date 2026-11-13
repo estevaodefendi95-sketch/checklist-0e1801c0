@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
@@ -51,7 +51,18 @@ export function PdvSalao() {
   const porMesa = useMemo(() => new Map(comandas.filter((c) => c.mesa_id).map((c) => [c.mesa_id!, c])), [comandas])
   const semMesa = comandas.filter((c) => !c.mesa_id)
   const sala = salaId ?? salas[0]?.id ?? null
+  // no celular o mapa encolhe para caber na largura da tela (sem rolar para o lado); na edição fica em tamanho real
+  const caixa = useRef<HTMLDivElement>(null)
+  const [larguraCaixa, setLarguraCaixa] = useState(0)
+  useEffect(() => {
+    const f = () => setLarguraCaixa(caixa.current?.clientWidth ?? 0)
+    f(); window.addEventListener('resize', f)
+    return () => window.removeEventListener('resize', f)
+  }, [mesas.length])
   const mesasSala = mesas.filter((m) => (m.sala_id ?? null) === sala || (!sala && !m.sala_id))
+  const conteudoW = Math.max(320, ...mesasSala.map((m) => m.pos_x + dimMesa(m).w + 20))
+  const alturaMapa = Math.max(300, ...mesasSala.map((m) => m.pos_y + dimMesa(m).h + 20))
+  const escala = editando || !larguraCaixa ? 1 : Math.max(0.55, Math.min(1, (larguraCaixa - 24) / conteudoW))
   const abertas = comandas.length
   const aberto = comandas.reduce((s, c) => s + num(totais[c.id]?.total), 0)
 
@@ -159,8 +170,9 @@ export function PdvSalao() {
       {!mesas.length ? (
         <Vazio texto={pode('pdv_gerir') ? 'Nenhuma mesa cadastrada. Monte o mapa em PDV · Configurações › Salão.' : 'Nenhuma mesa cadastrada.'} />
       ) : (
-        <div className={`${cartaoCls} relative overflow-auto p-3`} style={{ minHeight: 420 }}>
-          <div ref={area} className="relative touch-none select-none" onPointerMove={editando ? mover : undefined} onPointerUp={editando ? soltar : undefined} style={{ minWidth: 640, height: Math.max(420, ...mesasSala.map((m) => m.pos_y + dimMesa(m).h + 20)) }}>
+        <div ref={caixa} className={`${cartaoCls} relative overflow-auto p-3`}>
+          <div style={{ width: editando ? undefined : Math.max(0, conteudoW * escala), height: editando ? undefined : alturaMapa * escala }}>
+          <div ref={area} className="relative touch-none select-none" onPointerMove={editando ? mover : undefined} onPointerUp={editando ? soltar : undefined} style={{ minWidth: editando ? 640 : undefined, width: editando ? undefined : conteudoW, height: alturaMapa, transform: escala < 1 ? `scale(${escala})` : undefined, transformOrigin: 'top left' }}>
             {mesasSala.map((m) => {
               const c = porMesa.get(m.id)
               const st = c ? c.status : 'livre'
@@ -184,6 +196,7 @@ export function PdvSalao() {
                 </button>
               )
             })}
+          </div>
           </div>
         </div>
       )}
