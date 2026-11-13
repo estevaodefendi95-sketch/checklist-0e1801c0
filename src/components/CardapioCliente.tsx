@@ -112,10 +112,10 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
 
       <div className="flex min-h-0 flex-1">
         {lateral && !termo && (
-          <nav className="flex w-44 shrink-0 flex-col border-r border-black/5 bg-white">
+          <nav className="flex w-60 shrink-0 flex-col border-r border-black/5 bg-white">
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
               {secoes.map(({ c }) => (
-                <button key={c.id} onClick={() => ir(c.id)} className="block w-full rounded-xl px-3 py-3 text-left text-sm font-medium leading-tight"
+                <button key={c.id} onClick={() => ir(c.id)} className="block w-full rounded-2xl px-4 py-4 text-left text-base font-medium leading-tight"
                   style={ativa === c.id ? { background: 'color-mix(in srgb, var(--p) 10%, white)', color: 'var(--p)', fontWeight: 600 } : { color: 'var(--t)', opacity: 0.75 }}>{c.nome}</button>
               ))}
             </div>
