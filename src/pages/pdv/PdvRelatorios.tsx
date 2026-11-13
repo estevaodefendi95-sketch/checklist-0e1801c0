@@ -9,6 +9,7 @@ import { numero } from '../../lib/formato'
 import { chipCls } from '../../components/Estado'
 
 interface Pag { comanda_id: string; forma: string; valor: number; troco: number; tef_provedor: string | null; user_id: string | null }
+interface Aprov { acao: string; comanda_id: string | null; item_id: string | null; detalhe: string | null; motivo: string | null; solicitado_por: string | null; aprovado_por: string | null; criado_em: string }
 interface Cons { insumo_id: string; quantidade: number }
 interface Ins { id: string; nome: string; unidade: string; preco: number | null }
 
@@ -31,6 +32,10 @@ export function PdvRelatorios() {
   const [catDe, setCatDe] = useState<Record<string, string>>({})
   const [erro, setErro] = useState('')
   const [pronto, setPronto] = useState(false)
+  const [aprovs, setAprovs] = useState<Aprov[]>([])
+  const [fCliente, setFCliente] = useState('')
+  const [fUser, setFUser] = useState('')
+  const [soCancel, setSoCancel] = useState(false)
 
   const carregar = useCallback(async () => {
     setPronto(false)
@@ -41,7 +46,7 @@ export function PdvRelatorios() {
     const cs = ((c.data ?? []) as Comanda[]).filter((x) => !x.funcionario_id)
     setComandas(cs)
     const ids = cs.map((x) => x.id)
-    const [i, p, m, pr, ct, cn, ins, cf, pf] = await Promise.all([
+    const [i, p, m, pr, ct, cn, ins, cf, pf, ap] = await Promise.all([
       ids.length ? db.from('pdv_pedido_itens').select('*').in('comanda_id', ids) : { data: [] },
       ids.length ? db.from('pdv_pagamentos').select('comanda_id,forma,valor,troco,tef_provedor,user_id').in('comanda_id', ids).eq('estornado', false) : { data: [] },
       db.from('pdv_mesas').select('*'),
@@ -51,7 +56,9 @@ export function PdvRelatorios() {
       db.from('insumos').select('id,nome,unidade,preco'),
       db.from('pdv_config').select('estoque_auto_desde').eq('id', 1).maybeSingle(),
       db.from('profiles').select('id,nome'),
+      ids.length ? db.from('pdv_aprovacoes').select('acao,comanda_id,item_id,detalhe,motivo,solicitado_por,aprovado_por,criado_em').in('comanda_id', ids) : { data: [] },
     ])
+    setAprovs((ap.data ?? []) as Aprov[])
     setCons((cn.data ?? []) as Cons[])
     setInsumos(Object.fromEntries(((ins.data ?? []) as Ins[]).map((x) => [x.id, x])))
     setCorte(cf.data?.estoque_auto_desde ?? '')
@@ -67,7 +74,39 @@ export function PdvRelatorios() {
   }, [de, ate])
   useEffect(() => { carregar() }, [carregar])
 
+  const normal = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  const cancelPorComanda = useMemo(() => {
+    const m = new Set<string>()
+    itens.forEach((i) => { if (i.status === 'cancelado') m.add(i.comanda_id) })
+    comandas.forEach((c) => { if (c.status === 'cancelada') m.add(c.id) })
+    return m
+  }, [itens, comandas])
+  const cF = useMemo(() => {
+    const q = normal(fCliente.trim()), dig = fCliente.replace(/\D/g, '')
+    return comandas.filter((c) => {
+      if (fUser && (c as unknown as { aberta_por?: string }).aberta_por !== fUser) return false
+      if (soCancel && !cancelPorComanda.has(c.id)) return false
+      if (q) {
+        const nome = normal(c.nome_cliente ?? '')
+        const okNome = nome.includes(q)
+        const okTel = dig.length >= 3 && (c.telefone ?? '').replace(/\D/g, '').includes(dig)
+        const okNum = /^\d+$/.test(q) && String(c.numero) === q
+        if (!(okNome || okTel || okNum)) return false
+      }
+      return true
+    })
+  }, [comandas, fCliente, fUser, soCancel, cancelPorComanda])
+  const idsCF = useMemo(() => new Set(cF.map((c) => c.id)), [cF])
+  const itF = useMemo(() => itens.filter((i) => idsCF.has(i.comanda_id)), [itens, idsCF])
+  const pgF = useMemo(() => pags.filter((p) => idsCF.has(p.comanda_id)), [pags, idsCF])
+  const usuariosNoPeriodo = useMemo(() => {
+    const ids = new Set<string>()
+    comandas.forEach((c) => { const u = (c as unknown as { aberta_por?: string }).aberta_por; if (u) ids.add(u) })
+    return [...ids].map((id) => ({ id, nome: operadores[id] ?? 'Usuário' })).sort((a, b) => a.nome.localeCompare(b.nome))
+  }, [comandas, operadores])
+
   const r = useMemo(() => {
+    const comandas = cF, itens = itF, pags = pgF
     const fechadas = comandas.filter((c) => c.status === 'fechada')
     const abertas = comandas.filter((c) => c.status === 'aberta' || c.status === 'pedindo_conta')
     const canceladas = comandas.filter((c) => c.status === 'cancelada')
@@ -123,11 +162,11 @@ export function PdvRelatorios() {
       pm[k].min += c.fechada_em ? Math.max(0, (new Date(c.fechada_em).getTime() - new Date(c.aberta_em).getTime()) / 60000) : 0
     })
     return { hv, pm, oper, horas, vendSemFicha, faixas, dias, ORD, mediaPessoas: fechadas.length ? pessoas / fechadas.length : 0, maq, couvert, rodizio, fechadas, abertas, canceladas, fat, servico, porForma, prod, cat, pessoas, cancel, bruto }
-  }, [comandas, itens, pags, catDe, operadores, semFicha])
+  }, [cF, itF, pgF, catDe, operadores, semFicha])
 
   function csv() {
     const linhas = [['comanda', 'mesa', 'abertura', 'fechamento', 'status', 'pessoas', 'subtotal', 'servico_pct', 'desconto']]
-    comandas.forEach((c) => linhas.push([String(c.numero), c.mesa_id ? mesas[c.mesa_id]?.numero ?? '' : 'balcao', c.aberta_em, c.fechada_em ?? '', c.status, String(c.pessoas), r.bruto(c.id).toFixed(2), String(c.taxa_servico_pct), String(c.desconto)]))
+    cF.forEach((c) => linhas.push([String(c.numero), c.mesa_id ? mesas[c.mesa_id]?.numero ?? '' : 'balcao', c.aberta_em, c.fechada_em ?? '', c.status, String(c.pessoas), r.bruto(c.id).toFixed(2), String(c.taxa_servico_pct), String(c.desconto)]))
     const blob = new Blob(['﻿' + linhas.map((l) => l.join(';')).join('\n')], { type: 'text/csv' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `pdv_${de}_${ate}.csv`; a.click()
   }
@@ -145,6 +184,18 @@ export function PdvRelatorios() {
         <input type="date" className={inputCls + ' !w-auto'} value={de} onChange={(e) => setDe(e.target.value)} />
         <input type="date" className={inputCls + ' !w-auto'} value={ate} onChange={(e) => setAte(e.target.value)} />
       </div>
+      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+        <div className="relative">
+          <input className={inputCls + ' !pr-10'} type="search" placeholder="Buscar cliente (nome, telefone ou nº da comanda)" value={fCliente} onChange={(e) => setFCliente(e.target.value)} />
+          {fCliente && <button aria-label="Limpar" className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center text-xl text-ink-soft" onClick={() => setFCliente('')}>×</button>}
+        </div>
+        <select className={inputCls + ' !w-auto'} value={fUser} onChange={(e) => setFUser(e.target.value)} aria-label="Usuário">
+          <option value="">Todos os usuários</option>
+          {usuariosNoPeriodo.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+        </select>
+        <button className={chipCls(soCancel)} aria-pressed={soCancel} onClick={() => setSoCancel(!soCancel)}>Só com cancelamento</button>
+      </div>
+      {(fCliente || fUser || soCancel) && <p className="mb-3 text-sm text-ink-soft">Filtrado: {cF.length} de {comandas.length} comanda(s) no período.</p>}
       {erro && <Erro texto={erro} />}
       <div className="mb-4 flex gap-2">
         <button className={chipCls(aba === 'vendas')} onClick={() => setAba('vendas')}>Vendas</button>
@@ -232,14 +283,46 @@ export function PdvRelatorios() {
               {!topProd.length && <p className="text-sm text-ink-soft">Sem vendas no período.</p>}
             </Bloco>
             <Bloco t="Comandas do período">
-              {!comandas.length ? <Vazio texto="Nenhuma comanda." /> : comandas.slice().reverse().slice(0, 40).map((c) => (
+              {!cF.length ? <Vazio texto="Nenhuma comanda." /> : cF.slice().reverse().slice(0, 40).map((c) => (
                 <Linha key={c.id} a={`#${c.numero} · ${c.mesa_id ? 'mesa ' + (mesas[c.mesa_id]?.numero ?? '?') : 'balcão'} · ${c.pessoas} pes. · ${hora(c.aberta_em)} · ${c.status}`} b={reais(r.bruto(c.id) * (1 + c.taxa_servico_pct / 100) - c.desconto)} />
               ))}
             </Bloco>
-            {r.cancel.length > 0 && (
-              <Bloco t="Itens cancelados">
-                {r.cancel.map((i) => <Linha key={i.id} a={`${i.qtd}× ${i.nome}`} b={reais(i.qtd * i.preco_unit)} />)}
-              </Bloco>
+            <Bloco t="Itens lançados por usuário">
+              {(() => {
+                const m: Record<string, { n: number; v: number; c: number }> = {}
+                itF.filter((i) => i.tipo === 'produto').forEach((i) => {
+                  const k = operadores[(i as unknown as { criado_por?: string }).criado_por ?? ''] ?? 'Sistema / tablet'
+                  m[k] ??= { n: 0, v: 0, c: 0 }
+                  if (i.status === 'cancelado') m[k].c += num(i.qtd)
+                  else { m[k].n += num(i.qtd); m[k].v += i.qtd * i.preco_unit }
+                })
+                const ent = Object.entries(m).sort((a, b) => b[1].v - a[1].v)
+                return ent.length ? ent.map(([k, x]) => <Linha key={k} a={`${k} · ${x.n} item(ns)${x.c ? ` · ${x.c} cancelado(s)` : ''}`} b={reais(x.v)} />) : <p className="text-sm text-ink-soft">Sem itens.</p>
+              })()}
+            </Bloco>
+            {(r.cancel.length > 0 || r.canceladas.length > 0) && (
+              <div className="lg:col-span-2"><Bloco t={`Cancelamentos (${r.cancel.length} item(ns), ${r.canceladas.length} comanda(s))`}>
+                {r.cancel.map((i) => {
+                  const c = cF.find((x) => x.id === i.comanda_id)
+                  const a = aprovs.find((x) => x.item_id === i.id)
+                  const mot = (i as unknown as { cancelado_motivo?: string }).cancelado_motivo ?? a?.motivo
+                  return (
+                    <div key={i.id} className="py-2 text-sm">
+                      <div className="flex justify-between gap-3"><span><b>{i.qtd}× {i.nome}</b> · #{c?.numero} {c?.mesa_id ? 'mesa ' + (mesas[c.mesa_id]?.numero ?? '?') : 'balcão'}{c?.nome_cliente ? ` · ${c.nome_cliente}` : ''}</span><b className="shrink-0">{reais(i.qtd * i.preco_unit)}</b></div>
+                      <div className="text-xs text-ink-soft">Motivo: {mot || 'não informado'}{a ? ` · pedido por ${operadores[a.solicitado_por ?? ''] ?? '—'} · aprovado por ${operadores[a.aprovado_por ?? ''] ?? '—'} · ${hora(a.criado_em)}` : ' · sem registro de aprovação (anterior ao controle)'}</div>
+                    </div>
+                  )
+                })}
+                {r.canceladas.map((c) => {
+                  const a = aprovs.find((x) => x.acao === 'cancelar_comanda' && x.comanda_id === c.id)
+                  return (
+                    <div key={c.id} className="py-2 text-sm">
+                      <div className="flex justify-between gap-3"><span><b>Comanda #{c.numero} cancelada</b> · {c.mesa_id ? 'mesa ' + (mesas[c.mesa_id]?.numero ?? '?') : 'balcão'}{c.nome_cliente ? ` · ${c.nome_cliente}` : ''}</span><b className="shrink-0">{reais(itF.filter((i) => i.comanda_id === c.id).reduce((t, i) => t + i.qtd * i.preco_unit, 0))}</b></div>
+                      <div className="text-xs text-ink-soft">{a ? `Motivo: ${a.motivo ?? '—'} · pedido por ${operadores[a.solicitado_por ?? ''] ?? '—'} · aprovado por ${operadores[a.aprovado_por ?? ''] ?? '—'} · ${hora(a.criado_em)}` : 'sem registro de aprovação (anterior ao controle)'}</div>
+                    </div>
+                  )
+                })}
+              </Bloco></div>
             )}
           </div>
         </>
