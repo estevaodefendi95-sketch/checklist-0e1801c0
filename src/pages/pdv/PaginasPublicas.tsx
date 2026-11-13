@@ -47,6 +47,8 @@ export function ReservarPublico() {
   }, [data, pessoas])
   const max = useMemo(() => new Date(Date.now() + (cfg?.dias_futuro ?? 60) * 864e5).toLocaleDateString('en-CA'), [cfg])
   if (!cfg) return <p className="p-6 text-center">Carregando…</p>
+  // falha de rede ou erro do servidor: a resposta vem sem o tema
+  if (!cfg.tema) return <p className="p-6 text-center">{(cfg as { erro?: string }).erro ?? 'Sem conexão. Tente de novo em instantes.'}</p>
   const p = cfg.tema.primaria ?? '#7a1f2b', f = cfg.tema.fundo ?? '#faf7f2', t = cfg.tema.texto ?? '#222'
   const inp = 'w-full rounded-xl border border-black/15 bg-white p-3 text-base'
 
