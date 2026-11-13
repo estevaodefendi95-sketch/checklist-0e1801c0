@@ -12,6 +12,7 @@ import { PerfisCheckin, usePerfisCobrancas } from './PerfisCheckin'
 import { Modal } from './PdvCaixa'
 import { Grupo, Opcao } from './ConfigCardapio'
 import { EmitirFiscal } from './FiscalRapido'
+import { AprovacaoAdmin, AcaoAprovada } from '../../components/AprovacaoAdmin'
 import { cacheGravar, cacheLer, enfileirarPedido, erroDeRede, useFila } from '../../lib/offline'
 
 interface Pag { tef_provedor: string | null; id: string; forma: string; valor: number; troco: number; tef_status: string | null; tef_nsu: string | null; estornado: boolean; criado_em: string }
@@ -55,6 +56,7 @@ export function Comanda() {
   const { perfis, cobrancas } = usePerfisCobrancas()
   const fila = useFila().filter((p) => p.comanda_id === id)
   const [offline, setOffline] = useState(false)
+  const [aprov, setAprov] = useState<{ titulo: string; descricao?: string; acao: AcaoAprovada; id: string; pedirMotivo: boolean; depois?: () => void } | null>(null)
 
   const carregar = useCallback(async () => {
     if (!id) return
@@ -169,12 +171,9 @@ export function Comanda() {
     setMsg('Pedido enviado para as impressoras.')
     carregar()
   }
-  async function cancelarItem(i: Item) {
-    const motivo = window.prompt(`Cancelar "${i.nome}"? Informe o motivo:`)
-    if (!motivo) return
-    const { error } = await db.from('pdv_pedido_itens').update({ status: 'cancelado', cancelado_motivo: motivo }).eq('id', i.id)
-    if (error) setErro(error.message)
-    else carregar()
+  function cancelarItem(i: Item) {
+    if (semRede()) return
+    setAprov({ titulo: `Cancelar "${i.nome}"`, descricao: `${i.qtd}× ${i.nome}. Só um administrador pode aprovar.`, acao: 'cancelar_item', id: i.id, pedirMotivo: true })
   }
   async function statusItem(i: Item, status: Item['status']) {
     await db.from('pdv_pedido_itens').update({ status }).eq('id', i.id)
@@ -222,10 +221,9 @@ export function Comanda() {
     carregar()
     return true
   }
-  async function estornar(p: Pag) {
-    if (!window.confirm(`Estornar ${rotuloForma(p.forma)} de ${reais(p.valor - p.troco)}?`)) return
-    await db.from('pdv_pagamentos').update({ estornado: true }).eq('id', p.id)
-    carregar()
+  function estornar(p: Pag) {
+    if (semRede()) return
+    setAprov({ titulo: 'Estornar pagamento', descricao: `${rotuloForma(p.forma)} de ${reais(p.valor - p.troco)}. Só um administrador pode aprovar.`, acao: 'estornar', id: p.id, pedirMotivo: false })
   }
   async function fechar() {
     if (!c) return
@@ -262,12 +260,10 @@ export function Comanda() {
     if (e3.error) return setErro(e3.error.message)
     nav('/pdv/consumo')
   }
-  async function cancelarComanda() {
-    if (!c || !window.confirm('Cancelar a comanda inteira? Só é permitido sem pagamentos.')) return
+  function cancelarComanda() {
+    if (!c || semRede()) return
     if (pags.some((p) => !p.estornado)) return setErro('Estorne os pagamentos antes de cancelar.')
-    await db.from('pdv_pedido_itens').update({ status: 'cancelado', cancelado_motivo: 'comanda cancelada' }).eq('comanda_id', c.id)
-    await db.from('pdv_comandas').update({ status: 'cancelada', fechada_em: new Date().toISOString() }).eq('id', c.id)
-    nav('/pdv')
+    setAprov({ titulo: `Cancelar a comanda ${c.numero}`, descricao: 'Todos os itens serão cancelados. Só um administrador pode aprovar.', acao: 'cancelar_comanda', id: c.id, pedirMotivo: true, depois: () => nav('/pdv') })
   }
   async function salvarPessoas() {
     if (!c || pessoasEd == null) return
@@ -316,6 +312,10 @@ export function Comanda() {
         </div>
       )}
       {erro && <Erro texto={erro} />}
+      {aprov && (
+        <AprovacaoAdmin titulo={aprov.titulo} descricao={aprov.descricao} acao={aprov.acao} id={aprov.id} pedirMotivo={aprov.pedirMotivo}
+          onFechar={() => setAprov(null)} onOk={() => { const d = aprov.depois; setAprov(null); setMsg('Aprovado pelo administrador.'); if (d) d(); else carregar() }} />
+      )}
       {offline && <p className="mb-3 rounded-xl bg-amber-100 px-4 py-2 text-sm text-amber-900">Mostrando a última versão salva desta comanda. Você pode lançar pedidos; pagamento e fechamento precisam de internet.</p>}
       {fila.length > 0 && (
         <div className="mb-3 rounded-xl border border-amber-400 bg-amber-50 px-4 py-2 text-sm text-amber-900">

@@ -36,6 +36,7 @@ import { WhatsApp } from './pages/pdv/WhatsApp'
 import { CardapioPublico, ReservarPublico } from './pages/pdv/PaginasPublicas'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
 import { AvisoOffline } from './components/AvisoOffline'
+import { AprovacoesAdmin } from './components/AprovacoesAdmin'
 
 function Protected({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
   return (
@@ -93,6 +94,7 @@ export default function App() {
       <PermissoesProvider>
         <AvisoAtualizacao />
         <AvisoOffline />
+        <AprovacoesAdmin />
         <RouterProvider router={router} />
       </PermissoesProvider>
     </AuthProvider>

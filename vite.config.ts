@@ -40,6 +40,7 @@ export default defineConfig({
       workbox: {
         // arquivos do build (com hash) ficam no precache; dados do Supabase exigem conexão
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        importScripts: ['push-sw.js'],
         clientsClaim: true,
         cleanupOutdatedCaches: true,
         // sem navigateFallback: a navegação vai primeiro para a rede (regra abaixo)
