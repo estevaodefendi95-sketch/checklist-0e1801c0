@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { db } from '../../lib/supabase'
+import { Link } from 'react-router-dom'
+import { db, supabase } from '../../lib/supabase'
+import { reduzir } from '../../lib/imagem'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais, lerNumero } from '../../lib/formato'
@@ -287,7 +289,7 @@ function Produtos() {
                 <li key={p.id} className={`flex flex-wrap items-center justify-between gap-2 p-3 text-sm ${p.ativo ? '' : 'opacity-50'}`}>
                   <button className="min-w-0 flex-1 text-left" onClick={() => setEd(p)}>
                     <b>{p.nome}</b>
-                    <span className="block text-xs text-ink-soft">{p.destino}{!p.ncm && ' · sem NCM'}{rotuloHorario(p.horarios) ? ` · ${rotuloHorario(p.horarios)}` : ''}</span>
+                    <span className="block text-xs text-ink-soft">{p.destino}{!p.descricao && ' · sem descrição'}{!p.ncm && ' · sem NCM'}{rotuloHorario(p.horarios) ? ` · ${rotuloHorario(p.horarios)}` : ''}</span>
                   </button>
                   <span className="flex flex-wrap items-center gap-3">
                     <label className="flex items-center gap-1">R$
@@ -316,6 +318,24 @@ function Produtos() {
       {ed && (
         <Modal titulo={ed.id ? 'Editar produto' : 'Novo produto'} fechar={() => setEd(null)}>
           <Campo r="Nome"><input className={inputCls} value={ed.nome ?? ''} onChange={(e) => set({ nome: e.target.value })} /></Campo>
+          <Campo r="Descrição do prato (aparece no tablet e no cardápio)">
+            <textarea className={inputCls + ' !min-h-[96px] py-2'} maxLength={400} placeholder="Ex.: Filé mignon grelhado, molho de vinho tinto, batatas rústicas e legumes salteados." value={ed.descricao ?? ''} onChange={(e) => set({ descricao: e.target.value })} />
+            <span className="mt-0.5 block text-right text-[11px] text-ink-soft">{(ed.descricao ?? '').length}/400</span>
+          </Campo>
+          <div className="flex items-center gap-3">
+            {ed.foto_url ? <img src={ed.foto_url} alt="" className="h-16 w-24 rounded-lg object-cover" /> : <span className="grid h-16 w-24 place-items-center rounded-lg bg-brand-soft text-xs text-ink-soft">sem foto</span>}
+            <label className="text-sm">Foto do prato<input type="file" accept="image/*" className="mt-1 block text-xs" onChange={async (e) => {
+              const arq = e.target.files?.[0]; if (!arq) return
+              try {
+                const f = await reduzir(arq, 1200)
+                const path = `produtos/${crypto.randomUUID()}.${f.name.split('.').pop()?.toLowerCase() || 'jpg'}`
+                const up = await supabase.storage.from('tablet').upload(path, f, { contentType: f.type })
+                if (up.error) throw up.error
+                set({ foto_url: supabase.storage.from('tablet').getPublicUrl(path).data.publicUrl })
+              } catch (x) { s.falha((x as Error).message) }
+            }} /></label>
+          </div>
+          {ed.ficha_id ? <p className="text-xs text-ink-soft">Ficha técnica vinculada · <Link className="text-brand underline" to={`/fichas/${ed.ficha_id}`}>abrir ficha</Link> (ingredientes, custo e modo de preparo ficam lá).</p> : <p className="text-xs text-ink-soft">Sem ficha técnica vinculada: o estoque não baixa sozinho nas vendas deste produto.</p>}
           <div className="grid grid-cols-2 gap-2">
             <Campo r="Preço (R$)"><input className={inputCls} inputMode="decimal" defaultValue={ed.preco ?? ''} onChange={(e) => set({ preco: lerNumero(e.target.value) ?? 0 })} /></Campo>
             <Campo r="Categoria"><select className={inputCls} value={ed.categoria_id ?? ''} onChange={(e) => { const c = cats.find((k) => k.id === e.target.value); set({ categoria_id: e.target.value || null, ...(c ? { destino: c.destino_padrao } : {}) }) }}><option value="">—</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></Campo>

@@ -5,6 +5,7 @@ import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
+import { reduzir } from '../../lib/imagem'
 import { Tablet } from './ConfigTablet'
 import { TabletLayout } from './TabletLayout'
 
@@ -37,19 +38,6 @@ export function GestaoTablet() {
 
 interface Banner { id: string; titulo: string; patrocinador: string | null; imagem_url: string; produto_id: string | null; ativo: boolean; ordem: number; inicio: string | null; fim: string | null }
 interface Prod { id: string; nome: string; preco: number; foto_url: string | null; indicacao: boolean; indicacao_rotulo: string | null; ativo: boolean }
-
-async function reduzir(arquivo: File, larg = 1600): Promise<File> {
-  const img = await createImageBitmap(arquivo)
-  try {
-    if (img.width <= larg) return arquivo
-    const c = document.createElement('canvas')
-    c.width = larg; c.height = Math.round((img.height * larg) / img.width)
-    const ctx = c.getContext('2d'); if (!ctx) return arquivo
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height)
-    const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, 'image/jpeg', 0.85))
-    return blob ? new File([blob], arquivo.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }) : arquivo
-  } finally { img.close() }
-}
 
 function Banners() {
   const [lista, setLista] = useState<Banner[] | null>(null)
