@@ -158,6 +158,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <b className="font-display text-2xl font-semibold">{recolhido ? 'P' : 'Paggio'}</b>
             {!recolhido && <small className="mt-1 block text-[11px] uppercase tracking-[0.08em] opacity-75">Operação</small>}
           </Link>
+          <span className={recolhido ? 'absolute left-1/2 top-2 -translate-x-1/2' : 'ml-auto'}><FaixaCaixa compacto={recolhido} /></span>
         </div>
 
         <div className="px-3.5"><Sino className="w-full hover:bg-brand-ink/10" rotulo={!recolhido} /></div>
@@ -211,10 +212,9 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* ---------- conteúdo ---------- */}
       <div className={`transition-[padding] duration-200 ${recuo}`}>
-        <FaixaCaixa />
         {/* celular/tablet retrato: só a marca; o título fica na própria página */}
         <div className="flex items-center justify-between px-4 pt-[calc(14px+env(safe-area-inset-top))] text-xs uppercase tracking-[0.08em] text-ink-soft md:px-6 lg:hidden">
-          <span>Paggio</span>
+          <span className="flex items-center gap-2">Paggio <FaixaCaixa /></span>
           {podeTrocar && <SeletorModo modo={modo} onModo={trocarModo} compacto />}
           <Sino className="text-brand" />
         </div>
