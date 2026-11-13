@@ -35,6 +35,7 @@ export function PdvRelatorios() {
   const [aprovs, setAprovs] = useState<Aprov[]>([])
   const [fCliente, setFCliente] = useState('')
   const [fUser, setFUser] = useState('')
+  const [fPapel, setFPapel] = useState<'qualquer' | 'abriu' | 'lancou' | 'fechou'>('qualquer')
   const [soCancel, setSoCancel] = useState(false)
 
   const carregar = useCallback(async () => {
@@ -81,10 +82,20 @@ export function PdvRelatorios() {
     comandas.forEach((c) => { if (c.status === 'cancelada') m.add(c.id) })
     return m
   }, [itens, comandas])
+  // quem abriu, quem lançou itens e quem fechou cada comanda (dados antigos: quem fechou = quem recebeu o pagamento)
+  const envolvidos = useCallback((c: Comanda): ['abriu' | 'lancou' | 'fechou', string][] => {
+    const x = c as unknown as { aberta_por?: string; fechada_por?: string }
+    const out: ['abriu' | 'lancou' | 'fechou', string][] = []
+    if (x.aberta_por) out.push(['abriu', x.aberta_por])
+    itens.filter((i) => i.comanda_id === c.id).forEach((i) => { const u = (i as unknown as { criado_por?: string }).criado_por; if (u) out.push(['lancou', u]) })
+    const fech = x.fechada_por ?? pags.find((p) => p.comanda_id === c.id && p.user_id)?.user_id
+    if (c.status === 'fechada' && fech) out.push(['fechou', fech])
+    return out
+  }, [itens, pags])
   const cF = useMemo(() => {
     const q = normal(fCliente.trim()), dig = fCliente.replace(/\D/g, '')
     return comandas.filter((c) => {
-      if (fUser && (c as unknown as { aberta_por?: string }).aberta_por !== fUser) return false
+      if (fUser && !envolvidos(c).some(([papel, id]) => id === fUser && (fPapel === 'qualquer' || fPapel === papel))) return false
       if (soCancel && !cancelPorComanda.has(c.id)) return false
       if (q) {
         const nome = normal(c.nome_cliente ?? '')
@@ -95,15 +106,15 @@ export function PdvRelatorios() {
       }
       return true
     })
-  }, [comandas, fCliente, fUser, soCancel, cancelPorComanda])
+  }, [comandas, fCliente, fUser, fPapel, soCancel, cancelPorComanda, envolvidos])
   const idsCF = useMemo(() => new Set(cF.map((c) => c.id)), [cF])
   const itF = useMemo(() => itens.filter((i) => idsCF.has(i.comanda_id)), [itens, idsCF])
   const pgF = useMemo(() => pags.filter((p) => idsCF.has(p.comanda_id) && !p.baixa_de), [pags, idsCF])
   const usuariosNoPeriodo = useMemo(() => {
     const ids = new Set<string>()
-    comandas.forEach((c) => { const u = (c as unknown as { aberta_por?: string }).aberta_por; if (u) ids.add(u) })
+    comandas.forEach((c) => envolvidos(c).forEach(([, u]) => ids.add(u)))
     return [...ids].map((id) => ({ id, nome: operadores[id] ?? 'Usuário' })).sort((a, b) => a.nome.localeCompare(b.nome))
-  }, [comandas, operadores])
+  }, [comandas, operadores, envolvidos])
 
   const r = useMemo(() => {
     const comandas = cF, itens = itF, pags = pgF
@@ -189,10 +200,18 @@ export function PdvRelatorios() {
           <input className={inputCls + ' !pr-10'} type="search" placeholder="Buscar cliente (nome, telefone ou nº da comanda)" value={fCliente} onChange={(e) => setFCliente(e.target.value)} />
           {fCliente && <button aria-label="Limpar" className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center text-xl text-ink-soft" onClick={() => setFCliente('')}>×</button>}
         </div>
-        <select className={inputCls + ' !w-auto'} value={fUser} onChange={(e) => setFUser(e.target.value)} aria-label="Usuário">
-          <option value="">Todos os usuários</option>
-          {usuariosNoPeriodo.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-        </select>
+        <div className="flex gap-2">
+          <select className={inputCls + ' !w-auto'} value={fPapel} onChange={(e) => setFPapel(e.target.value as typeof fPapel)} aria-label="Operação">
+            <option value="qualquer">Qualquer operação</option>
+            <option value="abriu">Abriu a comanda (check-in)</option>
+            <option value="lancou">Lançou produto</option>
+            <option value="fechou">Fechou a conta</option>
+          </select>
+          <select className={inputCls + ' !w-auto'} value={fUser} onChange={(e) => setFUser(e.target.value)} aria-label="Usuário">
+            <option value="">Todos os usuários</option>
+            {usuariosNoPeriodo.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+          </select>
+        </div>
         <button className={chipCls(soCancel)} aria-pressed={soCancel} onClick={() => setSoCancel(!soCancel)}>Só com cancelamento</button>
       </div>
       {(fCliente || fUser || soCancel) && <p className="mb-3 text-sm text-ink-soft">Filtrado: {cF.length} de {comandas.length} comanda(s) no período.</p>}

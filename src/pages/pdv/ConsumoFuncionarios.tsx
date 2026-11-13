@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { db, supabase } from '../../lib/supabase'
+import { db } from '../../lib/supabase'
+import { idOperador } from '../../context/OperadorContext'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, chipCls, inputCls } from '../../components/Estado'
 import { reais, lerNumero } from '../../lib/formato'
@@ -57,7 +58,7 @@ export function ConsumoFuncionarios() {
     const aberta = cmds.find((c) => c.funcionario_id === f.id && (c.status === 'aberta' || c.status === 'pedindo_conta'))
     if (aberta) return nav(`/pdv/comanda/${aberta.id}`)
     const { data, error } = await db.from('pdv_comandas').insert({
-      funcionario_id: f.id, nome_cliente: f.nome, pessoas: 1, origem: 'sistema', taxa_servico_pct: 0, aberta_por: (await supabase.auth.getUser()).data.user?.id,
+      funcionario_id: f.id, nome_cliente: f.nome, pessoas: 1, origem: 'sistema', taxa_servico_pct: 0, aberta_por: await idOperador(),
     }).select('id').single()
     if (error) return setErro(error.message)
     nav(`/pdv/comanda/${data.id}`)

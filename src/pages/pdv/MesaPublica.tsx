@@ -4,7 +4,7 @@ import { supabase } from '../../integrations/supabase/client'
 import { CardapioCliente } from '../../components/CardapioCliente'
 import { ProdutoDetalhe } from '../../components/ProdutoDetalhe'
 import { LeitorQr } from '../../components/LeitorQr'
-import { AutorizarTablet, useSegurar } from '../../components/TabletAcesso'
+import { AutorizarTablet, salvarMesa, useSegurar } from '../../components/TabletAcesso'
 import type { CardBanner } from '../../components/CardapioCliente'
 
 // Tablet da mesa (sem login). O QR Code é do CARTÃO DA COMANDA: o cliente monta o pedido e lê o QR do
@@ -56,6 +56,8 @@ export function MesaPublica() {
   const avisarAdd = (nome: string) => setAdd((a) => ({ nome, n: (a?.n ?? 0) + 1 }))
 
   // Ao "instalar" o app a partir desta página, o ícone abre ESTA mesa em tela cheia (e não o painel de gestão)
+  // este aparelho passa a abrir sempre esta mesa pelo endereço único /mesa
+  useEffect(() => { if (token) salvarMesa(token) }, [token])
   useEffect(() => {
     const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')
     if (!link || !token) return
@@ -64,7 +66,7 @@ export function MesaPublica() {
     fetch('/manifest.webmanifest').then((r) => r.json()).then((m) => {
       const abs = (u: string) => new URL(u, window.location.origin).href
       const novo = {
-        ...m, name: 'Paggio · Cardápio da mesa', short_name: 'Cardápio', id: `/mesa/${token}`, start_url: `/mesa/${token}`, scope: '/mesa/', display: 'fullscreen',
+        ...m, name: 'Paggio · Cardápio da mesa', short_name: 'Cardápio', id: '/mesa', start_url: '/mesa', scope: '/mesa', display: 'fullscreen',
         icons: (m.icons ?? []).map((i: { src: string }) => ({ ...i, src: abs(i.src) })), shortcuts: undefined,
       }
       url = URL.createObjectURL(new Blob([JSON.stringify(novo)], { type: 'application/manifest+json' }))

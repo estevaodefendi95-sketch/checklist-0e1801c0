@@ -27,6 +27,7 @@ import { AReceber } from './pages/pdv/AReceber'
 import { AtendimentoRapido } from './pages/pdv/AtendimentoRapido'
 import { GestaoTablet } from './pages/pdv/GestaoTablet'
 import { MesaPublica } from './pages/pdv/MesaPublica'
+import { MesaEscolher } from './components/TabletAcesso'
 import { Compras } from './pages/Compras'
 import { Eventos } from './pages/pdv/Eventos'
 import { Comandas } from './pages/pdv/Comandas'
@@ -41,6 +42,7 @@ import { Permissao, usePermissoes } from './context/PermissoesContext'
 import { ler } from './lib/armazenamento'
 import { AvisoOffline } from './components/AvisoOffline'
 import { AprovacoesAdmin } from './components/AprovacoesAdmin'
+import { ExigeOperador, OperadorProvider } from './context/OperadorContext'
 
 /** Ao abrir o app no celular em modo Atendimento, a primeira tela é o Salão (e não o painel de gestão). */
 function Abertura() {
@@ -91,19 +93,20 @@ const router = createBrowserRouter([
   { path: '/fichas/:id/editar', element: <Protected><FichaEditor /></Protected> },
   // modo cozinha: tela cheia, sem menu
   { path: '/fichas/:id/cozinha', element: <ProtectedRoute><FichaCozinha /></ProtectedRoute> },
+  { path: '/mesa', element: <MesaEscolher /> },
   { path: '/mesa/:token', element: <MesaPublica /> },
   { path: '/cardapio', element: <CardapioPublico /> },
   { path: '/reservar', element: <ReservarPublico /> },
-  { path: '/pdv', element: <Protected><PdvSalao /></Protected> },
-  { path: '/atendimento', element: <Protected><AtendimentoRapido /></Protected> },
-  { path: '/pdv/comanda/:id', element: <Protected><Comanda /></Protected> },
-  { path: '/pdv/comandas', element: <Protected><Comandas /></Protected> },
+  { path: '/pdv', element: <Protected><ExigeOperador><PdvSalao /></ExigeOperador></Protected> },
+  { path: '/atendimento', element: <Protected><ExigeOperador><AtendimentoRapido /></ExigeOperador></Protected> },
+  { path: '/pdv/comanda/:id', element: <Protected><ExigeOperador><Comanda /></ExigeOperador></Protected> },
+  { path: '/pdv/comandas', element: <Protected><ExigeOperador><Comandas /></ExigeOperador></Protected> },
   { path: '/pdv/crm', element: <Protected><Gate p="pdv_ver_crm"><Crm /></Gate></Protected> },
   { path: '/pdv/consumo', element: <Protected><Gate p="pdv_ver_consumo"><ConsumoFuncionarios /></Gate></Protected> },
   { path: '/estoque/alertas', element: <Protected><EstoqueAlertas /></Protected> },
   { path: '/pdv/reservas', element: <Protected><Gate p="pdv_ver_reservas"><Reservas /></Gate></Protected> },
   { path: '/whatsapp', element: <Protected><Gate p="pdv_ver_whatsapp"><WhatsApp /></Gate></Protected> },
-  { path: '/pdv/caixa', element: <Protected><PdvCaixa /></Protected> },
+  { path: '/pdv/caixa', element: <Protected><ExigeOperador><PdvCaixa /></ExigeOperador></Protected> },
   { path: '/pdv/a-receber', element: <Protected><AReceber /></Protected> },
   { path: '/pdv/relatorios', element: <Protected><Gate p="pdv_ver_vendas"><PdvRelatorios /></Gate></Protected> },
   { path: '/compras', element: <Protected><Compras /></Protected> },
@@ -120,10 +123,12 @@ export default function App() {
   return (
     <AuthProvider>
       <PermissoesProvider>
+        <OperadorProvider>
         <AvisoAtualizacao />
         <AvisoOffline />
         <AprovacoesAdmin />
         <RouterProvider router={router} />
+        </OperadorProvider>
       </PermissoesProvider>
     </AuthProvider>
   )

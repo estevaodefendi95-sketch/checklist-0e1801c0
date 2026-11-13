@@ -29,7 +29,7 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { token, acao, itens, nome, pessoas, telefone, nascimento, email, senha, reserva_id, comanda_token } = await req.json();
+    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token } = await req.json();
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
     const uuidOk = (x: unknown) => /^[0-9a-f-]{36}$/i.test(String(x ?? ""));
@@ -58,32 +58,37 @@ Deno.serve(async (req) => {
       return json({ ok: true, numero: rc.com.numero, nome: rc.com.nome_cliente, status: rc.com.status, ...k });
     }
 
+    // PIN de supervisor (cadastrado pelo administrador): autoriza trocar a mesa do tablet. Limite de erros por mesa/aparelho.
+    async function conferirPin(quem: string) {
+      const { data, error } = await db.rpc("pdv_validar_pin_interno", { p_pin: String(pin ?? ""), p_quem: quem });
+      if (error) return { erro: error.message.includes("Muitas tentativas") ? "Muitas tentativas. Aguarde 10 minutos." : "Não foi possível conferir o PIN." } as const;
+      const u = (data ?? [])[0];
+      if (!u) return { erro: "PIN incorreto." } as const;
+      if (!u.pode_autorizar) return { erro: "Esse PIN não tem autorização para configurar o tablet." } as const;
+      return { ok: true } as const;
+    }
+    async function listaMesas() {
+      const { data: todas } = await db.from("pdv_mesas").select("numero,qr_token,capacidade").eq("ativo", true);
+      return (todas ?? []).sort((a: any, b: any) => String(a.numero).localeCompare(String(b.numero), "pt-BR", { numeric: true }));
+    }
+    // Endereço único do tablet (sem mesa): só mostra as mesas depois do PIN.
+    if (acao === "configurar") {
+      const r = await conferirPin("tablet-config");
+      if ("erro" in r) return json({ erro: r.erro });
+      return json({ ok: true, mesas: await listaMesas() });
+    }
+
     if (!token || !uuidOk(token)) return json({ erro: "Endereço do tablet inválido." });
 
     const { data: mesa } = await db.from("pdv_mesas").select("id,numero").eq("qr_token", token).eq("ativo", true).maybeSingle();
     if (!mesa) return json({ erro: "Mesa não encontrada." });
     const { data: cfg } = await db.from("pdv_config").select("*").eq("id", 1).single();
 
-    // Trava do tablet: trocar de mesa / sair do cardápio exige e-mail e senha de um usuário do sistema com acesso ao PDV.
+    // Trava do tablet: trocar de mesa / sair do cardápio exige o PIN de um supervisor.
     if (acao === "autorizar") {
-      const desde = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      const { count } = await db.from("pdv_tablet_falhas").select("id", { count: "exact", head: true }).eq("token", token).gte("criado_em", desde);
-      if ((count ?? 0) >= 5) return json({ erro: "Muitas tentativas. Aguarde 10 minutos." });
-      const mail = String(email ?? "").trim().toLowerCase();
-      if (!mail || !senha) return json({ erro: "Informe e-mail e senha." });
-      const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
-      const { data: login, error: le } = await anon.auth.signInWithPassword({ email: mail, password: String(senha) });
-      const uid = login?.user?.id;
-      if (le || !uid) { await db.from("pdv_tablet_falhas").insert({ token }); return json({ erro: "E-mail ou senha incorretos." }); }
-      const [{ data: prof }, { data: perm }] = await Promise.all([
-        db.from("profiles").select("role,is_master").eq("id", uid).maybeSingle(),
-        db.from("permissoes").select("*").eq("user_id", uid).maybeSingle(),
-      ]);
-      const ok = prof?.role === "admin" || prof?.is_master || (perm as any)?.pdv_operar || (perm as any)?.pdv_gerir;
-      if (!ok) { await db.from("pdv_tablet_falhas").insert({ token }); return json({ erro: "Esse usuário não tem acesso ao PDV." }); }
-      const { data: todas } = await db.from("pdv_mesas").select("numero,qr_token,capacidade").eq("ativo", true);
-      const mesas = (todas ?? []).sort((a: any, b: any) => String(a.numero).localeCompare(String(b.numero), "pt-BR", { numeric: true }));
-      return json({ ok: true, mesas });
+      const r = await conferirPin("tablet-" + token);
+      if ("erro" in r) return json({ erro: r.erro });
+      return json({ ok: true, mesas: await listaMesas() });
     }
     if (!cfg.tablet_qr_ativo) return json({ mesa: mesa.numero, qr_ativo: false, boas_vindas: cfg.tablet_mensagem_boas_vindas, tema: cfg.tablet_tema });
 

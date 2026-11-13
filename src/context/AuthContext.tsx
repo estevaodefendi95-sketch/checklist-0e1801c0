@@ -52,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    try { sessionStorage.removeItem('paggio-operador') } catch { /* sem armazenamento */ }
     await supabase.auth.signOut()
   }
 

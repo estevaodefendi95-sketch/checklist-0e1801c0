@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../integrations/supabase/client'
+
+export const MESA_KEY = 'paggio-mesa-token'
+export const lerMesaSalva = () => { try { return localStorage.getItem(MESA_KEY) } catch { return null } }
+export const salvarMesa = (t: string) => { try { localStorage.setItem(MESA_KEY, t) } catch { /* sem armazenamento */ } }
 
 /** Segurar o dedo por ~1 s: evita que o cliente aperte sem querer as áreas de gerência do tablet. */
 export function useSegurar(fn?: () => void, ms = 1000) {
@@ -16,27 +21,23 @@ export function useSegurar(fn?: () => void, ms = 1000) {
 }
 
 interface MesaTk { numero: string; qr_token: string; capacidade: number }
-const EMAIL_KEY = 'paggio_tablet_email'
-function lerEmail() { try { return localStorage.getItem(EMAIL_KEY) ?? '' } catch { return '' } }
-
-/** Pede e-mail e senha de um usuário do sistema (validados no servidor) antes de trocar de mesa ou sair do cardápio. */
+/** Pede o PIN de supervisor (cadastrado pelo administrador, com "pode autorizar") antes de trocar de mesa ou sair do cardápio. */
 export function AutorizarTablet({ token, modo, mesaAtual, onTrocar, onSair, onCancelar }: {
   token?: string; modo: 'trocar' | 'sair'; mesaAtual?: string
-  onTrocar: (tokenNovo: string) => void; onSair: () => void; onCancelar: () => void
+  onTrocar: (tokenNovo: string) => void; onSair: () => void; onCancelar?: () => void
 }) {
-  const [email, setEmail] = useState(lerEmail)
-  const [senha, setSenha] = useState('')
+  const [pin, setPin] = useState('')
   const [erro, setErro] = useState('')
   const [carga, setCarga] = useState(false)
   const [mesas, setMesas] = useState<MesaTk[] | null>(null)
 
   async function entrar() {
     setErro(''); setCarga(true)
-    const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao: 'autorizar', email, senha } })
-    setCarga(false); setSenha('')
+    // sem mesa definida ainda (endereço único do tablet): ação "configurar"
+    const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao: token ? 'autorizar' : 'configurar', pin } })
+    setCarga(false); setPin('')
     if (error) return setErro('Sem conexão. Tente de novo.')
     if (data?.erro) return setErro(data.erro)
-    try { localStorage.setItem(EMAIL_KEY, email.trim()) } catch { /* sem armazenamento */ }
     if (modo === 'sair') return onSair()
     setMesas((data.mesas ?? []) as MesaTk[])
   }
@@ -47,13 +48,12 @@ export function AutorizarTablet({ token, modo, mesaAtual, onTrocar, onSair, onCa
         {!mesas ? (
           <>
             <h2 className="text-lg font-semibold">{modo === 'trocar' ? 'Trocar a mesa deste tablet' : 'Sair do cardápio'}</h2>
-            <p className="text-sm opacity-70">Acesso da equipe: informe o e-mail e a senha do seu usuário.</p>
-            <input className={campo} type="email" autoComplete="username" placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <input className={campo} type="password" autoComplete="current-password" placeholder="Senha" value={senha} autoFocus={!!email} onChange={(e) => setSenha(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && email && senha && entrar()} />
+            <p className="text-sm opacity-70">Acesso da equipe: digite o PIN de supervisor.</p>
+            <input className={campo + ' text-center text-2xl tracking-[0.5em]'} type="password" inputMode="numeric" autoComplete="off" maxLength={6} placeholder="PIN" value={pin} autoFocus onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => e.key === 'Enter' && pin.length >= 4 && entrar()} />
             {erro && <p className="text-sm text-red-700">{erro}</p>}
             <div className="flex gap-2">
-              <button className="flex-1 rounded-xl border border-black/20 px-4 py-3 font-medium" onClick={onCancelar}>Cancelar</button>
-              <button className="flex-1 rounded-xl bg-[#7a1f2b] px-4 py-3 font-semibold text-white disabled:opacity-50" disabled={carga || !email || !senha} onClick={entrar}>{carga ? 'Verificando…' : 'Confirmar'}</button>
+              {onCancelar && <button className="flex-1 rounded-xl border border-black/20 px-4 py-3 font-medium" onClick={onCancelar}>Cancelar</button>}
+              <button className="flex-1 rounded-xl bg-[#7a1f2b] px-4 py-3 font-semibold text-white disabled:opacity-50" disabled={carga || pin.length < 4} onClick={entrar}>{carga ? 'Verificando…' : 'Confirmar'}</button>
             </div>
           </>
         ) : (
@@ -65,10 +65,23 @@ export function AutorizarTablet({ token, modo, mesaAtual, onTrocar, onSair, onCa
                 <button key={m.qr_token} className={`rounded-xl border py-3 text-lg font-semibold ${m.numero === mesaAtual ? 'border-[#7a1f2b] bg-[#7a1f2b] text-white' : 'border-black/20'}`} onClick={() => onTrocar(m.qr_token)}>{m.numero}</button>
               ))}
             </div>
-            <button className="w-full rounded-xl border border-black/20 px-4 py-3 font-medium" onClick={onCancelar}>Fechar</button>
+            {onCancelar && <button className="w-full rounded-xl border border-black/20 px-4 py-3 font-medium" onClick={onCancelar}>Fechar</button>}
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Endereço único do tablet (/mesa): abre a mesa já escolhida neste aparelho; na primeira vez pede o PIN e a mesa. */
+export function MesaEscolher() {
+  const nav = useNavigate()
+  const salva = lerMesaSalva()
+  useEffect(() => { if (salva) nav(`/mesa/${salva}`, { replace: true }) }, [salva, nav])
+  if (salva) return null
+  return (
+    <div className="grid h-[100dvh] place-items-center bg-[#f4efe9] text-[#222]">
+      <AutorizarTablet modo="trocar" onSair={() => {}} onTrocar={(tk) => { salvarMesa(tk); nav(`/mesa/${tk}`, { replace: true }) }} />
     </div>
   )
 }

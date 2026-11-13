@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { db, supabase } from '../../lib/supabase'
+import { db } from '../../lib/supabase'
+import { idOperador } from '../../context/OperadorContext'
 import { btnCls, btnSecCls, cartaoCls, chipCls, inputCls } from '../../components/Estado'
 import type { Mesa, Sala } from '../../lib/pdv'
 import { PerfisCheckin, usePerfisCobrancas } from './PerfisCheckin'
@@ -81,7 +82,7 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
     if (cli.error) { setSalvando(false); return setErro(cli.error.message) }
     const { data, error } = await db.from('pdv_comandas').insert({
       numero: nc, mesa_id: mesaId || null, pessoas: pessoas || 1, nome_cliente: nome.trim(), telefone: soDigitos(tel), cliente_id: cli.data, origem: 'sistema',
-      aberta_por: (await supabase.auth.getUser()).data.user?.id,
+      aberta_por: await idOperador(),
       taxa_servico_pct: (await db.from('pdv_config').select('taxa_servico_pct').single()).data?.taxa_servico_pct ?? 10,
     }).select('id').single()
     if (error) { setSalvando(false); return setErro(error.code === '23505' ? (error.message.includes('numero') ? `A comanda nº ${nc} já está em uso. Use outro número.` : 'Essa mesa já tem comanda aberta.') : error.message) }

@@ -12,15 +12,19 @@ import { Checkin } from './ConfigCheckin'
 import { Fiscal, Tef } from './ConfigFiscal'
 import { ReimprimirCupons } from './FiscalRapido'
 import { ConfigDescontos } from './ConfigDescontos'
+import { PreviaImpressao } from './PreviaImpressao'
+import { ConfigPins } from './ConfigPins'
 import { GruposDoProduto, HorarioCampos, Opcoes, Pilula, RelogioHorario, rotuloHorario } from './ConfigCardapio'
 
-type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'fiscal' | 'pagamentos' | 'descontos'
+type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'previa' | 'pins' | 'fiscal' | 'pagamentos' | 'descontos'
 const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
   { v: 'salao', r: 'Salão e mesas', perm: 'pdv_gerir' },
   { v: 'checkin', r: 'Check-in: couvert e rodízio', perm: 'pdv_gerir' },
   { v: 'produtos', r: 'Cardápio e preços', perm: 'pdv_gerir' },
   { v: 'opcoes', r: 'Opções e combos', perm: 'pdv_gerir' },
   { v: 'impressoras', r: 'Impressoras', perm: 'pdv_gerir' },
+  { v: 'previa', r: 'Modelo de impressão', perm: 'pdv_gerir' },
+  { v: 'pins', r: 'Senhas (PIN)', perm: 'pdv_gerir' },
   { v: 'fiscal', r: 'Fiscal (NFC-e)', perm: 'pdv_fiscal' },
   { v: 'descontos', r: 'Descontos', perm: 'pdv_gerir' },
   { v: 'pagamentos', r: 'Pagamentos / TEF', perm: 'pdv_gerir' },
@@ -41,6 +45,8 @@ export function PdvConfig() {
       {aba === 'produtos' && <Produtos />}
       {aba === 'opcoes' && <Opcoes />}
       {aba === 'impressoras' && <Impressoras />}
+      {aba === 'previa' && <PreviaImpressao />}
+      {aba === 'pins' && <ConfigPins />}
       {aba === 'fiscal' && <Fiscal />}
       {aba === 'descontos' && <ConfigDescontos />}
       {aba === 'pagamentos' && <Tef />}

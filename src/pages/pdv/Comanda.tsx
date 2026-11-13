@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db, supabase } from '../../lib/supabase'
+import { idOperador } from '../../context/OperadorContext'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais, lerNumero } from '../../lib/formato'
@@ -166,7 +167,7 @@ export function Comanda() {
   async function enviar() {
     if (!c || !carrinho.length) return
     setErro('')
-    const uid = ((await supabase.auth.getSession()).data.session?.user.id) ?? undefined
+    const uid = await idOperador()
     const linhas = carrinho.map((x) => ({
       comanda_id: c.id, produto_id: x.p.id, nome: x.p.nome, qtd: x.qtd, preco_unit: precoLinha(x),
       opcoes: x.opcoes.map((o) => ({ id: o.id, nome: o.nome, preco: Number(o.preco_adicional) })), obs: x.obs.trim() || null, destino: x.p.destino, origem: 'sistema', criado_por: uid,
@@ -228,7 +229,7 @@ export function Comanda() {
     const { error } = await db.from('pdv_pagamentos').insert({
       comanda_id: c.id, sessao_id: sessao.id, forma, valor: forma === 'dinheiro' ? aplicado + troco : aplicado, troco,
       tef_provedor: cartao ? maq : null, tef_status: cartao ? 'aprovado' : null, tef_nsu: nsu.trim() || null,
-      user_id: (await supabase.auth.getUser()).data.user?.id,
+      user_id: await idOperador(),
     })
     if (error) return fail(error.message)
     setValor(''); setNsu(''); setRecebido(''); setErro('')
@@ -251,7 +252,7 @@ export function Comanda() {
       if (!ok) return
     }
     if (itens.some((i) => i.status !== 'cancelado') === false && !window.confirm('Comanda sem itens. Fechar mesmo assim?')) return
-    const { error } = await db.from('pdv_comandas').update({ status: 'fechada', fechada_em: new Date().toISOString(), sessao_id: sessao?.id ?? null }).eq('id', c.id)
+    const { error } = await db.from('pdv_comandas').update({ status: 'fechada', fechada_em: new Date().toISOString(), sessao_id: sessao?.id ?? null, fechada_por: await idOperador() }).eq('id', c.id)
     if (error) return setErro(error.message)
     // Conta fechada: abre a emissão rápida do cupom fiscal (CPF/CNPJ do cliente ou sem identificação)
     const { data: fc } = await db.from('pdv_fiscal_config').select('ativo').maybeSingle()
@@ -268,10 +269,10 @@ export function Comanda() {
     const e1 = await db.from('pdv_comandas').update({ desconto: desc, taxa_servico_pct: 0 }).eq('id', c.id)
     if (e1.error) return setErro(e1.error.message)
     if (folha > 0) {
-      const e2 = await db.from('pdv_pagamentos').insert({ comanda_id: c.id, sessao_id: sessao?.id ?? null, forma: 'folha', valor: folha, troco: 0, user_id: (await supabase.auth.getUser()).data.user?.id })
+      const e2 = await db.from('pdv_pagamentos').insert({ comanda_id: c.id, sessao_id: sessao?.id ?? null, forma: 'folha', valor: folha, troco: 0, user_id: await idOperador() })
       if (e2.error) return setErro(e2.error.message)
     }
-    const e3 = await db.from('pdv_comandas').update({ status: 'fechada', fechada_em: new Date().toISOString(), sessao_id: sessao?.id ?? null }).eq('id', c.id)
+    const e3 = await db.from('pdv_comandas').update({ status: 'fechada', fechada_em: new Date().toISOString(), sessao_id: sessao?.id ?? null, fechada_por: await idOperador() }).eq('id', c.id)
     if (e3.error) return setErro(e3.error.message)
     nav('/pdv/consumo')
   }

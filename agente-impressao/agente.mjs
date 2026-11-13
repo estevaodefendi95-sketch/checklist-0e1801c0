@@ -43,7 +43,7 @@ function monta(job) {
   if (job.tipo === 'teste') {
     k.centro(true).negrito(true).grande(true).txt('TESTE').grande(false).negrito(false).txt(imp.nome).txt(`Funcao: ${imp.funcao}`).txt(new Date().toLocaleString('pt-BR')).centro(false).txt('Acentuacao: ação, coração, é, ü, ç')
   } else if (job.tipo === 'pedido') {
-    k.centro(true).negrito(true).grande(true).txt(imp.funcao.toUpperCase()).grande(false).txt(`MESA ${c.mesa ?? '-'}`).grande(false).txt(c.comanda ? `Comanda #${c.comanda}${c.cliente ? ' - ' + c.cliente : ''}` : '').negrito(false).txt(`${c.hora ?? ''} (${c.origem ?? ''})`).centro(false).linha()
+    k.centro(true).negrito(true).grande(true).txt(imp.funcao.toUpperCase()).txt(`MESA ${c.mesa ?? '-'}`).grande(false).txt(c.comanda ? `Comanda #${c.comanda}${c.cliente ? ' - ' + c.cliente : ''}` : '').negrito(false).txt(`${c.hora ?? ''} (${c.origem ?? ''})`).centro(false).linha()
     k.negrito(true).grande(true).txt(`${c.qtd ?? 1}x ${c.nome}`).grande(false).negrito(false)
     if (c.obs) k.txt('OBS: ' + c.obs)
     k.linha()

@@ -129,7 +129,12 @@ export function Tablet() {
       </section>
 
       <section className={`${cartaoCls} space-y-3 p-5`}>
-        <Titulo n={3} t="Endereço do tablet de cada mesa" d="Cada tablet fica aberto no endereço da mesa onde está (só para configurar o aparelho; o cliente não usa isso). Para trocar depois, segure o topo da tela do tablet." />
+        <Titulo n={3} t="Endereço do tablet" d="Use o endereço único em todos os tablets: na primeira vez o tablet pede o PIN de supervisor e a mesa, e depois abre sempre nela. Trocar de mesa depois: segure o topo da tela e digite o PIN. Dois tablets podem ficar na mesma mesa." />
+        <button className={`flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border p-4 text-left transition ${copiado === 'unico' ? 'border-green-500 bg-green-50' : 'border-brand/40 bg-brand-soft hover:border-brand'}`} onClick={() => copiar('unico', `${base}/mesa`)} title="Copiar endereço único">
+          <span><span className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">Endereço único (recomendado)</span><span className="block break-all text-base font-bold">{base}/mesa</span></span>
+          <span className="text-sm font-medium text-brand">{copiado === 'unico' ? '✓ Link copiado' : 'Copiar'}</span>
+        </button>
+        <p className="pt-1 text-xs text-ink-soft">O PIN é cadastrado em PDV · Configurações › Senhas (PIN), marcando "pode autorizar". Ou use o link de uma mesa específica abaixo.</p>
         {!mesas.length ? <Vazio texto="Cadastre mesas primeiro." /> : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {mesas.map((m) => (

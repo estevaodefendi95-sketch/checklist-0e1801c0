@@ -28,14 +28,14 @@ function limparDados(acao: string, d: any): { dados?: Record<string, unknown>; e
 }
 
 // Fecha a comanda liberando o restante: "a receber" (cobrança depois) ou "cortesia" (consumo interno).
-async function liberarComanda(db: any, acao: "a_receber" | "cortesia", id: string, mot: string, dados: any, solicitante: string, aprovador: string): Promise<{ ok?: true; erro?: string }> {
+async function liberarComanda(db: any, acao: "a_receber" | "cortesia", id: string, mot: string, dados: any, solicitante: string, aprovador: string, donoCaixa: string = solicitante): Promise<{ ok?: true; erro?: string }> {
   const { data: c } = await db.from("pdv_comandas").select("id,numero,status").eq("id", id).maybeSingle();
   if (!c) return { erro: "Comanda não encontrada." };
   if (!["aberta", "pedindo_conta"].includes(c.status)) return { erro: "A comanda não está aberta." };
   const { data: t } = await db.from("pdv_comanda_totais").select("total,pago").eq("comanda_id", id).maybeSingle();
   const restante = Math.round((Number(t?.total ?? 0) - Number(t?.pago ?? 0)) * 100) / 100;
   if (restante <= 0.004) return { erro: "Não há valor restante nesta comanda." };
-  const { data: ses } = await db.from("pdv_caixa_sessoes").select("id").eq("status", "aberto").eq("aberto_por", solicitante).maybeSingle();
+  const { data: ses } = await db.from("pdv_caixa_sessoes").select("id").eq("status", "aberto").eq("aberto_por", donoCaixa).maybeSingle();
   const { data: pg, error: e1 } = await db.from("pdv_pagamentos").insert({ comanda_id: id, sessao_id: ses?.id ?? null, forma: acao, valor: restante, troco: 0, user_id: solicitante }).select("id").single();
   if (e1) return { erro: e1.message };
   if (acao === "a_receber") {
@@ -45,7 +45,7 @@ async function liberarComanda(db: any, acao: "a_receber" | "cortesia", id: strin
     });
     if (error) { await db.from("pdv_pagamentos").delete().eq("id", pg.id); return { erro: error.message }; }
   }
-  const { error: e3 } = await db.from("pdv_comandas").update({ status: "fechada", fechada_em: new Date().toISOString(), sessao_id: ses?.id ?? null }).eq("id", id);
+  const { error: e3 } = await db.from("pdv_comandas").update({ status: "fechada", fechada_em: new Date().toISOString(), sessao_id: ses?.id ?? null, fechada_por: solicitante }).eq("id", id);
   if (e3) return { erro: e3.message };
   await db.from("pdv_aprovacoes").insert({
     acao, comanda_id: id, pagamento_id: pg.id, motivo: mot || null, solicitado_por: solicitante, aprovado_por: aprovador,
@@ -54,14 +54,14 @@ async function liberarComanda(db: any, acao: "a_receber" | "cortesia", id: strin
   return { ok: true };
 }
 
-async function executar(db: any, acao: string, id: string, mot: string, solicitante: string, aprovador: string, dados: any = {}): Promise<{ ok?: true; erro?: string }> {
-  if (acao === "a_receber" || acao === "cortesia") return liberarComanda(db, acao, id, mot, dados, solicitante, aprovador);
+async function executar(db: any, acao: string, id: string, mot: string, solicitante: string, aprovador: string, dados: any = {}, donoCaixa: string = solicitante): Promise<{ ok?: true; erro?: string }> {
+  if (acao === "a_receber" || acao === "cortesia") return liberarComanda(db, acao, id, mot, dados, solicitante, aprovador, donoCaixa);
   const log = (x: Record<string, unknown>) => db.from("pdv_aprovacoes").insert({ acao, motivo: mot || null, solicitado_por: solicitante, aprovado_por: aprovador, ...x });
   if (acao === "cancelar_item") {
     const { data: it } = await db.from("pdv_pedido_itens").select("id,nome,qtd,comanda_id,status").eq("id", id).maybeSingle();
     if (!it) return { erro: "Item não encontrado." };
     if (it.status === "cancelado") return { ok: true };
-    const { error } = await db.from("pdv_pedido_itens").update({ status: "cancelado", cancelado_motivo: mot }).eq("id", id);
+    const { error } = await db.from("pdv_pedido_itens").update({ status: "cancelado", cancelado_motivo: mot, cancelado_por: solicitante }).eq("id", id);
     if (error) return { erro: error.message };
     await log({ comanda_id: it.comanda_id, item_id: id, detalhe: `${it.qtd}× ${it.nome}` });
     return { ok: true };
@@ -80,8 +80,8 @@ async function executar(db: any, acao: string, id: string, mot: string, solicita
   if (!["aberta", "pedindo_conta"].includes(c.status)) return { erro: "A comanda não está aberta." };
   const { count: pagos } = await db.from("pdv_pagamentos").select("id", { count: "exact", head: true }).eq("comanda_id", id).eq("estornado", false);
   if ((pagos ?? 0) > 0) return { erro: "Estorne os pagamentos antes de cancelar." };
-  await db.from("pdv_pedido_itens").update({ status: "cancelado", cancelado_motivo: mot || "comanda cancelada" }).eq("comanda_id", id).neq("status", "cancelado");
-  const { error } = await db.from("pdv_comandas").update({ status: "cancelada", fechada_em: new Date().toISOString() }).eq("id", id);
+  await db.from("pdv_pedido_itens").update({ status: "cancelado", cancelado_motivo: mot || "comanda cancelada", cancelado_por: solicitante }).eq("comanda_id", id).neq("status", "cancelado");
+  const { error } = await db.from("pdv_comandas").update({ status: "cancelada", fechada_em: new Date().toISOString(), fechada_por: solicitante }).eq("id", id);
   if (error) return { erro: error.message };
   await log({ comanda_id: id, detalhe: `Comanda ${c.numero}` });
   return { ok: true };
@@ -110,7 +110,7 @@ async function avisarAdmins(db: any, payload: Record<string, unknown>) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { acao, tipo, id, motivo, email, senha, pedido_id, decisao, dados } = await req.json();
+    const { acao, tipo, id, motivo, email, senha, pin, operador, pedido_id, decisao, dados } = await req.json();
     const url = Deno.env.get("SUPABASE_URL")!;
     const sb = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
@@ -193,19 +193,36 @@ Deno.serve(async (req) => {
       return json({ ok: true, pedido_id: novo.id, notificados: enviados });
     }
 
+    // quem fez a operação: o operador identificado pelo PIN no Salão (se informado e válido), senão o usuário logado
+    let quem = eu;
+    if (/^[0-9a-f-]{36}$/i.test(String(operador ?? ""))) {
+      const { data: op } = await db.from("profiles").select("id").eq("id", operador).maybeSingle();
+      if (op) quem = op.id;
+    }
+
+    // ---- caminho do PIN do supervisor (cadastrado pelo administrador)
+    if (pin) {
+      const { data: v, error: ve } = await db.rpc("pdv_validar_pin_interno", { p_pin: String(pin), p_quem: "u:" + eu });
+      if (ve) return json({ erro: ve.message.includes("Muitas tentativas") ? "Muitas tentativas. Aguarde 10 minutos." : "Não foi possível conferir o PIN." });
+      const u = (v ?? [])[0];
+      if (!u) return json({ erro: "PIN incorreto." });
+      if (!u.pode_autorizar) return json({ erro: "Esse PIN não tem autorização para aprovar." });
+      return json(await executar(db, alvoAcao, id, mot, quem, u.user_id, dadosOk, eu));
+    }
+
     // ---- caminho da senha: limite de tentativas erradas
     const desde = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { count } = await db.from("pdv_aprov_falhas").select("id", { count: "exact", head: true }).eq("user_id", eu).gte("criado_em", desde);
     if ((count ?? 0) >= 5) return json({ erro: "Muitas tentativas. Aguarde 10 minutos." });
     const mail = String(email ?? "").trim().toLowerCase();
-    if (!mail || !senha) return json({ erro: "Informe e-mail e senha do administrador." });
+    if (!mail || !senha) return json({ erro: "Informe o PIN do supervisor." });
     const anon = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: login, error: le } = await anon.auth.signInWithPassword({ email: mail, password: String(senha) });
     const aprovador = login?.user?.id;
     if (le || !aprovador) { await db.from("pdv_aprov_falhas").insert({ user_id: eu }); return json({ erro: "E-mail ou senha incorretos." }); }
     const { data: ap } = await db.from("profiles").select("role,is_master").eq("id", aprovador).maybeSingle();
     if (!(ap?.role === "admin" || ap?.is_master)) { await db.from("pdv_aprov_falhas").insert({ user_id: eu }); return json({ erro: "Esse usuário não é administrador." }); }
-    return json(await executar(db, alvoAcao, id, mot, eu, aprovador, dadosOk));
+    return json(await executar(db, alvoAcao, id, mot, quem, aprovador, dadosOk, eu));
   } catch (e) {
     return json({ erro: String((e as Error).message ?? e) });
   }
