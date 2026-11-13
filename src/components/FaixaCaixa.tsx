@@ -18,10 +18,10 @@ export function FaixaCaixa({ compacto = false }: { compacto?: boolean }) {
   const aberto = abertos.length > 0
   const txt = aberto ? 'Caixa aberto' : 'Caixa fechado'
   return (
-    <span role="status" aria-live="polite" title={txt} className="inline-flex items-center gap-1.5 text-[11px] font-medium leading-none">
-      <span className="relative flex h-2 w-2">
+    <span role="status" aria-live="polite" aria-label={txt} title={txt} className="inline-flex items-center gap-1.5 text-[11px] font-medium leading-none">
+      <span className={`relative flex ${compacto ? "h-2.5 w-2.5" : "h-2 w-2"}`}>
         {aberto && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />}
-        <span className={`relative inline-flex h-2 w-2 rounded-full ${aberto ? 'bg-emerald-500' : 'bg-red-500'}`} />
+        <span className={`relative inline-flex h-full w-full rounded-full ${aberto ? 'bg-emerald-500' : 'bg-red-500'}`} />
       </span>
       {!compacto && <span>{txt}</span>}
     </span>
