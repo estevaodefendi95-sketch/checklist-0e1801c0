@@ -35,7 +35,7 @@ export function Comanda() {
   const [prods, setProds] = useState<Produto[]>([])
   const [sessao, setSessao] = useState<Sessao | null>(null)
   const [func, setFunc] = useState<{ nome: string; pct: number } | null>(null)
-  const [cat, setCat] = useState<string>('todas')
+  const [cat, setCat] = useState<string | null>(null) // null = tela de categorias
   const [busca, setBusca] = useState('')
   const [erro, setErro] = useState('')
   const [msg, setMsg] = useState('')
@@ -120,7 +120,7 @@ export function Comanda() {
       .filter(
         (p) =>
           p.disponivel &&
-          (q || cat === 'todas' || p.categoria_id === cat) &&
+          (q || p.categoria_id === cat) &&
           (!q || p.nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes(q))
       )
       .sort((a, b) => ordemCat(a.categoria_id) - ordemCat(b.categoria_id))
@@ -348,31 +348,39 @@ export function Comanda() {
                 <input className={`${inputCls} !pr-11`} type="search" enterKeyHint="search" placeholder="Buscar produto…" value={busca} onChange={(e) => setBusca(e.target.value)} />
                 {busca && <button aria-label="Limpar busca" className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center text-xl text-ink-soft" onClick={() => setBusca('')}>×</button>}
               </div>
-              <div className="-mx-4 flex snap-x gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] md:mx-0 md:px-0">
-                {[{ id: 'todas', nome: 'Todas' }, ...cats].map((k) => {
-                  const on = !busca && cat === k.id
+              {!busca && cat && (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setCat(null)} className="flex min-h-[44px] items-center gap-1 rounded-full border border-line bg-surface px-4 text-sm font-medium">‹ Categorias</button>
+                  <b className="truncate text-base">{cats.find((k) => k.id === cat)?.nome ?? 'Produtos'}</b>
+                </div>
+              )}
+              {busca && <div className="text-xs text-ink-soft">{lista.length} resultado(s) em todas as categorias</div>}
+            </div>
+            {!busca && !cat ? (
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
+                {cats.map((k) => {
+                  const n = prods.filter((p) => p.disponivel && p.categoria_id === k.id).length
+                  if (!n) return null
+                  const noCarrinho = carrinho.filter((x) => x.p.categoria_id === k.id).reduce((a, x) => a + x.qtd, 0)
                   return (
-                    <button key={k.id} onClick={() => { setCat(k.id); setBusca('') }}
-                      className={`min-h-[40px] shrink-0 snap-start whitespace-nowrap rounded-full border px-4 text-sm ${on ? 'border-brand bg-brand font-semibold text-brand-ink' : 'border-line bg-surface text-ink-soft'}`}>
-                      {k.nome}
+                    <button key={k.id} onClick={() => setCat(k.id)} className={`${cartaoCls} relative flex min-h-[88px] flex-col justify-center p-3 text-left active:scale-[0.98] ${noCarrinho ? 'ring-2 ring-brand' : ''}`}>
+                      {noCarrinho > 0 && <span className="absolute right-2 top-2 grid h-6 min-w-6 place-items-center rounded-full bg-brand px-1.5 text-xs font-bold text-brand-ink">{noCarrinho}</span>}
+                      <span className="pr-6 text-base font-semibold leading-tight">{k.nome}</span>
+                      <span className="mt-1 text-xs text-ink-soft">{n} {n === 1 ? 'produto' : 'produtos'}</span>
                     </button>
                   )
                 })}
               </div>
-              {busca && <div className="text-xs text-ink-soft">{lista.length} resultado(s) em todas as categorias</div>}
-            </div>
-            {!lista.length ? (
+            ) : !lista.length ? (
               <Vazio texto={busca ? `Nenhum produto com "${busca}".` : 'Nenhum produto. Cadastre em PDV · Configurações › Produtos.'} />
             ) : (
               <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3">
-                {lista.map((p, i) => {
+                {lista.map((p) => {
                   const q = carrinho.filter((x) => x.p.id === p.id).reduce((a, x) => a + x.qtd, 0)
                   const comOpcoes = gruposDe(p).length > 0
                   const nomeCat = cats.find((k) => k.id === p.categoria_id)?.nome
-                  const novaCat = cat === 'todas' && !busca && (i === 0 || lista[i - 1].categoria_id !== p.categoria_id)
                   return (
                     <div key={p.id} className="contents">
-                      {novaCat && <div className="col-span-full px-1 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">{nomeCat ?? 'Sem categoria'}</div>}
                       <div className={`${cartaoCls} flex min-h-[64px] items-center gap-2 p-2 pl-3 ${q ? 'ring-2 ring-brand' : ''}`}>
                         <button onClick={() => add(p)} className="min-w-0 flex-1 text-left active:opacity-70">
                           <div className="text-[15px] font-semibold leading-tight">{p.nome}</div>
