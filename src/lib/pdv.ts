@@ -15,6 +15,10 @@ export const FORMAS = [
 export const rotuloForma = (v: string) => FORMAS.find((f) => f.v === v)?.r ?? v
 
 export interface Sala { id: string; nome: string; ordem: number; ativo: boolean }
+/** Tamanho fixo por formato: toda mesa de um mesmo formato fica idêntica em qualquer tela */
+export const TAM_FORMA = { quadrada: { w: 100, h: 100 }, redonda: { w: 100, h: 100 }, retangular: { w: 170, h: 100 } } as const
+export const dimMesa = (m: { forma: keyof typeof TAM_FORMA }) => TAM_FORMA[m.forma] ?? TAM_FORMA.quadrada
+
 export interface Mesa {
   id: string; sala_id: string | null; numero: string; capacidade: number
   forma: 'quadrada' | 'redonda' | 'retangular'

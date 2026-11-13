@@ -3,7 +3,7 @@ import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais, lerNumero } from '../../lib/formato'
-import { Categoria, DESTINOS, Destino, Impressora, Mesa, Produto, Sala } from '../../lib/pdv'
+import { Categoria, DESTINOS, Destino, Impressora, Mesa, Produto, Sala, TAM_FORMA, dimMesa } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
 import { Modal } from './PdvCaixa'
 import { Tablet } from './ConfigTablet'
@@ -85,7 +85,7 @@ function Salao() {
     const q = Number(lote.qtd), i0 = Number(lote.inicio)
     const novas = Array.from({ length: q }, (_, k) => {
       const col = k % 6, lin = Math.floor(k / 6)
-      return { sala_id: sala, numero: String(i0 + k), capacidade: Number(lote.cap) || 4, pos_x: 20 + col * 100, pos_y: 20 + lin * 100 }
+      return { sala_id: sala, numero: String(i0 + k), capacidade: Number(lote.cap) || 4, pos_x: 20 + col * 120, pos_y: 20 + lin * 120 }
     })
     const { error } = await db.from('pdv_mesas').insert(novas)
     if (error) s.falha(error.code === '23505' ? 'Algum número de mesa já existe.' : error.message)
@@ -100,7 +100,7 @@ function Salao() {
     if (!sala) return s.falha('Crie uma sala primeiro.')
     const n = Math.max(0, ...mesas.map((m) => parseInt(m.numero, 10) || 0)) + 1
     const k = mesas.filter((m) => m.sala_id === sala).length
-    const { error } = await db.from('pdv_mesas').insert({ sala_id: sala, numero: String(n), capacidade: Number(lote.cap) || 4, pos_x: 20 + (k % 6) * 100, pos_y: 20 + Math.floor(k / 6) * 100 })
+    const { error } = await db.from('pdv_mesas').insert({ sala_id: sala, numero: String(n), capacidade: Number(lote.cap) || 4, pos_x: 20 + (k % 6) * 120, pos_y: 20 + Math.floor(k / 6) * 120 })
     if (error) s.falha(error.message); else carregar()
   }
   async function renumerar(m: Mesa, v: string) {
@@ -155,7 +155,7 @@ function Salao() {
             {doSala.map((m) => (
               <div key={m.id}
                 onPointerDown={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); drag.current = { id: m.id, dx: e.clientX - r.left, dy: e.clientY - r.top } }}
-                style={{ left: m.pos_x, top: m.pos_y, width: m.largura, height: m.altura, opacity: m.ativo ? 1 : 0.4 }}
+                style={{ left: m.pos_x, top: m.pos_y, width: dimMesa(m).w, height: dimMesa(m).h, opacity: m.ativo ? 1 : 0.4 }}
                 className={`absolute flex cursor-grab select-none items-center justify-center border-2 border-brand bg-brand-soft font-semibold ${m.forma === 'redonda' ? 'rounded-full' : 'rounded-xl'}`}>
                 <span className="pointer-events-none text-center leading-tight">{m.numero}<small className="block text-[10px] font-normal opacity-70">{m.capacidade} lug.</small></span>
               </div>
@@ -176,8 +176,7 @@ function Salao() {
                     <select className={inputCls + ' !w-36'} value={m.sala_id ?? ''} onChange={(e) => upd(m, { sala_id: e.target.value || null, pos_x: 20, pos_y: 20 })} title="sala">
                       {salas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
                     </select>
-                    <span className="flex items-center gap-1 text-xs text-ink-soft">L<input className={inputCls + ' !w-16'} defaultValue={m.largura} onBlur={(e) => upd(m, { largura: Math.min(300, Math.max(50, Number(e.target.value) || 80)) })} />A<input className={inputCls + ' !w-16'} defaultValue={m.altura} onBlur={(e) => upd(m, { altura: Math.min(300, Math.max(50, Number(e.target.value) || 80)) })} /></span>
-                    <select className={inputCls + ' !w-32'} value={m.forma} onChange={(e) => upd(m, { forma: e.target.value as Mesa['forma'], largura: e.target.value === 'retangular' ? 140 : 80 })}>
+                    <select className={inputCls + ' !w-32'} value={m.forma} onChange={(e) => upd(m, { forma: e.target.value as Mesa['forma'], largura: TAM_FORMA[e.target.value as Mesa['forma']].w, altura: TAM_FORMA[e.target.value as Mesa['forma']].h })}>
                       <option value="quadrada">quadrada</option><option value="redonda">redonda</option><option value="retangular">retangular</option>
                     </select>
                     <label className="flex items-center gap-1"><input type="checkbox" checked={m.ativo} onChange={(e) => upd(m, { ativo: e.target.checked })} />ativa</label>

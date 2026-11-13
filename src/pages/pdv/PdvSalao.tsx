@@ -4,7 +4,7 @@ import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
-import { Comanda, Mesa, Sala, Totais, minutosDesde, num, useAoVivo } from '../../lib/pdv'
+import { Comanda, Mesa, Sala, TAM_FORMA, Totais, dimMesa, minutosDesde, num, useAoVivo } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
 import { CheckinModal } from './CheckinRapido'
 
@@ -64,7 +64,7 @@ export function PdvSalao() {
     if (!sala) return setErro('Crie uma sala em Configurações do PDV primeiro.')
     const n = Math.max(0, ...mesas.map((m) => parseInt(m.numero, 10) || 0)) + 1
     const doSala = mesas.filter((m) => m.sala_id === sala)
-    const { data, error } = await db.from('pdv_mesas').insert({ sala_id: sala, numero: String(n), capacidade: 4, pos_x: 20 + (doSala.length % 6) * 100, pos_y: 20 + Math.floor(doSala.length / 6) * 100 }).select('id').single()
+    const { data, error } = await db.from('pdv_mesas').insert({ sala_id: sala, numero: String(n), capacidade: 4, pos_x: 20 + (doSala.length % 6) * 120, pos_y: 20 + Math.floor(doSala.length / 6) * 120 }).select('id').single()
     if (error) return setErro(error.message)
     setSelId(data.id); carregar()
   }
@@ -140,13 +140,7 @@ export function PdvSalao() {
               </div>
               <div className="text-xs text-ink-soft">Formato
                 <div className="mt-1 flex gap-1.5">
-                  {(['quadrada', 'redonda', 'retangular'] as const).map((f) => <button key={f} className={`min-h-[44px] rounded-lg border px-3 text-sm ${m.forma === f ? 'border-brand bg-brand-soft text-brand' : 'border-line text-ink-soft'}`} onClick={() => upd(m, { forma: f, largura: f === 'retangular' ? 160 : 100, altura: 100 })}>{f}</button>)}
-                </div>
-              </div>
-              <div className="text-xs text-ink-soft">Tamanho
-                <div className="mt-1 flex gap-1.5">
-                  <button className="h-11 rounded-lg border border-line px-3 text-sm" onClick={() => upd(m, { largura: Math.max(60, m.largura - 20), altura: Math.max(60, m.altura - 20) })}>− menor</button>
-                  <button className="h-11 rounded-lg border border-line px-3 text-sm" onClick={() => upd(m, { largura: Math.min(300, m.largura + 20), altura: Math.min(300, m.altura + 20) })}>maior +</button>
+                  {(['quadrada', 'redonda', 'retangular'] as const).map((f) => <button key={f} className={`min-h-[44px] rounded-lg border px-3 text-sm ${m.forma === f ? 'border-brand bg-brand-soft text-brand' : 'border-line text-ink-soft'}`} onClick={() => upd(m, { forma: f, largura: TAM_FORMA[f].w, altura: TAM_FORMA[f].h })}>{f}</button>)}
                 </div>
               </div>
               {salas.length > 1 && <label className="text-xs text-ink-soft">Sala<select className={inputCls + ' !w-36'} value={m.sala_id ?? ''} onChange={(e) => upd(m, { sala_id: e.target.value || null, pos_x: 20, pos_y: 20 })}>{salas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></label>}
@@ -158,7 +152,7 @@ export function PdvSalao() {
         <Vazio texto={pode('pdv_gerir') ? 'Nenhuma mesa cadastrada. Monte o mapa em PDV · Configurações › Salão.' : 'Nenhuma mesa cadastrada.'} />
       ) : (
         <div className={`${cartaoCls} relative overflow-auto p-3`} style={{ minHeight: 420 }}>
-          <div ref={area} className="relative touch-none select-none" onPointerMove={editando ? mover : undefined} onPointerUp={editando ? soltar : undefined} style={{ minWidth: 640, height: Math.max(420, ...mesasSala.map((m) => m.pos_y + m.altura + 20)) }}>
+          <div ref={area} className="relative touch-none select-none" onPointerMove={editando ? mover : undefined} onPointerUp={editando ? soltar : undefined} style={{ minWidth: 640, height: Math.max(420, ...mesasSala.map((m) => m.pos_y + dimMesa(m).h + 20)) }}>
             {mesasSala.map((m) => {
               const c = porMesa.get(m.id)
               const st = c ? c.status : 'livre'
@@ -167,7 +161,7 @@ export function PdvSalao() {
                   key={m.id}
                   onClick={() => (editando ? setSelId(m.id) : clicar(m))}
                   onPointerDown={editando ? (e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); drag.current = { id: m.id, dx: e.clientX - r.left, dy: e.clientY - r.top, moveu: false }; setSelId(m.id) } : undefined}
-                  style={{ left: m.pos_x, top: m.pos_y, width: m.largura, height: m.altura }}
+                  style={{ left: m.pos_x, top: m.pos_y, width: dimMesa(m).w, height: dimMesa(m).h }}
                   className={`absolute flex flex-col items-center justify-center border-2 text-center text-xs leading-tight transition-transform active:scale-95 ${m.forma === 'redonda' ? 'rounded-full' : 'rounded-xl'} ${COR[st]} ${editando && selId === m.id ? 'ring-2 ring-brand' : ''} ${editando ? 'cursor-move border-dashed' : ''}`}
                 >
                   <b className="text-base">{m.numero}</b>
