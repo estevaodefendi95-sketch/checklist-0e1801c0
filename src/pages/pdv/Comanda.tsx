@@ -60,6 +60,7 @@ export function Comanda() {
   const [offline, setOffline] = useState(false)
   const [aprov, setAprov] = useState<{ titulo: string; descricao?: string; acao: AcaoAprovada; id: string; pedirMotivo: boolean; rotuloMotivo?: string; dados?: Record<string, unknown>; depois?: () => void } | null>(null)
   const [descAberto, setDescAberto] = useState(false)
+  const [escMesa, setEscMesa] = useState<{ mesas: Mesa[]; ocupadas: Set<string>; salas: { id: string; nome: string }[]; sala: string } | null>(null)
   const [arForm, setArForm] = useState<{ nome: string; telefone: string; vencimento: string; observacao: string } | null>(null)
 
   const carregar = useCallback(async () => {
@@ -297,6 +298,23 @@ export function Comanda() {
     const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: c.id, p_perfis: Object.entries(editPerfis).map(([perfil_id, qtd]) => ({ perfil_id, qtd })), p_cobrancas: selCob })
     if (r.error) return setErro(r.error.message)
     setEditPerfis(null); setErro(''); carregar()
+  }
+  async function abrirMesas() {
+    if (semRede()) return
+    const [m, o, sl] = await Promise.all([
+      db.from('pdv_mesas').select('*').eq('ativo', true).order('numero'),
+      db.from('pdv_comandas').select('mesa_id').in('status', ['aberta', 'pedindo_conta']).not('mesa_id', 'is', null),
+      db.from('pdv_salas').select('id,nome').eq('ativo', true).order('ordem'),
+    ])
+    if (m.error) return setErro(m.error.message)
+    setEscMesa({ mesas: (m.data ?? []) as Mesa[], ocupadas: new Set(((o.data ?? []) as { mesa_id: string }[]).map((x) => x.mesa_id)), salas: (sl.data ?? []) as { id: string; nome: string }[], sala: '' })
+  }
+  async function vincularMesa(m: Mesa | null) {
+    if (!c) return
+    const { error } = await db.from('pdv_comandas').update({ mesa_id: m?.id ?? null }).eq('id', c.id)
+    if (error) return setErro(error.code === '23505' ? 'Essa mesa já tem outra comanda aberta.' : error.message)
+    setEscMesa(null); setErro(''); setMsg(m ? `Comanda vinculada à mesa ${m.numero}.` : 'Comanda sem mesa (balcão).')
+    carregar()
   }
   function abrirDescontos() {
     if (semRede()) return
@@ -562,6 +580,7 @@ export function Comanda() {
             <div className="flex justify-between"><dt>Serviço {c.taxa_servico_pct}%{aberta && pode('pdv_caixa') && <button className="ml-1 text-brand" onClick={abrirDescontos}>alterar</button>}</dt><dd>{reais(num(tot?.servico))}</dd></div>
             <div className="flex justify-between"><dt>Desconto{aberta && pode('pdv_caixa') && <button className="ml-1 text-brand" onClick={abrirDescontos}>{c.desconto > 0 ? 'alterar' : 'aplicar'}</button>}{(c.desconto_detalhe as DescontoDetalhe | null)?.regra_nome ? <em className="block text-xs not-italic text-ink-soft">{(c.desconto_detalhe as DescontoDetalhe).regra_nome}</em> : null}</dt><dd>−{reais(c.desconto)}</dd></div>
             <div className="flex justify-between text-base font-semibold"><dt>Total</dt><dd>{reais(num(tot?.total))}</dd></div>
+            <div className="flex items-center justify-between"><dt>{mesa ? `Mesa ${mesa.numero}` : 'Sem mesa'}{aberta && pode('pdv_operar') && <button className="ml-1 text-brand" onClick={abrirMesas}>{mesa ? 'trocar' : 'vincular'}</button>}</dt><dd className="text-ink-soft">#{c.numero}</dd></div>
             <div className="flex items-center justify-between text-ink-soft"><dt>{c.pessoas} pessoa(s){aberta && <button className="ml-1 text-brand" onClick={() => setPessoasEd(String(c.pessoas))}>alterar</button>}</dt><dd>{reais(num(tot?.total) / Math.max(1, c.pessoas))} / pessoa</dd></div>
             <div className="flex justify-between"><dt>Pago</dt><dd>{reais(num(tot?.pago))}</dd></div>
             <div className="flex justify-between font-semibold"><dt>Restante</dt><dd>{reais(restante)}</dd></div>
@@ -578,6 +597,26 @@ export function Comanda() {
           )}
         </aside>
       </div>
+      {escMesa && (
+        <Modal titulo={mesa ? `Trocar a mesa (agora: ${mesa.numero})` : 'Vincular a uma mesa'} fechar={() => setEscMesa(null)}>
+          {escMesa.salas.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              {[{ id: '', nome: 'Todas' }, ...escMesa.salas].map((x) => <button key={x.id} className={escMesa.sala === x.id ? btnCls : btnSecCls} onClick={() => setEscMesa({ ...escMesa, sala: x.id })}>{x.nome}</button>)}
+            </div>
+          )}
+          <div className="grid grid-cols-4 gap-2">
+            {escMesa.mesas.filter((m) => !escMesa.sala || m.sala_id === escMesa.sala).map((m) => {
+              const ocup = escMesa.ocupadas.has(m.id) && m.id !== c.mesa_id
+              return (
+                <button key={m.id} disabled={ocup} onClick={() => vincularMesa(m)}
+                  className={`min-h-[56px] rounded-xl border-2 text-lg font-bold ${m.id === c.mesa_id ? 'border-brand bg-brand-soft text-brand' : ocup ? 'border-line bg-paper-dim text-ink-soft opacity-40' : 'border-line bg-surface'}`}>{m.numero}</button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-ink-soft">Mesas apagadas já têm comanda aberta. Itens já enviados continuam com o aviso que saiu na cozinha; os próximos saem com a mesa nova.</p>
+          {mesa && <button className={btnSecCls + ' w-full'} onClick={() => vincularMesa(null)}>Tirar da mesa (balcão)</button>}
+        </Modal>
+      )}
       {descAberto && <DescontosComanda c={c} itens={itens} onFechar={() => setDescAberto(false)} onSalvo={() => { setDescAberto(false); setMsg('Desconto aplicado.'); carregar() }} />}
       {arForm && (
         <Modal titulo="Deixar a receber" fechar={() => setArForm(null)}>
