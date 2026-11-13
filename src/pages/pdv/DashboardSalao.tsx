@@ -10,16 +10,16 @@ import { Comanda, Mesa, Sala, Totais, minutosDesde, num, useAoVivo } from '../..
 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink-soft',
-  aberta: 'border-emerald-500 bg-emerald-100 text-emerald-900',
-  pedindo_conta: 'border-red-500 bg-red-100 text-red-800',
+  aberta: 'border-ok/70 bg-ok-soft text-ink',
+  pedindo_conta: 'border-alert bg-alert-soft text-ink',
 }
 const tempo = (min: number) => (min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`)
 
 function Num({ rotulo, valor, tom }: { rotulo: string; valor: number | string; tom?: 'ok' | 'alerta' }) {
   return (
-    <div className={`${cartaoCls} p-4`}>
-      <p className="apoio">{rotulo}</p>
-      <p className={`mt-1 text-3xl font-semibold tabular-nums ${tom === 'ok' ? 'text-ok' : tom === 'alerta' ? 'text-alert' : 'text-ink'}`}>{valor}</p>
+    <div className={`${cartaoCls} p-3 sm:p-4`}>
+      <p className="apoio !text-[11px] leading-tight sm:!text-sm">{rotulo}</p>
+      <p className={`mt-1 text-2xl font-semibold tabular-nums sm:text-3xl ${tom === 'ok' ? 'text-ok' : tom === 'alerta' ? 'text-alert' : 'text-ink'}`}>{valor}</p>
     </div>
   )
 }
@@ -63,17 +63,18 @@ export function DashboardSalao() {
     <div>
       <Cabecalho
         titulo="Salão agora"
-        subtitulo={`${comandas.length} comanda(s) aberta(s) · ${reais(consumo)} em consumo · atualiza sozinho`}
+        subtitulo="Atualiza sozinho"
         acoes={<Link to={inicioAtendimento()} className={btnCls}>Ir para o Salão e mesas</Link>}
       />
       <AvisoBateriaTablets />
       {erro && <Erro texto={erro} />}
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Num rotulo="Comandas abertas" valor={comandas.length} />
-        <Num rotulo="Mesas ocupadas" valor={`${ocupadas} de ${mesas.length}`} />
-        <Num rotulo="Mesas livres" valor={mesas.length - ocupadas} tom="ok" />
-        <Num rotulo="Pedindo a conta" valor={pedindo} tom={pedindo ? 'alerta' : undefined} />
-        <Num rotulo="Pessoas no salão" valor={pessoas} />
+      <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
+        <Num rotulo="Comandas" valor={comandas.length} />
+        <Num rotulo="Ocupadas" valor={`${ocupadas}/${mesas.length}`} />
+        <Num rotulo="Livres" valor={mesas.length - ocupadas} tom="ok" />
+        <Num rotulo="Pedindo conta" valor={pedindo} tom={pedindo ? 'alerta' : undefined} />
+        <Num rotulo="Pessoas" valor={pessoas} />
+        <Num rotulo="Em consumo" valor={reais(consumo).replace(/\s/g, " ")} />
       </div>
 
       {grupos.map((sala) => {

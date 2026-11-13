@@ -148,7 +148,7 @@ export function Assistente() {
 
   return (
     <>
-      <button onClick={() => setAberto(true)} aria-label="Abrir assistente" title="Assistente" className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-brand text-brand-ink shadow-xl lg:bottom-6 lg:right-6">
+      <button onClick={() => setAberto(true)} aria-label="Abrir assistente" title="Assistente" className="fixed bottom-[calc(78px+env(safe-area-inset-bottom))] right-3 z-40 grid h-11 w-11 place-items-center rounded-full bg-brand text-brand-ink opacity-90 shadow-lg lg:bottom-6 lg:right-6 lg:h-14 lg:w-14 lg:opacity-100">
         <Icone nome="chat" tamanho={26} />
       </button>
       {aberto && (
