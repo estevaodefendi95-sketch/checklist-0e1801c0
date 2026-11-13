@@ -50,6 +50,7 @@ export function Comanda() {
   const [maq, setMaq] = useState(() => { try { return localStorage.getItem('pdv-maquininha') || 'Sipag' } catch { return 'Sipag' } })
   const [recebido, setRecebido] = useState('')
   const [editPerfis, setEditPerfis] = useState<Record<string, number> | null>(null)
+  const [selCob, setSelCob] = useState<string[]>([])
   const { perfis, cobrancas } = usePerfisCobrancas()
 
   const carregar = useCallback(async () => {
@@ -239,11 +240,13 @@ export function Comanda() {
   }
   async function abrirPerfis() {
     const { data } = await db.from('pdv_comanda_perfis').select('perfil_id,qtd').eq('comanda_id', id)
+    const { data: ja } = await db.from('pdv_pedido_itens').select('cobranca_id').eq('comanda_id', id).in('tipo', ['couvert', 'rodizio']).neq('status', 'cancelado')
+    setSelCob([...new Set((ja ?? []).map((x: { cobranca_id: string | null }) => x.cobranca_id).filter(Boolean) as string[])])
     setEditPerfis(Object.fromEntries((data ?? []).map((x: { perfil_id: string; qtd: number }) => [x.perfil_id, x.qtd])))
   }
   async function salvarPerfis() {
     if (!c || !editPerfis) return
-    const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: c.id, p_perfis: Object.entries(editPerfis).map(([perfil_id, qtd]) => ({ perfil_id, qtd })) })
+    const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: c.id, p_perfis: Object.entries(editPerfis).map(([perfil_id, qtd]) => ({ perfil_id, qtd })), p_cobrancas: selCob })
     if (r.error) return setErro(r.error.message)
     setEditPerfis(null); setErro(''); carregar()
   }
@@ -457,8 +460,8 @@ export function Comanda() {
       )}
       {editPerfis && (
         <Modal titulo="Pessoas e perfis (couvert / rodízio)" fechar={() => setEditPerfis(null)}>
-          <PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={editPerfis} onChange={setEditPerfis} />
-          <p className="text-xs text-ink-soft">Ao salvar, o couvert e o rodízio da comanda são recalculados para estes perfis.</p>
+          <PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={editPerfis} onChange={setEditPerfis} sel={selCob} onSel={setSelCob} />
+          <p className="text-xs text-ink-soft">Ao salvar, o couvert e o rodízio marcados são recalculados para estes perfis; os desmarcados saem da comanda.</p>
           <button className={btnCls} onClick={salvarPerfis}>Salvar</button>
         </Modal>
       )}

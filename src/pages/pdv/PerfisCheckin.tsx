@@ -27,10 +27,10 @@ const NOME_DIA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 export const rotuloDias = (d: number[]) => (d.length === 7 ? 'todos os dias' : d.map((x) => NOME_DIA[x]).join(', '))
 
 /** cobranças que valem hoje e quanto cada perfil paga (espelha a função pdv_aplicar_perfis do banco) */
-export function calcularCobranca(perfis: Perfil[], cobrancas: Cobranca[], qtds: Record<string, number>) {
+export function calcularCobranca(perfis: Perfil[], cobrancas: Cobranca[], qtds: Record<string, number>, sel: string[]) {
   const dow = new Date().getDay()
   const linhas: { nome: string; qtd: number; unit: number; tipo: string }[] = []
-  for (const c of cobrancas.filter((x) => x.ativo && x.valor > 0 && x.dias_semana.includes(dow))) {
+  for (const c of cobrancas.filter((x) => x.ativo && x.valor > 0 && x.dias_semana.includes(dow) && sel.includes(x.id))) {
     for (const p of perfis) {
       const q = qtds[p.id] ?? 0
       if (q > 0 && p.percentual > 0) linhas.push({ nome: `${c.nome} (${p.nome})`, qtd: q, unit: Math.round(c.valor * p.percentual) / 100, tipo: c.tipo })
@@ -40,9 +40,10 @@ export function calcularCobranca(perfis: Perfil[], cobrancas: Cobranca[], qtds: 
 }
 
 export function PerfisCheckin({
-  perfis, cobrancas, qtds, onChange,
-}: { perfis: Perfil[]; cobrancas: Cobranca[]; qtds: Record<string, number>; onChange: (q: Record<string, number>) => void }) {
-  const { linhas, total } = useMemo(() => calcularCobranca(perfis, cobrancas, qtds), [perfis, cobrancas, qtds])
+  perfis, cobrancas, qtds, onChange, sel, onSel,
+}: { perfis: Perfil[]; cobrancas: Cobranca[]; qtds: Record<string, number>; onChange: (q: Record<string, number>) => void; sel: string[]; onSel: (ids: string[]) => void }) {
+  const { linhas, total } = useMemo(() => calcularCobranca(perfis, cobrancas, qtds, sel), [perfis, cobrancas, qtds, sel])
+  const hoje = cobrancas.filter((c) => c.ativo && c.valor > 0 && c.dias_semana.includes(new Date().getDay()))
   const pessoas = Object.values(qtds).reduce((s, n) => s + n, 0)
   const mudar = (id: string, d: number) => onChange({ ...qtds, [id]: Math.max(0, (qtds[id] ?? 0) + d) })
   return (
@@ -66,14 +67,31 @@ export function PerfisCheckin({
           )
         })}
       </div>
+      {hoje.length > 0 && (
+        <div className="space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Lançar na comanda</span>
+          <div className="flex flex-wrap gap-2">
+            {hoje.map((c) => {
+              const on = sel.includes(c.id)
+              return (
+                <button type="button" key={c.id} aria-pressed={on} onClick={() => onSel(on ? sel.filter((x) => x !== c.id) : [...sel, c.id])}
+                  className={`min-h-[44px] rounded-xl border-2 px-4 text-sm font-medium ${on ? 'border-brand bg-brand-soft text-brand' : 'border-line text-ink-soft'}`}>
+                  {on ? '✓ ' : ''}{c.nome} · {reais(c.valor)}
+                </button>
+              )
+            })}
+          </div>
+          {!sel.length && <p className="text-xs text-ink-soft">Nada será cobrado. Toque em couvert e/ou rodízio para lançar.</p>}
+        </div>
+      )}
       {linhas.length > 0 ? (
         <div className="rounded-xl bg-brand-soft p-2.5 text-xs">
           {linhas.map((l, i) => <div key={i} className="flex justify-between"><span>{l.qtd}× {l.nome}</span><span>{reais(l.qtd * l.unit)}</span></div>)}
           <div className="mt-1 flex justify-between border-t border-brand/20 pt-1 font-semibold"><span>Total de couvert/rodízio</span><span>{reais(total)}</span></div>
         </div>
-      ) : (
+      ) : hoje.length === 0 ? (
         <p className="text-xs text-ink-soft">Sem couvert ou rodízio hoje (configure valores e dias em Configurações do PDV › Check-in).</p>
-      )}
+      ) : null}
     </div>
   )
 }

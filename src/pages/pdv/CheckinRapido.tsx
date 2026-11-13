@@ -26,6 +26,7 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
   const [nome, setNome] = useState(nomeInicial ?? '')
   const [nasc, setNasc] = useState('')
   const [qtds, setQtds] = useState<Record<string, number>>({})
+  const [selCob, setSelCob] = useState<string[]>([])
   const [conhecido, setConhecido] = useState<{ visitas: number; ticket_medio: number; cashback_saldo: number } | null>(null)
   const [salas, setSalas] = useState<Sala[]>([])
   const [buscaMesa, setBuscaMesa] = useState('')
@@ -85,7 +86,7 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
     }).select('id').single()
     if (error) { setSalvando(false); return setErro(error.code === '23505' ? (error.message.includes('numero') ? `A comanda nº ${nc} já está em uso. Use outro número.` : 'Essa mesa já tem comanda aberta.') : error.message) }
     if (pessoas > 0) {
-      const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: data.id, p_perfis: Object.entries(qtds).map(([perfil_id, qtd]) => ({ perfil_id, qtd })) })
+      const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: data.id, p_perfis: Object.entries(qtds).map(([perfil_id, qtd]) => ({ perfil_id, qtd })), p_cobrancas: selCob })
       if (r.error) setErro('Comanda aberta, mas não consegui lançar couvert/rodízio: ' + r.error.message)
     }
     if (reservaId) await db.from('reservas').update({ status: 'sentada', comanda_id: data.id, mesa_id: mesaId || null, atualizado_em: new Date().toISOString() }).eq('id', reservaId)
@@ -129,7 +130,7 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
                 </p>
               )}
             </section>
-            <section className={secao}><PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={qtds} onChange={setQtds} /></section>
+            <section className={secao}><PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={qtds} onChange={setQtds} sel={selCob} onSel={setSelCob} /></section>
           </div>
           <section className={secao}>
             <div className="flex items-center justify-between text-sm font-medium"><span>Mesa</span><span className="text-xs font-normal text-ink-soft">{mesaSel ? `Mesa ${mesaSel.numero} · ${mesaSel.capacidade} lugares${pessoasTot > mesaSel.capacidade ? ' · grupo maior que a mesa' : ''}` : 'sem mesa (balcão / fila)'}</span></div>
