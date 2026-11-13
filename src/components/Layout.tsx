@@ -9,6 +9,7 @@ import { LinhaVersao } from './AvisoAtualizacao'
 import { Sino } from './Avisos'
 import { Assistente } from './Assistente'
 import { AlertaImpressao } from './AlertaImpressao'
+import { FaixaCaixa } from './FaixaCaixa'
 import { MODO_KEY } from '../lib/modo'
 
 const roleLabel: Record<string, string> = {
@@ -57,6 +58,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   // itens sem permissão nem entram na lista
   const todosItens: Item[] = [
+    ...(pode('pdv_operar') ? [{ to: '/', rotulo: 'Início (salão agora)', curto: 'Início', icone: 'areas', grupo: 'atendimento' } as Item] : []),
     ...(pode('pdv_operar')
       ? [
           { to: '/atendimento', rotulo: 'Atendimento rápido', curto: 'Mesas', icone: 'pdv', grupo: 'atendimento', soCelular: true } as Item,
@@ -76,7 +78,7 @@ export function Layout({ children }: { children: ReactNode }) {
     ...(pode('pdv_operar')
       ? [{ to: '/pdv/relatorios', rotulo: 'Relatório de vendas', curto: 'Vendas', icone: 'vendas', grupo: 'atendimento' } as Item]
       : []),
-    { to: '/', rotulo: 'Checklists', curto: 'Checklist', icone: 'checklist', grupo: 'operacao' },
+    { to: '/checklists', rotulo: 'Checklists', curto: 'Checklist', icone: 'checklist', grupo: 'operacao' },
     { to: '/areas', rotulo: 'Áreas', icone: 'areas', grupo: 'operacao' },
     { to: '/relatorio/estoque', rotulo: 'Estoque', icone: 'estoque', grupo: 'operacao' },
     ...(pode('pdv_operar') || pode('lancar_estoque') ? [{ to: '/estoque/alertas', rotulo: 'Alertas de estoque', curto: 'Alertas', icone: 'estoque', grupo: 'operacao' } as Item] : []),
@@ -113,7 +115,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const podeTrocar = temAtend && verGestao
   const BARRA_MODO: Record<Modo, string[]> = {
     atendimento: ['/atendimento', '/pdv/comandas', '/pdv/reservas', '/pdv/caixa'],
-    gestao: ['/', '/pdv/relatorios', '/estoque/alertas', '/fichas'],
+    gestao: ['/', '/checklists', '/pdv/relatorios', '/estoque/alertas', '/fichas'],
   }
   const NA_BARRA = itens.filter((i) => BARRA_MODO[modo].includes(i.to)).map((i) => i.to)
   const ordem: Item['grupo'][] = modo === 'atendimento' ? ['atendimento', 'operacao', 'cardapio', 'admin'] : ['operacao', 'cardapio', 'admin', 'atendimento']
@@ -209,6 +211,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* ---------- conteúdo ---------- */}
       <div className={`transition-[padding] duration-200 ${recuo}`}>
+        <FaixaCaixa />
         {/* celular/tablet retrato: só a marca; o título fica na própria página */}
         <div className="flex items-center justify-between px-4 pt-[calc(14px+env(safe-area-inset-top))] text-xs uppercase tracking-[0.08em] text-ink-soft md:px-6 lg:hidden">
           <span>Paggio</span>

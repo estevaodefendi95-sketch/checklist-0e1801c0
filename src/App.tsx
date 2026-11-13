@@ -27,6 +27,7 @@ import { AReceber } from './pages/pdv/AReceber'
 import { AtendimentoRapido } from './pages/pdv/AtendimentoRapido'
 import { GestaoTablet } from './pages/pdv/GestaoTablet'
 import { MesaPublica } from './pages/pdv/MesaPublica'
+import { DashboardSalao } from './pages/pdv/DashboardSalao'
 import { MesaEscolher } from './components/TabletAcesso'
 import { Compras } from './pages/Compras'
 import { Eventos } from './pages/pdv/Eventos'
@@ -52,7 +53,8 @@ function Abertura() {
   try { jaAbriu = sessionStorage.getItem('paggio-abriu') === '1'; sessionStorage.setItem('paggio-abriu', '1') } catch { /* sem armazenamento */ }
   const celular = window.matchMedia('(max-width: 1023px)').matches
   const soAtendimento = pode('pdv_operar') && !pode('pdv_ver_gestao')
-  if (soAtendimento) return <Navigate to={celular ? '/atendimento' : '/pdv'} replace />
+  if (soAtendimento && celular) return <Navigate to="/atendimento" replace />
+  if (!celular && pode('pdv_operar')) return <DashboardSalao />
   if (!jaAbriu && celular && pode('pdv_operar') && ler<string>('paggio-modo-mobile', 'atendimento') === 'atendimento') return <Navigate to="/atendimento" replace />
   return <Dashboard modo="hoje" />
 }
@@ -79,6 +81,7 @@ function Protected({ children, admin }: { children: React.ReactNode; admin?: boo
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/', element: <Protected><Abertura /></Protected> },
+  { path: '/checklists', element: <Protected><Dashboard modo="hoje" /></Protected> },
   { path: '/areas', element: <Protected><Dashboard modo="areas" /></Protected> },
   { path: '/checklist/:templateId', element: <Protected><ChecklistExecucao /></Protected> },
   { path: '/historico', element: <Protected><Historico /></Protected> },
