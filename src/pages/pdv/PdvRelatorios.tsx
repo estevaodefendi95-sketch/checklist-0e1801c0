@@ -3,7 +3,7 @@ import { db } from '../../lib/supabase'
 import { Cabecalho } from '../../components/Cabecalho'
 import { Carregando, Erro, Vazio, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
-import { Comanda, Item, Mesa, FORMAS, num, rotuloForma, hora } from '../../lib/pdv'
+import { Comanda, Item, Mesa, FORMAS, idsConsumoInterno, num, rotuloForma, hora } from '../../lib/pdv'
 import { Link } from 'react-router-dom'
 import { numero } from '../../lib/formato'
 import { chipCls } from '../../components/Estado'
@@ -37,6 +37,7 @@ export function PdvRelatorios() {
   const [fUser, setFUser] = useState('')
   const [fPapel, setFPapel] = useState<'qualquer' | 'abriu' | 'lancou' | 'fechou'>('qualquer')
   const [soCancel, setSoCancel] = useState(false)
+  const [internas, setInternas] = useState(0)
 
   const carregar = useCallback(async () => {
     setPronto(false)
@@ -44,7 +45,10 @@ export function PdvRelatorios() {
     const fim = new Date(soma(ate, 1) + 'T00:00:00').toISOString()
     const c = await db.from('pdv_comandas').select('*').gte('aberta_em', ini).lt('aberta_em', fim).order('aberta_em')
     if (c.error) { setErro(c.error.message); return setPronto(true) }
-    const cs = ((c.data ?? []) as Comanda[]).filter((x) => !x.funcionario_id)
+    const semFunc = ((c.data ?? []) as Comanda[]).filter((x) => !x.funcionario_id)
+    const internos = await idsConsumoInterno(db, semFunc)   // família/casa: fora do faturamento
+    const cs = semFunc.filter((x) => !internos.has(x.id))
+    setInternas(semFunc.length - cs.length)
     setComandas(cs)
     const ids = cs.map((x) => x.id)
     const [i, p, m, pr, ct, cn, ins, cf, pf, ap] = await Promise.all([
@@ -251,6 +255,7 @@ export function PdvRelatorios() {
             <Kpi t="Comandas canceladas" v={String(r.canceladas.length)} />
             <Kpi t="Itens cancelados" v={String(r.cancel.length)} />
           </div>
+          {internas > 0 && <p className="mb-4 text-xs text-ink-soft">Fora do faturamento: {internas} comanda(s) de consumo interno / família (e o consumo de funcionários, que fica na tela própria).</p>}
           <div className="grid gap-4 lg:grid-cols-2">
             <Bloco t="Por forma de pagamento">
               {FORMAS.map((f) => <Linha key={f.v} a={rotuloForma(f.v)} b={reais(r.porForma[f.v] ?? 0)} />)}

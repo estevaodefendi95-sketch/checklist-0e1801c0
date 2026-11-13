@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 
 export interface RegraDesconto {
   id: string; nome: string; pct: number; escopo: 'todos' | 'produtos'; produto_ids: string[]
-  inclui_couvert: boolean; remove_servico: boolean; ativo: boolean; ordem: number
+  inclui_couvert: boolean; remove_servico: boolean; ativo: boolean; ordem: number; fora_faturamento?: boolean
 }
 export interface DescontoDetalhe {
   regra_id: string | null; regra_nome: string | null; tira_couvert: boolean; tira_servico: boolean

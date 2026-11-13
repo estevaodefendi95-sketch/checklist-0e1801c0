@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { db } from '../lib/supabase'
 import { reais } from '../lib/formato'
-import { Comanda, Item, num, rotuloForma, useAoVivo } from '../lib/pdv'
+import { Comanda, Item, idsConsumoInterno, num, rotuloForma, useAoVivo } from '../lib/pdv'
 import { usePermissoes } from '../context/PermissoesContext'
 import { Erro, cartaoCls } from './Estado'
 
@@ -89,7 +89,9 @@ export function PainelInicio() {
       ? await db.from('pdv_comandas').select('*').gte('aberta_em', ini.toISOString()).lt('aberta_em', fim.toISOString())
       : { data: [], error: null }
     if (c.error) return setErro(c.error.message)
-    const cs = ((c.data ?? []) as Comanda[]).filter((x) => !x.funcionario_id)
+    const semFunc = ((c.data ?? []) as Comanda[]).filter((x) => !x.funcionario_id)
+    const internos = await idsConsumoInterno(db, semFunc)   // família/casa: fora do faturamento
+    const cs = semFunc.filter((x) => !internos.has(x.id))
     const ids = cs.map((x) => x.id)
 
     const semIni = new Date(ini); semIni.setDate(semIni.getDate() - 7)
@@ -100,7 +102,7 @@ export function PainelInicio() {
       ids.length ? db.from('pdv_pedido_itens').select('comanda_id,nome,qtd,preco_unit,status,tipo').in('comanda_id', ids) : { data: [] },
       ids.length ? db.from('pdv_pagamentos').select('comanda_id,forma,valor,troco').in('comanda_id', ids).eq('estornado', false).is('baixa_de', null) : { data: [] },
       vendas
-        ? db.from('pdv_comandas').select('id,status,funcionario_id').gte('aberta_em', semIni.toISOString()).lt('aberta_em', semFim.toISOString()).eq('status', 'fechada')
+        ? db.from('pdv_comandas').select('id,status,funcionario_id,desconto_detalhe').gte('aberta_em', semIni.toISOString()).lt('aberta_em', semFim.toISOString()).eq('status', 'fechada')
         : { data: [] },
       reservasOk ? db.from('reservas').select('hora,pessoas,status').eq('data', diaRef).in('status', ['pendente', 'confirmada', 'sentada']) : { data: null },
       caixaOk ? db.from('pdv_a_receber').select('valor,vencimento').eq('status', 'aberto') : { data: null },
@@ -134,7 +136,9 @@ export function PainelInicio() {
 
     // mesmo dia da semana passada: só o faturamento, para dar noção de "melhor ou pior que o normal"
     let semanaPassada: number | null = null
-    const idsSem = ((semPass.data ?? []) as { id: string; funcionario_id: string | null }[]).filter((x) => !x.funcionario_id).map((x) => x.id)
+    const semPassComandas = ((semPass.data ?? []) as { id: string; funcionario_id: string | null; desconto_detalhe?: unknown }[]).filter((x) => !x.funcionario_id)
+    const internosSem = await idsConsumoInterno(db, semPassComandas)
+    const idsSem = semPassComandas.filter((x) => !internosSem.has(x.id)).map((x) => x.id)
     if (vendas && idsSem.length) {
       const t = await db.from('pdv_comanda_totais').select('total').in('comanda_id', idsSem)
       semanaPassada = ((t.data ?? []) as { total: number }[]).reduce((s, x) => s + num(x.total), 0)

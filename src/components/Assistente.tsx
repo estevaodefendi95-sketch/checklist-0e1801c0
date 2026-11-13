@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { db, supabase } from '../lib/supabase'
 import { usePermissoes } from '../context/PermissoesContext'
 import { reais, lerNumero } from '../lib/formato'
-import { noHorarios, num, type Faixa } from '../lib/pdv'
+import { idsConsumoInterno, noHorarios, num, type Faixa } from '../lib/pdv'
 import { Icone } from './Icone'
 
 interface Msg { de: 'eu' | 'bot'; texto: string; links?: { to: string; rotulo: string }[]; acao?: { rotulo: string; fazer: () => Promise<string> } }
@@ -27,8 +27,10 @@ export function Assistente() {
   const add = (m: Msg) => setMsgs((x) => [...x, m])
 
   async function resumo(): Promise<Msg> {
-    const { data: cs } = await db.from('pdv_comandas').select('id,pessoas').eq('status', 'fechada').gte('fechada_em', inicioDoDia())
-    const ids = (cs ?? []).map((c: { id: string }) => c.id)
+    const { data: cs0 } = await db.from('pdv_comandas').select('id,pessoas,funcionario_id,desconto_detalhe').eq('status', 'fechada').gte('fechada_em', inicioDoDia())
+    const internos = await idsConsumoInterno(db, (cs0 ?? []) as { id: string }[])   // funcionário/família: fora do faturamento
+    const cs = (cs0 ?? []).filter((c: { id: string; funcionario_id: string | null }) => !c.funcionario_id && !internos.has(c.id))
+    const ids = cs.map((c: { id: string }) => c.id)
     const { data: tt } = ids.length ? await db.from('pdv_comanda_totais').select('total').in('comanda_id', ids) : { data: [] }
     const total = (tt ?? []).reduce((s: number, t: { total: number }) => s + num(t.total), 0)
     const pessoas = (cs ?? []).reduce((s: number, c: { pessoas: number }) => s + num(c.pessoas), 0)

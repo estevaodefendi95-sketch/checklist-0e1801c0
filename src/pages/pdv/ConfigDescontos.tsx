@@ -7,7 +7,7 @@ import { Modal } from './PdvCaixa'
 import { Avisos, useSalvarMsg } from './PdvConfig'
 import type { RegraDesconto } from './DescontosComanda'
 
-const NOVA: RegraDesconto = { id: '', nome: '', pct: 10, escopo: 'todos', produto_ids: [], inclui_couvert: false, remove_servico: true, ativo: true, ordem: 0 }
+const NOVA: RegraDesconto = { id: '', nome: '', pct: 10, escopo: 'todos', produto_ids: [], inclui_couvert: false, remove_servico: true, ativo: true, ordem: 0, fora_faturamento: false }
 
 /** Descontos automáticos usados no fechamento da conta (familiares, funcionários, parceiros…). */
 export function ConfigDescontos() {
@@ -46,7 +46,7 @@ export function ConfigDescontos() {
     if (!ed.nome.trim()) return s.falha('Dê um nome para o desconto.')
     if (pct == null || pct < 0 || pct > 100) return s.falha('Percentual entre 0 e 100.')
     if (ed.escopo === 'produtos' && !ed.produto_ids.length) return s.falha('Escolha ao menos um produto.')
-    const dados = { nome: ed.nome.trim(), pct, escopo: ed.escopo, produto_ids: ed.escopo === 'produtos' ? ed.produto_ids : [], inclui_couvert: ed.inclui_couvert, remove_servico: ed.remove_servico, ativo: ed.ativo }
+    const dados = { nome: ed.nome.trim(), pct, escopo: ed.escopo, produto_ids: ed.escopo === 'produtos' ? ed.produto_ids : [], inclui_couvert: ed.inclui_couvert, remove_servico: ed.remove_servico, ativo: ed.ativo, fora_faturamento: !!ed.fora_faturamento }
     const { error } = ed.id ? await db.from('pdv_descontos_regras').update(dados).eq('id', ed.id) : await db.from('pdv_descontos_regras').insert({ ...dados, ordem: regras.length + 1 })
     if (error) return s.falha(error.message)
     s.ok('Desconto salvo.'); setEd(null); carregar()
@@ -83,7 +83,7 @@ export function ConfigDescontos() {
                   <b>{r.nome} · {r.pct}%</b>
                   <p className="text-xs text-ink-soft">
                     {r.escopo === 'todos' ? 'Todo o consumo' : `${r.produto_ids.length} produto(s): ${r.produto_ids.slice(0, 3).map((i) => nomeProd[i] ?? '?').join(', ')}${r.produto_ids.length > 3 ? '…' : ''}`}
-                    {r.inclui_couvert ? ' · inclui couvert/rodízio' : ''}{r.remove_servico ? ' · sem taxa de serviço' : ' · cobra serviço'}
+                    {r.inclui_couvert ? ' · inclui couvert/rodízio' : ''}{r.remove_servico ? ' · sem taxa de serviço' : ' · cobra serviço'}{r.fora_faturamento ? ' · fora do faturamento' : ''}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -122,6 +122,7 @@ export function ConfigDescontos() {
             </div>
           )}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.inclui_couvert} onChange={(e) => setEd({ ...ed, inclui_couvert: e.target.checked })} /> Aplicar também no couvert e rodízio</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!ed.fora_faturamento} onChange={(e) => setEd({ ...ed, fora_faturamento: e.target.checked })} /> Não conta no faturamento (consumo da família / da casa)</label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.remove_servico} onChange={(e) => setEd({ ...ed, remove_servico: e.target.checked })} /> Não cobrar taxa de serviço (10%)</label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.ativo} onChange={(e) => setEd({ ...ed, ativo: e.target.checked })} /> Ativo (aparece no fechamento)</label>
           <div className="flex gap-2">

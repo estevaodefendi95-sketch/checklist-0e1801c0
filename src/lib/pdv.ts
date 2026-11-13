@@ -106,3 +106,21 @@ export function noHorarios(h: Faixa[] | null | undefined, d = new Date()) {
   const m = (x: string) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5))
   return h.some((f) => { const a = m(f.inicio), b = m(f.fim); return a <= b ? f.dia === hoje && min >= a && min < b : (f.dia === hoje && min >= a) || (f.dia === ontem && min < b) })
 }
+
+/**
+ * Comandas de consumo interno (família/casa) que NÃO entram no faturamento: as encerradas como "consumo interno" (cortesia)
+ * e as que usaram uma regra de desconto marcada "fora do faturamento". O consumo de funcionário já sai pelo funcionario_id.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function idsConsumoInterno(db: any, comandas: { id: string; desconto_detalhe?: unknown }[]): Promise<Set<string>> {
+  const fora = new Set<string>()
+  if (!comandas.length) return fora
+  const [pg, rg] = await Promise.all([
+    db.from('pdv_pagamentos').select('comanda_id').in('comanda_id', comandas.map((c) => c.id)).eq('forma', 'cortesia').eq('estornado', false),
+    db.from('pdv_descontos_regras').select('id').eq('fora_faturamento', true),
+  ])
+  ;((pg.data ?? []) as { comanda_id: string }[]).forEach((p) => fora.add(p.comanda_id))
+  const regras = new Set(((rg.data ?? []) as { id: string }[]).map((r) => r.id))
+  comandas.forEach((c) => { const rid = (c.desconto_detalhe as { regra_id?: string | null } | null)?.regra_id; if (rid && regras.has(rid)) fora.add(c.id) })
+  return fora
+}
