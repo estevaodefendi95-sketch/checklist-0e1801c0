@@ -8,9 +8,12 @@ import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 import { reduzir } from '../../lib/imagem'
 import { Tablet } from './ConfigTablet'
 import { TabletLayout } from './TabletLayout'
+import { CardapioTablet, HorariosEditor, resumoHorario } from './CardapioTablet'
+import type { Faixa } from '../../lib/pdv'
 
-type Aba = 'banners' | 'indicacoes' | 'layout' | 'mesas'
+type Aba = 'cardapio' | 'banners' | 'indicacoes' | 'layout' | 'mesas'
 const ABAS: { v: Aba; r: string }[] = [
+  { v: 'cardapio', r: 'Cardápio: menus e horários' },
   { v: 'banners', r: 'Banners patrocinados' },
   { v: 'indicacoes', r: 'Indicações de pratos' },
   { v: 'layout', r: 'Layout do tablet' },
@@ -18,13 +21,14 @@ const ABAS: { v: Aba; r: string }[] = [
 ]
 
 export function GestaoTablet() {
-  const [aba, setAba] = useState<Aba>('banners')
+  const [aba, setAba] = useState<Aba>('cardapio')
   return (
     <div>
-      <Cabecalho titulo="Gestão do tablet" subtitulo="Banners, indicações, layout, mesas e QR Code do cardápio digital" />
+      <Cabecalho titulo="Gestão do tablet" subtitulo="Menus e horários, banners, indicações, layout, mesas e QR Code do cardápio digital" />
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
         {ABAS.map((a) => <button key={a.v} className={aba === a.v ? btnCls : btnSecCls} onClick={() => setAba(a.v)}>{a.r}</button>)}
       </div>
+      {aba === 'cardapio' && <CardapioTablet />}
       {aba === 'banners' && <Banners />}
       {aba === 'indicacoes' && <Indicacoes />}
       {aba === 'layout' && <TabletLayout />}
@@ -36,7 +40,7 @@ export function GestaoTablet() {
   )
 }
 
-interface Banner { id: string; titulo: string; patrocinador: string | null; imagem_url: string; produto_id: string | null; ativo: boolean; ordem: number; inicio: string | null; fim: string | null }
+interface Banner { id: string; titulo: string; patrocinador: string | null; imagem_url: string; produto_id: string | null; ativo: boolean; ordem: number; inicio: string | null; fim: string | null; horarios?: Faixa[] | null }
 interface Prod { id: string; nome: string; preco: number; foto_url: string | null; indicacao: boolean; indicacao_rotulo: string | null; ativo: boolean }
 
 function Banners() {
@@ -65,7 +69,7 @@ function Banners() {
   }
   async function salvar() {
     if (!ed?.imagem_url) return s.falha('Envie a imagem do banner.')
-    const dados = { titulo: (ed.titulo ?? '').trim(), patrocinador: ed.patrocinador?.trim() || null, imagem_url: ed.imagem_url, produto_id: ed.produto_id || null, ativo: ed.ativo !== false, inicio: ed.inicio || null, fim: ed.fim || null }
+    const dados = { titulo: (ed.titulo ?? '').trim(), patrocinador: ed.patrocinador?.trim() || null, imagem_url: ed.imagem_url, produto_id: ed.produto_id || null, ativo: ed.ativo !== false, inicio: ed.inicio || null, fim: ed.fim || null, horarios: ed.horarios?.length ? ed.horarios : null }
     const r = ed.id ? await db.from('pdv_banners').update(dados).eq('id', ed.id) : await db.from('pdv_banners').insert({ ...dados, ordem: (lista?.length ?? 0) + 1 })
     if (r.error) s.falha(r.error.message); else { s.ok(); setEd(null); carregar() }
   }
@@ -96,7 +100,7 @@ function Banners() {
                 <img src={b.imagem_url} alt="" className="h-16 w-48 rounded-lg object-cover" />
                 <div className="min-w-0 flex-1 text-sm">
                   <b>{b.titulo || 'Sem título'}</b>{b.patrocinador && <span className="text-ink-soft"> · {b.patrocinador}</span>}
-                  <div className="text-xs text-ink-soft">{b.ativo ? 'Ativo' : 'Pausado'}{b.inicio || b.fim ? ` · ${b.inicio ? new Date(b.inicio + 'T12:00').toLocaleDateString('pt-BR') : '…'} a ${b.fim ? new Date(b.fim + 'T12:00').toLocaleDateString('pt-BR') : '…'}` : ''}{b.produto_id ? ` · abre: ${prods.find((p) => p.id === b.produto_id)?.nome ?? 'prato'}` : ''}</div>
+                  <div className="text-xs text-ink-soft">{b.ativo ? 'Ativo' : 'Pausado'}{b.inicio || b.fim ? ` · ${b.inicio ? new Date(b.inicio + 'T12:00').toLocaleDateString('pt-BR') : '…'} a ${b.fim ? new Date(b.fim + 'T12:00').toLocaleDateString('pt-BR') : '…'}` : ''}{b.horarios?.length ? ` · ${resumoHorario(b.horarios)}` : ''}{b.produto_id ? ` · abre: ${prods.find((p) => p.id === b.produto_id)?.nome ?? 'prato'}` : ''}</div>
                 </div>
                 <div className="flex gap-1">
                   <button className={btnSecCls + ' !min-h-[38px]'} disabled={i === 0} onClick={() => mover(b, -1)}>↑</button>
@@ -127,6 +131,7 @@ function Banners() {
               <Campo r="Início (opcional)"><input type="date" className={inputCls} value={ed.inicio ?? ''} onChange={(e) => setEd({ ...ed, inicio: e.target.value || null })} /></Campo>
               <Campo r="Fim (opcional)"><input type="date" className={inputCls} value={ed.fim ?? ''} onChange={(e) => setEd({ ...ed, fim: e.target.value || null })} /></Campo>
             </div>
+            <details className="rounded-xl border border-line p-2 text-sm"><summary className="cursor-pointer font-medium">Horário no dia (opcional): {resumoHorario(ed.horarios)}</summary><div className="mt-2"><HorariosEditor valor={ed.horarios ?? null} onChange={(v) => setEd({ ...ed, horarios: v })} /></div></details>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.ativo !== false} onChange={(e) => setEd({ ...ed, ativo: e.target.checked })} />Ativo no tablet</label>
             <div className="flex justify-end gap-2"><button className={btnSecCls} onClick={() => setEd(null)}>Cancelar</button><button className={btnCls} onClick={salvar} disabled={env}>Salvar</button></div>
           </div>

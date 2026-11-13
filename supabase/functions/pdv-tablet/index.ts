@@ -89,23 +89,24 @@ Deno.serve(async (req) => {
 
     if (acao === "menu") {
       const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-      const [cats, prods, , grp, pg, ops, bn, rs] = await Promise.all([
-        db.from("pdv_categorias").select("id,nome,visivel_tablet,horarios").eq("ativo", true).order("ordem"),
+      const [cats, prods, mn, grp, pg, ops, bn, rs] = await Promise.all([
+        db.from("pdv_categorias").select("id,nome,visivel_tablet,horarios,menu_id").eq("ativo", true).order("ordem"),
         db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,horarios,indicacao,indicacao_rotulo").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
-        Promise.resolve({ data: [] }),
+        db.from("pdv_menus").select("id,visivel,horarios").eq("ativo", true),
         db.from("pdv_grupos_opcoes").select("id,nome,tipo,min_escolhas,max_escolhas").eq("ativo", true).order("ordem"),
         db.from("pdv_produto_grupos").select("produto_id,grupo_id,ordem").order("ordem"),
         db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true).order("ordem"),
-        db.from("pdv_banners").select("id,titulo,patrocinador,imagem_url,produto_id,inicio,fim").eq("ativo", true).order("ordem").order("criado_em"),
+        db.from("pdv_banners").select("id,titulo,patrocinador,imagem_url,produto_id,inicio,fim,horarios").eq("ativo", true).order("ordem").order("criado_em"),
         db.from("reservas").select("id,nome,telefone,pessoas,hora,duracao_min,liberada_tablet_em").eq("mesa_id", mesa.id).eq("data", hoje).in("status", ["pendente", "confirmada"]).order("hora"),
       ]);
-      const banners = (bn.data ?? []).filter((b: any) => (!b.inicio || b.inicio <= hoje) && (!b.fim || b.fim >= hoje));
+      const banners = (bn.data ?? []).filter((b: any) => (!b.inicio || b.inicio <= hoje) && (!b.fim || b.fim >= hoje) && noHorario(b.horarios));
       // reserva da mesa: aparece de 3 h antes até o fim da duração; o toque na tela do tablet libera
       const { min: agoraMin } = agoraSP();
       const hm = (x: string) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5));
       const r: any = (rs.data ?? []).find((x: any) => agoraMin >= hm(x.hora) - 180 && agoraMin <= hm(x.hora) + x.duracao_min);
       const reserva = r ? { id: r.id, nome: r.nome, telefone: r.telefone, pessoas: r.pessoas, hora: String(r.hora).slice(0, 5), liberada: !!r.liberada_tablet_em } : null;
-      const catOk = new Map((cats.data ?? []).filter((c: any) => c.visivel_tablet && noHorario(c.horarios)).map((c: any) => [c.id, c]));
+      const menuOk = new Map((mn.data ?? []).map((m: any) => [m.id, m.visivel && noHorario(m.horarios)]));
+      const catOk = new Map((cats.data ?? []).filter((c: any) => c.visivel_tablet && noHorario(c.horarios) && (!c.menu_id || menuOk.get(c.menu_id) === true)).map((c: any) => [c.id, c]));
       const produtos = (prods.data ?? []).filter((p: any) => p.visivel_tablet && (!p.categoria_id || catOk.has(p.categoria_id)) && noHorario(p.horarios))
         .map((p: any) => ({
           id: p.id, nome: p.nome, descricao: p.descricao, preco: p.preco, categoria_id: p.categoria_id, foto_url: p.foto_url, indicacao: !!p.indicacao, indicacao_rotulo: p.indicacao_rotulo,
@@ -132,20 +133,22 @@ Deno.serve(async (req) => {
       if (com.status !== "aberta") return json({ erro: "Essa conta já foi pedida. Chame o atendente." });
       if (!Array.isArray(itens) || !itens.length || itens.length > 40) return json({ erro: "Pedido vazio." });
       const ids = itens.map((i: any) => i.produto_id);
-      const [{ data: prods }, { data: cats }, { data: pg }, { data: grp }, { data: ops }] = await Promise.all([
+      const [{ data: prods }, { data: cats }, { data: pg }, { data: grp }, { data: ops }, { data: menusP }] = await Promise.all([
         db.from("pdv_produtos").select("id,nome,preco,destino,categoria_id,visivel_tablet,horarios").in("id", ids).eq("ativo", true).eq("disponivel", true),
-        db.from("pdv_categorias").select("id,visivel_tablet,horarios"),
+        db.from("pdv_categorias").select("id,visivel_tablet,horarios,menu_id"),
         db.from("pdv_produto_grupos").select("produto_id,grupo_id").in("produto_id", ids),
         db.from("pdv_grupos_opcoes").select("id,nome,min_escolhas,max_escolhas").eq("ativo", true),
         db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true),
+        db.from("pdv_menus").select("id,visivel,horarios").eq("ativo", true),
       ]);
+      const menuOkP = new Map((menusP ?? []).map((m: any) => [m.id, m.visivel && noHorario(m.horarios)]));
       const mapa = new Map((prods ?? []).map((p: any) => [p.id, p]));
       const linhas = [];
       for (const i of itens) {
         const p: any = mapa.get(i.produto_id);
         const q = Math.min(20, Math.max(1, Math.floor(Number(i.qtd) || 0)));
         const c: any = (cats ?? []).find((k: any) => k.id === p?.categoria_id);
-        if (!p || !p.visivel_tablet || !noHorario(p.horarios) || (c && (!c.visivel_tablet || !noHorario(c.horarios))))
+        if (!p || !p.visivel_tablet || !noHorario(p.horarios) || (c && (!c.visivel_tablet || !noHorario(c.horarios) || (c.menu_id && menuOkP.get(c.menu_id) !== true))))
           return json({ erro: "Um dos itens não está disponível neste horário." });
         // opções escolhidas: valida grupos do produto, mínimo/máximo e recalcula o preço no servidor
         const escolhidas: any[] = (Array.isArray(i.opcoes) ? i.opcoes : []).map((id: string) => (ops ?? []).find((o: any) => o.id === id));
