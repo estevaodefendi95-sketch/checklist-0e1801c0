@@ -166,7 +166,7 @@ export function MesaPublica() {
   }
   if (!e.qr_ativo) return <p className="p-6 text-center">Pedidos pelo QR Code indisponíveis. Chame o garçom.</p>
   return (
-    <div className="mx-auto h-[100dvh] max-w-5xl">
+    <div className="mx-auto h-[100dvh] w-full">
       {msg && !det && !carrinho && <p className="fixed inset-x-3 top-3 z-40 mx-auto max-w-xl rounded-xl bg-white p-3 text-sm shadow-lg" onClick={() => setMsg('')}>{msg}</p>}
       <CardapioCliente
         tema={tema} banners={e.banners} onTopoSegurar={() => setAcesso('trocar')} onLogoSegurar={() => setAcesso('sair')} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
@@ -179,7 +179,7 @@ export function MesaPublica() {
         rodape={<>
           {qtd > 0 && <button className={btn + ' flex w-full items-center justify-between shadow-lg'} onClick={() => setCarrinho(true)}><span>Ver pedido · {qtd} {qtd === 1 ? 'item' : 'itens'}</span><span>{brl(total)}</span></button>}
         </>}
-        sobrepor={<>{dialogoAcesso}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr titulo="Aponte para o QR Code do cartão da sua comanda" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
+        sobrepor={<>{dialogoAcesso}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr camera="user" titulo="Mostre o QR Code do cartão da sua comanda para a câmera da frente" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
           <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50" onClick={() => setMinha(null)}>
             <div className="max-h-[85vh] w-full max-w-xl space-y-2 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" onClick={(x) => x.stopPropagation()}>
               <h2 className="text-lg font-semibold">Comanda {minha.numero}{minha.nome ? ` · ${minha.nome}` : ''}</h2>
