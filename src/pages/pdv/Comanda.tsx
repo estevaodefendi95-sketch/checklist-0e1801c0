@@ -241,6 +241,8 @@ export function Comanda() {
     carregar()
   }
   const fail = (m: string) => { setErro(m); return false }
+  // Enter em qualquer campo do recebimento registra o pagamento (campo vazio = todo o restante da conta)
+  const teclaEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); void pagar() } }
   async function pagar(restanteTudo = false): Promise<boolean> {
     if (!c) return false
     if (semRede()) return false
@@ -263,7 +265,12 @@ export function Comanda() {
     })
     if (error) return fail(error.message)
     setValor(''); setNsu(''); setRecebido(''); setErro('')
-    if (troco > 0) setMsg(`Troco: ${reais(troco)}`)
+    const falta = Math.max(0, restante - aplicado)
+    if (falta > 0.005) {
+      // pagou só uma parte: libera as teclas 1-6 para escolher a forma do restante
+      ;(document.activeElement as HTMLElement | null)?.blur?.()
+      setMsg(`${rotuloForma(forma)} de ${reais(aplicado)} registrado${troco > 0 ? ` (troco ${reais(troco)})` : ''}. Falta ${reais(falta)}: escolha a forma de pagamento do restante e aperte Enter.`)
+    } else if (troco > 0) setMsg(`Troco: ${reais(troco)}`)
     carregar()
     return true
   }
@@ -396,6 +403,7 @@ export function Comanda() {
       if (e.key === 'F6' && c.status === 'pedindo_conta' && (pode('pdv_operar') || pode('pdv_caixa'))) return faz(() => reabrir())
       if (e.key === 'F7' && aberta && podeDesc) return faz(() => { setAba('pagamento'); setSinalDesc((n) => n + 1); setTimeout(() => refDesc.current?.focus(), 150) })
       if (e.key === 'F8' && lancavel && carrinho.length) return faz(() => enviar())
+      if (e.key === 'Enter' && !digitando && aba === 'pagamento' && aberta && !c.funcionario_id && document.activeElement === document.body && !aprov && !escMesa && !agrupando) return faz(() => { void pagar() })
       if (e.key === 'Escape' && digitando) alvo.blur()
       if (!digitando && aba === 'pagamento' && aberta && /^[1-6]$/.test(e.key)) setForma(FORMAS[Number(e.key) - 1].v)
     }
@@ -560,11 +568,11 @@ export function Comanda() {
                   ))}
                 </div>
                 <label className="block text-sm">Valor (restante {reais(restante)})
-                  <input className={inputCls} inputMode="decimal" placeholder={restante.toFixed(2).replace('.', ',')} value={valor} onChange={(e) => setValor(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') pagar() }} />
+                  <input className={inputCls} inputMode="decimal" placeholder={restante.toFixed(2).replace('.', ',')} value={valor} onChange={(e) => setValor(e.target.value)} onKeyDown={teclaEnter} />
                 </label>
                 {forma === 'dinheiro' && (
                   <label className="block text-sm">Valor recebido
-                    <input className={inputCls} inputMode="decimal" value={recebido} onChange={(e) => setRecebido(e.target.value)} />
+                    <input className={inputCls} inputMode="decimal" value={recebido} onChange={(e) => setRecebido(e.target.value)} onKeyDown={teclaEnter} />
                   </label>
                 )}
                 {(forma === 'credito' || forma === 'debito') && (
@@ -576,7 +584,7 @@ export function Comanda() {
                 )}
                 {(forma === 'credito' || forma === 'debito') && (
                   <label className="block text-sm">NSU / comprovante da maquininha
-                    <input className={inputCls} value={nsu} onChange={(e) => setNsu(e.target.value)} />
+                    <input className={inputCls} value={nsu} onChange={(e) => setNsu(e.target.value)} onKeyDown={teclaEnter} />
                   </label>
                 )}
                 <div className="flex flex-wrap gap-2">
