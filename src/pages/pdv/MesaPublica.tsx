@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../integrations/supabase/client'
 import { CardapioCliente } from '../../components/CardapioCliente'
@@ -7,8 +7,8 @@ import { LeitorQr } from '../../components/LeitorQr'
 import { AutorizarTablet, useSegurar } from '../../components/TabletAcesso'
 import type { CardBanner } from '../../components/CardapioCliente'
 
-// Página pública aberta pelo QR Code da mesa (sem login). Toda a leitura e escrita passa pela
-// função pdv-tablet, que valida o token da mesa e só aceita pedido com comanda aberta.
+// Tablet da mesa (sem login). O QR Code é do CARTÃO DA COMANDA: o cliente monta o pedido e lê o QR do
+// seu cartão para enviá-lo. Toda a leitura e escrita passa pela função pdv-tablet.
 interface Opc { id: string; nome: string; preco_adicional: number }
 interface Grp { id: string; nome: string; tipo: string; min_escolhas: number; max_escolhas: number; opcoes: Opc[] }
 interface Prod { id: string; nome: string; descricao: string | null; preco: number; categoria_id: string | null; foto_url: string | null; grupos?: Grp[]; indicacao?: boolean; indicacao_rotulo?: string | null }
@@ -16,8 +16,7 @@ interface Linha { key: string; p: Prod; qtd: number; opcoes: string[]; obs: stri
 interface Cat { id: string; nome: string }
 interface It { nome: string; qtd: number; preco_unit: number; status: string; opcoes?: { nome: string }[] }
 interface Estado {
-  erro?: string; mesa?: string; boas_vindas?: string; qr_ativo?: boolean; exige_checkin?: boolean
-  comanda?: { id: string; nome_cliente: string | null; total: number; status: string } | null
+  erro?: string; mesa?: string; boas_vindas?: string; qr_ativo?: boolean
   banners?: CardBanner[]; reserva?: { id: string; nome: string; telefone: string; pessoas: number; hora: string; liberada: boolean } | null
   itens?: It[]; tema?: { primaria?: string; fundo?: string; texto?: string; destaque?: string; titulo?: string; subtitulo?: string; colunas?: number; mostrar_fotos?: boolean }; categorias?: Cat[]; produtos?: Prod[]; pode_chamar?: boolean; pode_conta?: boolean
 }
@@ -32,33 +31,20 @@ export function MesaPublica() {
   const [e, setE] = useState<Estado | null>(null)
   const [car, setCar] = useState<Linha[]>([])
   const [det, setDet] = useState<Prod | null>(null)
-  const [leitor, setLeitor] = useState(false)
+  const [leitor, setLeitor] = useState<null | 'pedido' | 'conta' | 'minha'>(null)
+  const [minha, setMinha] = useState<null | { numero: number; nome: string | null; total: number; itens: It[] }>(null)
   const [carrinho, setCarrinho] = useState(false)
   const [lateral, setLateral] = useState(() => window.innerWidth >= 768)
   useEffect(() => { const f = () => setLateral(window.innerWidth >= 768); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f) }, [])
   const [msg, setMsg] = useState('')
   const [env, setEnv] = useState(false)
-  const [nome, setNome] = useState('')
-  const [pessoas, setPessoas] = useState('2')
-  const [tel, setTel] = useState('')
-  const [nasc, setNasc] = useState('')
 
   const chamar = useCallback(async (acao: string, extra: Record<string, unknown> = {}) => {
     const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao, ...extra } })
     if (error) return { erro: 'Sem conexão. Chame o garçom.' } as Estado
     return data as Estado
   }, [token])
-  const chamarTk = useCallback(async (tk: string, acao: string, extra: Record<string, unknown> = {}) => {
-    const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token: tk, acao, ...extra } })
-    if (error) return { erro: 'Sem conexão. Chame o garçom.' } as Estado
-    return data as Estado
-  }, [])
   const carregar = useCallback(async () => { const d = await chamar('menu'); setE(d) }, [chamar])
-  const preenchido = useRef('')
-  useEffect(() => {
-    const r = e?.reserva
-    if (r && preenchido.current !== r.id) { preenchido.current = r.id; setNome(r.nome); setTel(r.telefone); setPessoas(String(r.pessoas)) }
-  }, [e?.reserva])
   useEffect(() => { carregar(); const t = setInterval(carregar, 10000); return () => clearInterval(t) }, [carregar])
 
   const prodsCard = useMemo(() => (e?.produtos ?? []).map((p) => ({ ...p, personalizavel: !!p.grupos?.length })), [e])
@@ -81,30 +67,33 @@ export function MesaPublica() {
     setDet(null); setMsg('')
   }
 
-  // o pedido vai para a mesa do QR Code lido (a mesa onde o cliente realmente está)
-  async function enviarPara(texto: string) {
-    setLeitor(false)
-    const m = texto.match(/mesa\/([^/?#\s]+)/i)
-    const tk = m ? m[1] : texto.trim()
+  // o QR Code lido é o do cartão da comanda do cliente
+  const tokenCartao = (texto: string) => texto.trim().slice(0, 300)
+  async function aoLer(texto: string) {
+    const modo = leitor
+    setLeitor(null)
+    const ct = tokenCartao(texto)
     setEnv(true)
-    const menu = await chamarTk(tk, 'menu')
-    if (menu.erro || !menu.mesa) { setEnv(false); return setMsg(menu.erro ?? 'Esse QR Code não é de uma mesa. Tente o QR Code da sua mesa.') }
-    if (!menu.comanda) { setEnv(false); return setMsg(`A mesa ${menu.mesa} ainda não foi aberta. Peça ao garçom para fazer o check-in.`) }
-    const itens = car.map((l) => ({ produto_id: l.p.id, qtd: l.qtd, opcoes: l.opcoes, obs: l.obs }))
-    const r = await chamarTk(tk, 'pedir', { itens }) as Estado & { ok?: boolean }
-    setEnv(false)
-    if (r.erro) return setMsg(r.erro)
-    setCar([]); setMsg(`Pedido enviado para a mesa ${menu.mesa}! Já está sendo preparado e será levado até você.`); carregar()
+    if (modo === 'pedido') {
+      const itens = car.map((l) => ({ produto_id: l.p.id, qtd: l.qtd, opcoes: l.opcoes, obs: l.obs }))
+      const r = await chamar('pedir', { itens, comanda_token: ct }) as Estado & { comanda?: number }
+      setEnv(false)
+      if (r.erro) return setMsg(r.erro)
+      setCar([]); setMsg(`Pedido enviado para a comanda ${r.comanda}! Já está sendo preparado e será levado até você.`)
+    } else if (modo === 'conta') {
+      const r = await chamar('conta', { comanda_token: ct })
+      setEnv(false)
+      setMsg(r.erro ?? 'Conta solicitada. O garçom já vai até você.')
+    } else {
+      const r = await chamar('comanda_info', { comanda_token: ct }) as Estado & { numero?: number; nome?: string | null; total?: number; itens?: It[] }
+      setEnv(false)
+      if (r.erro) return setMsg(r.erro)
+      setMinha({ numero: r.numero ?? 0, nome: r.nome ?? null, total: r.total ?? 0, itens: r.itens ?? [] })
+    }
   }
-  async function simples(acao: 'garcom' | 'conta', texto: string) {
+  async function simples(acao: 'garcom', texto: string) {
     const r = await chamar(acao)
     setMsg(r.erro ?? texto)
-  }
-  async function checkin() {
-    if (!nome.trim()) return setMsg('Informe seu nome.')
-    if (tel.replace(/\D/g, '').length < 10) return setMsg('Informe seu telefone com DDD.')
-    const r = await chamar('checkin', { nome, telefone: tel, nascimento: nasc || undefined, pessoas: Number(pessoas) || 1 })
-    if (r.erro) setMsg(r.erro); else carregar()
   }
 
   if (!e) return <p className="p-6 text-center">Carregando…</p>
@@ -129,39 +118,21 @@ export function MesaPublica() {
         ))}
         {!car.length && <p className="text-sm opacity-70">Sacola vazia.</p>}
         {msg && <p className="text-sm text-[var(--p)]">{msg}</p>}
-        <button className={btn + ' w-full'} disabled={env || !car.length} onClick={() => { setCarrinho(false); setMsg(''); setLeitor(true) }}>Enviar pedido · {brl(total)}</button>
-      </div>
-    </div>
-  )
-  const abrirMesa = (
-    <div className="mx-auto max-w-xl p-4" style={{ ...vars, color: 'var(--t)' }}>
-      <h1 {...segTopoRes} className="mb-2 select-none text-2xl font-semibold">{e.tema?.titulo || 'Paggio'} · Mesa {e.mesa}</h1>
-      <div className="space-y-3 rounded-2xl bg-white p-4 shadow">
-        <p>{e.exige_checkin ? 'Sua mesa ainda não foi aberta. Peça à recepção para fazer o check-in e volte aqui.' : 'Abra sua mesa para começar:'}</p>
-        {!e.exige_checkin && (
-          <>
-            <input className="w-full rounded-xl border p-3" placeholder="Seu nome *" value={nome} onChange={(x) => setNome(x.target.value)} />
-            <input className="w-full rounded-xl border p-3" inputMode="tel" placeholder="Telefone (WhatsApp) *" value={tel} onChange={(x) => setTel(x.target.value)} />
-            <label className="block text-xs opacity-70">Data de nascimento (opcional)<input type="date" className="mt-1 w-full rounded-xl border p-3 text-base" value={nasc} onChange={(x) => setNasc(x.target.value)} /></label>
-            <input className="w-full rounded-xl border p-3" inputMode="numeric" placeholder="Quantas pessoas" value={pessoas} onChange={(x) => setPessoas(x.target.value)} />
-            {msg && <p className="text-sm text-[var(--p)]">{msg}</p>}
-            <button className={btn} onClick={checkin}>Abrir mesa</button>
-          </>
-        )}
+        <button className={btn + ' w-full'} disabled={env || !car.length} onClick={() => { setCarrinho(false); setMsg(''); setLeitor('pedido') }}>Ler QR da comanda e enviar · {brl(total)}</button>
       </div>
     </div>
   )
   const dialogoAcesso = acesso && (
     <AutorizarTablet token={token} modo={acesso} mesaAtual={e.mesa}
       onCancelar={() => setAcesso(null)} onSair={() => { setAcesso(null); nav('/') }}
-      onTrocar={(tk) => { setAcesso(null); setCar([]); setMsg(''); setE(null); preenchido.current = ''; nav(`/mesa/${tk}`) }} />
+      onTrocar={(tk) => { setAcesso(null); setCar([]); setMsg(''); setE(null); nav(`/mesa/${tk}`) }} />
   )
   async function liberarReserva() {
     if (!e?.reserva) return
     const r = await chamar('liberar_reserva', { reserva_id: e.reserva.id })
     if (r.erro) setMsg(r.erro); else carregar()
   }
-  if (e.qr_ativo && !e.comanda && e.reserva && !e.reserva.liberada) {
+  if (e.qr_ativo && e.reserva && !e.reserva.liberada) {
     return (
       <div className="relative flex h-[100dvh] cursor-pointer select-none flex-col items-center justify-center gap-4 p-6 text-center text-white" style={{ ...vars, background: 'var(--p)' }} onClick={liberarReserva}>
         <div {...segTopoRes} onClick={(x) => x.stopPropagation()} className="absolute inset-x-0 top-0 h-24" />
@@ -176,7 +147,6 @@ export function MesaPublica() {
     )
   }
   if (!e.qr_ativo) return <p className="p-6 text-center">Pedidos pelo QR Code indisponíveis. Chame o garçom.</p>
-  if (!e.comanda) return <>{abrirMesa}{dialogoAcesso}</>
   return (
     <div className="mx-auto h-[100dvh] max-w-5xl">
       {msg && !det && !carrinho && <p className="fixed inset-x-3 top-3 z-40 mx-auto max-w-xl rounded-xl bg-white p-3 text-sm shadow-lg" onClick={() => setMsg('')}>{msg}</p>}
@@ -185,18 +155,23 @@ export function MesaPublica() {
         qtdDe={qtdProd} onAdd={(p) => mais(p as Prod)} onMenos={menos} onAbrir={(p) => setDet(e.produtos?.find((x) => x.id === p.id) ?? null)}
         acoes={<>
           {e.pode_chamar && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}
-          {e.pode_conta && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => simples('conta', 'Conta solicitada. O garçom já vai até você.')}>Pedir a conta</button>}
+          <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => { setMsg(''); setLeitor('minha') }}>Minha conta</button>
+          {e.pode_conta && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => { setMsg(''); setLeitor('conta') }}>Pedir a conta</button>}
         </>}
         rodape={<>
-          {(e.itens ?? []).length > 0 && (
-            <details className="rounded-2xl bg-white p-3 text-sm shadow">
-              <summary className="flex cursor-pointer justify-between font-semibold"><span>Seu consumo</span><span>{brl(e.comanda.total)}</span></summary>
-              {(e.itens ?? []).map((i, k) => <div key={k} className="flex justify-between py-1"><span>{i.qtd}× {i.nome}{i.opcoes?.length ? <em className="block text-xs opacity-70">{i.opcoes.map((o) => o.nome).join(', ')}</em> : null} <em className="opacity-60">({i.status})</em></span><span>{brl(i.qtd * i.preco_unit)}</span></div>)}
-            </details>
-          )}
           {qtd > 0 && <button className={btn + ' flex w-full items-center justify-between shadow-lg'} onClick={() => setCarrinho(true)}><span>Ver pedido · {qtd} {qtd === 1 ? 'item' : 'itens'}</span><span>{brl(total)}</span></button>}
         </>}
-        sobrepor={<>{dialogoAcesso}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr onLido={enviarPara} onCancelar={() => setLeitor(false)} />}</>}
+        sobrepor={<>{dialogoAcesso}{det && <ProdutoDetalhe produto={det} vars={vars} fotos={tema.mostrar_fotos !== false} onFechar={() => setDet(null)} onAdicionar={adicionarDet} className="absolute inset-0" />}{sacola}{leitor && <LeitorQr titulo="Aponte para o QR Code do cartão da sua comanda" onLido={aoLer} onCancelar={() => setLeitor(null)} />}{minha && (
+          <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50" onClick={() => setMinha(null)}>
+            <div className="max-h-[85vh] w-full max-w-xl space-y-2 overflow-y-auto rounded-t-3xl bg-white p-4 text-[#222]" onClick={(x) => x.stopPropagation()}>
+              <h2 className="text-lg font-semibold">Comanda {minha.numero}{minha.nome ? ` · ${minha.nome}` : ''}</h2>
+              {minha.itens.map((i, k) => <div key={k} className="flex justify-between py-1 text-sm"><span>{i.qtd}× {i.nome}{i.opcoes?.length ? <em className="block text-xs opacity-70">{i.opcoes.map((o) => o.nome).join(', ')}</em> : null} <em className="opacity-60">({i.status})</em></span><span>{brl(i.qtd * i.preco_unit)}</span></div>)}
+              {!minha.itens.length && <p className="text-sm opacity-70">Nenhum item ainda.</p>}
+              <p className="flex justify-between border-t pt-2 font-semibold"><span>Total (com serviço)</span><span>{brl(minha.total)}</span></p>
+              <button className={btn + ' w-full'} onClick={() => setMinha(null)}>Fechar</button>
+            </div>
+          </div>
+        )}</>}
       />
     </div>
   )

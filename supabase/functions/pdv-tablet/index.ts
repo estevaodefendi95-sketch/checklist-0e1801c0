@@ -29,10 +29,36 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { token, acao, itens, nome, pessoas, telefone, nascimento, email, senha, reserva_id } = await req.json();
-    if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return json({ erro: "QR Code inválido." });
+    const { token, acao, itens, nome, pessoas, telefone, nascimento, email, senha, reserva_id, comanda_token } = await req.json();
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
+    const uuidOk = (x: unknown) => /^[0-9a-f-]{36}$/i.test(String(x ?? ""));
+
+    // O QR Code é do cartão da comanda: o token do cartão aponta para a comanda ABERTA com aquele número.
+    async function resolverCartao(ct: unknown) {
+      // aceita o texto exato do QR já impresso (qualquer formato) ou a última parte de um endereço
+      const raw = String(ct ?? "").trim().slice(0, 300);
+      const cand = [...new Set([raw, raw.split(/[/?#]/).filter(Boolean).pop() ?? raw])];
+      const { data: card } = raw ? await db.from("pdv_cartoes").select("numero").in("token", cand).limit(1).maybeSingle() : { data: null };
+      if (!card) return { erro: "QR Code inválido. Leia o QR Code do cartão da sua comanda." } as const;
+      const { data: c } = await db.from("pdv_comandas").select("id,numero,nome_cliente,status,taxa_servico_pct,desconto,mesa_id")
+        .eq("numero", card.numero).in("status", ["aberta", "pedindo_conta"]).maybeSingle();
+      if (!c) return { erro: `A comanda ${card.numero} ainda não foi aberta. Peça ao atendente para fazer o check-in.` } as const;
+      return { com: c } as const;
+    }
+    async function consumo(comId: string, taxa: number, desc: number) {
+      const { data: its } = await db.from("pdv_pedido_itens").select("nome,qtd,preco_unit,status,opcoes").eq("comanda_id", comId).neq("status", "cancelado").order("criado_em");
+      const sub = (its ?? []).reduce((s: number, i: any) => s + i.qtd * i.preco_unit, 0);
+      return { itens: its ?? [], total: Math.max(0, sub * (1 + (taxa ?? 0) / 100) - (desc ?? 0)) };
+    }
+    if (acao === "comanda_info") {
+      const rc = await resolverCartao(comanda_token);
+      if ("erro" in rc) return json({ erro: rc.erro });
+      const k = await consumo(rc.com.id, rc.com.taxa_servico_pct, rc.com.desconto);
+      return json({ ok: true, numero: rc.com.numero, nome: rc.com.nome_cliente, status: rc.com.status, ...k });
+    }
+
+    if (!token || !uuidOk(token)) return json({ erro: "Endereço do tablet inválido." });
 
     const { data: mesa } = await db.from("pdv_mesas").select("id,numero").eq("qr_token", token).eq("ativo", true).maybeSingle();
     if (!mesa) return json({ erro: "Mesa não encontrada." });
@@ -61,20 +87,17 @@ Deno.serve(async (req) => {
     }
     if (!cfg.tablet_qr_ativo) return json({ mesa: mesa.numero, qr_ativo: false, boas_vindas: cfg.tablet_mensagem_boas_vindas, tema: cfg.tablet_tema });
 
-    const { data: com } = await db.from("pdv_comandas").select("id,nome_cliente,status,taxa_servico_pct,desconto")
-      .eq("mesa_id", mesa.id).in("status", ["aberta", "pedindo_conta"]).maybeSingle();
-
     if (acao === "menu") {
       const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-      const [cats, prods, its, grp, pg, ops, bn, rs] = await Promise.all([
+      const [cats, prods, , grp, pg, ops, bn, rs] = await Promise.all([
         db.from("pdv_categorias").select("id,nome,visivel_tablet,horarios").eq("ativo", true).order("ordem"),
         db.from("pdv_produtos").select("id,nome,descricao,preco,categoria_id,foto_url,visivel_tablet,horarios,indicacao,indicacao_rotulo").eq("ativo", true).eq("disponivel", true).order("ordem").order("nome"),
-        com ? db.from("pdv_pedido_itens").select("nome,qtd,preco_unit,status,opcoes").eq("comanda_id", com.id).neq("status", "cancelado").order("criado_em") : Promise.resolve({ data: [] }),
+        Promise.resolve({ data: [] }),
         db.from("pdv_grupos_opcoes").select("id,nome,tipo,min_escolhas,max_escolhas").eq("ativo", true).order("ordem"),
         db.from("pdv_produto_grupos").select("produto_id,grupo_id,ordem").order("ordem"),
         db.from("pdv_opcoes").select("id,grupo_id,nome,preco_adicional").eq("ativo", true).order("ordem"),
         db.from("pdv_banners").select("id,titulo,patrocinador,imagem_url,produto_id,inicio,fim").eq("ativo", true).order("ordem").order("criado_em"),
-        com ? Promise.resolve({ data: [] }) : db.from("reservas").select("id,nome,telefone,pessoas,hora,duracao_min,liberada_tablet_em").eq("mesa_id", mesa.id).eq("data", hoje).in("status", ["pendente", "confirmada"]).order("hora"),
+        db.from("reservas").select("id,nome,telefone,pessoas,hora,duracao_min,liberada_tablet_em").eq("mesa_id", mesa.id).eq("data", hoje).in("status", ["pendente", "confirmada"]).order("hora"),
       ]);
       const banners = (bn.data ?? []).filter((b: any) => (!b.inicio || b.inicio <= hoje) && (!b.fim || b.fim >= hoje));
       // reserva da mesa: aparece de 3 h antes até o fim da duração; o toque na tela do tablet libera
@@ -90,49 +113,23 @@ Deno.serve(async (req) => {
             .map((g: any) => ({ ...g, opcoes: (ops.data ?? []).filter((o: any) => o.grupo_id === g.id) })),
         }));
       const categorias = [...catOk.values()].filter((c: any) => produtos.some((p: any) => p.categoria_id === c.id)).map((c: any) => ({ id: c.id, nome: c.nome }));
-      const sub = (its.data ?? []).reduce((s: number, i: any) => s + i.qtd * i.preco_unit, 0);
-      const total = Math.max(0, sub * (1 + (com?.taxa_servico_pct ?? 0) / 100) - (com?.desconto ?? 0));
       return json({
         mesa: mesa.numero, qr_ativo: true, tema: cfg.tablet_tema, boas_vindas: cfg.tablet_mensagem_boas_vindas, exige_checkin: cfg.tablet_exige_checkin,
         pode_chamar: cfg.tablet_pode_chamar_garcom, pode_conta: cfg.tablet_pode_pedir_conta,
-        comanda: com ? { id: com.id, nome_cliente: com.nome_cliente, status: com.status, total } : null,
-        itens: its.data ?? [], categorias, produtos, banners, reserva,
+        categorias, produtos, banners, reserva,
       });
     }
 
-    if (acao === "checkin") {
-      if (cfg.tablet_exige_checkin) return json({ erro: "O check-in é feito na recepção." });
-      if (com) return json({ ok: true });
-      let tel = String(telefone ?? "").replace(/\D/g, "");
-      if (tel.length > 11 && tel.startsWith("55")) tel = tel.slice(2);
-      const nm = String(nome ?? "").trim().slice(0, 60);
-      if (!nm) return json({ erro: "Informe seu nome." });
-      if (tel.length < 10 || tel.length > 11) return json({ erro: "Informe seu telefone com DDD." });
-      const nasc = /^\d{4}-\d{2}-\d{2}$/.test(String(nascimento ?? "")) ? String(nascimento) : null;
-      const { data: cli } = await db.from("pdv_clientes").upsert(
-        nasc ? { telefone: tel, nome: nm, nascimento: nasc } : { telefone: tel, nome: nm }, { onConflict: "telefone" }).select("id").single();
-      const { data: nova, error } = await db.from("pdv_comandas").insert({
-        mesa_id: mesa.id, nome_cliente: nm, telefone: tel, cliente_id: cli?.id ?? null, pessoas: Math.min(30, Math.max(1, Number(pessoas) || 1)),
-        origem: "tablet", taxa_servico_pct: cfg.taxa_servico_pct,
-      }).select("id").single();
-      if (!error && nova) {
-        // reserva liberada no tablet vira "sentada" e fica ligada à comanda
-        const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-        const { data: rl } = await db.from("reservas").select("id").eq("mesa_id", mesa.id).eq("data", hoje).in("status", ["pendente", "confirmada"]).not("liberada_tablet_em", "is", null).order("hora").limit(1);
-        if (rl?.length) await db.from("reservas").update({ status: "sentada", comanda_id: nova.id, atualizado_em: new Date().toISOString() }).eq("id", rl[0].id);
-      }
-      return error ? json({ erro: "Não foi possível abrir a mesa." }) : json({ ok: true });
-    }
-
     if (acao === "liberar_reserva") {
-      if (com) return json({ ok: true });
       const { error } = await db.from("reservas").update({ liberada_tablet_em: new Date().toISOString() }).eq("id", String(reserva_id ?? "")).eq("mesa_id", mesa.id);
       return error ? json({ erro: "Não foi possível liberar." }) : json({ ok: true });
     }
 
-    if (!com) return json({ erro: "Mesa sem comanda aberta. Chame o garçom." });
-
     if (acao === "pedir") {
+      const rc = await resolverCartao(comanda_token);
+      if ("erro" in rc) return json({ erro: rc.erro });
+      const com = rc.com;
+      if (com.status !== "aberta") return json({ erro: "Essa conta já foi pedida. Chame o atendente." });
       if (!Array.isArray(itens) || !itens.length || itens.length > 40) return json({ erro: "Pedido vazio." });
       const ids = itens.map((i: any) => i.produto_id);
       const [{ data: prods }, { data: cats }, { data: pg }, { data: grp }, { data: ops }] = await Promise.all([
@@ -174,12 +171,18 @@ Deno.serve(async (req) => {
     if (acao === "garcom" || acao === "conta") {
       if (acao === "garcom" && !cfg.tablet_pode_chamar_garcom) return json({ erro: "Indisponível." });
       if (acao === "conta" && !cfg.tablet_pode_pedir_conta) return json({ erro: "Indisponível." });
-      if (acao === "conta") await db.from("pdv_comandas").update({ status: "pedindo_conta" }).eq("id", com.id);
+      let comId: string | null = null, numero: number | null = null;
+      if (acao === "conta") {
+        const rc = await resolverCartao(comanda_token);
+        if ("erro" in rc) return json({ erro: rc.erro });
+        comId = rc.com.id; numero = rc.com.numero;
+        await db.from("pdv_comandas").update({ status: "pedindo_conta" }).eq("id", comId);
+      }
       const { data: imp } = await db.from("pdv_impressoras").select("id").eq("funcao", "caixa").eq("ativo", true).limit(1);
       if (imp?.length) {
         await db.from("pdv_fila_impressao").insert({
-          impressora_id: imp[0].id, tipo: "pedido", comanda_id: com.id,
-          conteudo: { mesa: mesa.numero, nome: acao === "garcom" ? "*** CHAMAR GARCOM ***" : "*** PEDIU A CONTA ***", qtd: 1, origem: "tablet" },
+          impressora_id: imp[0].id, tipo: "pedido", comanda_id: comId,
+          conteudo: { mesa: mesa.numero, nome: acao === "garcom" ? "*** CHAMAR GARCOM ***" : `*** PEDIU A CONTA (COMANDA ${numero}) ***`, qtd: 1, origem: "tablet" },
         });
       }
       return json({ ok: true });

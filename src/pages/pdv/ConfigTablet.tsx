@@ -3,6 +3,7 @@ import { db } from '../../lib/supabase'
 import { Carregando, Vazio, btnCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { lerNumero } from '../../lib/formato'
 import { Mesa } from '../../lib/pdv'
+import { LeitorQr } from '../../components/LeitorQr'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 
 interface Cfg { taxa_servico_pct: number; couvert: number; tablet_qr_ativo: boolean; tablet_exige_checkin: boolean; tablet_url_base: string | null; tablet_mensagem_boas_vindas: string | null; tablet_tempo_inatividade_min: number; tablet_pode_chamar_garcom: boolean; tablet_pode_pedir_conta: boolean }
@@ -12,25 +13,19 @@ export function Tablet() {
   const [cfg, setCfg] = useState<Cfg | null>(null)
   const [mesas, setMesas] = useState<Mesa[]>([])
   const [disps, setDisps] = useState<Disp[]>([])
-  const [qrs, setQrs] = useState<Record<string, string>>({})
+  const [cartoes, setCartoes] = useState<{ numero: number; token: string }[]>([])
+  const [numCartao, setNumCartao] = useState('')
+  const [lendo, setLendo] = useState(false)
   const [nd, setNd] = useState({ nome: '', tipo: 'tablet' })
   const s = useSalvarMsg()
   const carregar = useCallback(async () => {
-    const [a, b, c] = await Promise.all([db.from('pdv_config').select('*').single(), db.from('pdv_mesas').select('*').eq('ativo', true).order('numero'), db.from('pdv_dispositivos').select('*').order('criado_em')])
+    const [a, b, c, k] = await Promise.all([db.from('pdv_config').select('*').single(), db.from('pdv_mesas').select('*').eq('ativo', true).order('numero'), db.from('pdv_dispositivos').select('*').order('criado_em'), db.from('pdv_cartoes').select('numero,token').order('numero')])
+    setCartoes((k.data ?? []) as { numero: number; token: string }[])
     setCfg(a.data as Cfg); setMesas((b.data ?? []) as Mesa[]); setDisps((c.data ?? []) as Disp[])
   }, [])
   useEffect(() => { carregar() }, [carregar])
   const base = (cfg?.tablet_url_base || window.location.origin).replace(/\/$/, '')
   const urlMesa = (m: Mesa) => `${base}/mesa/${m.qr_token}`
-  useEffect(() => {
-    if (!mesas.length) return
-    import('qrcode').then(async (Q) => {
-      const o: Record<string, string> = {}
-      for (const m of mesas) o[m.id] = await Q.toDataURL(urlMesa(m), { width: 240, margin: 1 })
-      setQrs(o)
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mesas, cfg?.tablet_url_base])
   async function salvar() {
     if (!cfg) return
     const { error } = await db.from('pdv_config').update({ ...cfg, atualizado_em: new Date().toISOString() }).eq('id', 1)
@@ -41,9 +36,16 @@ export function Tablet() {
     const { error } = await db.from('pdv_dispositivos').insert({ nome: nd.nome.trim(), tipo: nd.tipo })
     if (error) s.falha(error.message); else { setNd({ nome: '', tipo: 'tablet' }); carregar() }
   }
-  function imprimirQrs() {
+  async function cadastrarCartao(numero: number, codigo: string) {
+    const linha = codigo ? { numero, token: codigo } : { numero, token: crypto.randomUUID() }
+    const { error } = await db.from('pdv_cartoes').upsert(linha, { onConflict: 'numero' })
+    if (error) s.falha(error.code === '23505' ? 'Esse QR Code já está cadastrado em outro número.' : error.message); else { s.ok(`Cartão ${numero} cadastrado.`); setNumCartao(String(numero + 1)); carregar() }
+  }
+  async function imprimirCartoes() {
     const w = window.open('', '_blank'); if (!w) return
-    w.document.write(`<html><body style="font-family:sans-serif;display:flex;flex-wrap:wrap;gap:16px">${mesas.map((m) => `<div style="width:220px;text-align:center;border:1px solid #999;padding:10px;page-break-inside:avoid"><h2>Mesa ${m.numero}</h2><img src="${qrs[m.id]}" width="200"/><p>Aponte a câmera para pedir</p></div>`).join('')}</body></html>`)
+    const Q = await import('qrcode')
+    const cards = await Promise.all(cartoes.map(async (c) => `<div style="width:200px;text-align:center;border:1px solid #999;padding:10px;page-break-inside:avoid"><h2 style="margin:0 0 6px">Comanda ${c.numero}</h2><img src="${await Q.toDataURL(c.token, { width: 220, margin: 1 })}" width="180"/><p style="font-size:12px;margin:4px 0 0">Aponte no tablet para pedir</p></div>`))
+    w.document.write(`<html><body style="font-family:sans-serif;display:flex;flex-wrap:wrap;gap:12px">${cards.join('')}</body></html>`)
     w.document.close(); w.print()
   }
   if (!cfg) return <Carregando />
@@ -68,20 +70,36 @@ export function Tablet() {
         </div>
         <button className={btnCls} onClick={salvar}>Salvar</button>
       </section>
-      <section className={`${cartaoCls} p-4`}>
-        <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">QR Code das mesas</h2><button className={btnSecCls} onClick={imprimirQrs} disabled={!mesas.length}>Imprimir todos</button></div>
-        {!mesas.length ? <Vazio texto="Cadastre mesas primeiro." /> : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {mesas.map((m) => (
-              <div key={m.id} className="rounded-xl border border-line p-2 text-center text-xs">
-                <b className="text-sm">Mesa {m.numero}</b>
-                {qrs[m.id] && <img src={qrs[m.id]} alt={`QR mesa ${m.numero}`} className="mx-auto mt-1 w-full" />}
-                <button className="mt-1 text-brand" onClick={() => navigator.clipboard?.writeText(urlMesa(m))}>copiar link</button>
-              </div>
+      <section className={`${cartaoCls} space-y-3 p-4`}>
+        <div className="flex items-center justify-between gap-2">
+          <div><h2 className="font-semibold">Cartões de comanda (QR Code)</h2><p className="text-xs text-ink-soft">O QR Code é do cartão da comanda: o cliente lê o do cartão dele no tablet para enviar o pedido. Se já tem cartões impressos, leia o QR de cada um e diga o número.</p></div>
+          <button className={btnSecCls} onClick={imprimirCartoes} disabled={!cartoes.length}>Imprimir cartões</button>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs text-ink-soft">Nº da comanda<input className={inputCls + ' !w-28'} inputMode="numeric" value={numCartao} onChange={(e) => setNumCartao(e.target.value.replace(/\D/g, '').slice(0, 4))} /></label>
+          <button className={btnCls} disabled={!numCartao} onClick={() => setLendo(true)}>Ler QR do cartão</button>
+          <button className={btnSecCls} disabled={!numCartao} onClick={() => cadastrarCartao(Number(numCartao), '')}>Gerar QR novo para este nº</button>
+        </div>
+        {lendo && <LeitorQr titulo={`Aponte para o QR do cartão da comanda ${numCartao}`} onLido={(t) => { setLendo(false); cadastrarCartao(Number(numCartao), t.trim()) }} onCancelar={() => setLendo(false)} />}
+        {!cartoes.length ? <Vazio texto="Nenhum cartão cadastrado." /> : (
+          <div className="flex flex-wrap gap-1.5">
+            {cartoes.map((c) => (
+              <span key={c.numero} className="group inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-sm" title={c.token}>
+                <b>{c.numero}</b><span className="max-w-24 truncate text-[10px] text-ink-soft">{c.token.slice(-8)}</span>
+                <button className="text-alert" aria-label={`Remover cartão ${c.numero}`} onClick={async () => { if (window.confirm(`Remover o cartão ${c.numero}?`)) { await db.from('pdv_cartoes').delete().eq('numero', c.numero); carregar() } }}>×</button>
+              </span>
             ))}
           </div>
         )}
-        <p className="mt-3 text-xs text-ink-soft">O QR é fixo por mesa. O pedido só entra se houver comanda aberta na mesa (check-in), então foto do QR não permite pedir de fora.</p>
+      </section>
+      <section className={`${cartaoCls} p-4`}>
+        <h2 className="mb-1 font-semibold">Endereço do tablet de cada mesa</h2>
+        <p className="mb-2 text-xs text-ink-soft">Cada tablet fica aberto no endereço da mesa onde está (só para configurar o aparelho; o cliente não usa isso). Para trocar depois, segure o topo da tela do tablet.</p>
+        {!mesas.length ? <Vazio texto="Cadastre mesas primeiro." /> : (
+          <div className="flex flex-wrap gap-1.5">
+            {mesas.map((m) => <button key={m.id} className="rounded-lg border border-line px-3 py-1.5 text-sm" onClick={() => navigator.clipboard?.writeText(urlMesa(m))} title="copiar endereço do tablet">Mesa {m.numero} · copiar link</button>)}
+          </div>
+        )}
       </section>
       <section className={`${cartaoCls} space-y-2 p-4`}>
         <h2 className="font-semibold">Dispositivos (tablets, celulares de garçom, agente de impressão)</h2>
