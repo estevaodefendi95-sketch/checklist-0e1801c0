@@ -391,6 +391,10 @@ export function Comanda() {
   // Atalhos de teclado (computador): F2 pedido · F3 conta/pagamento · F4 fechar comanda · F5 encerrar conta · F6 reabrir · F7 desconto · F8 enviar pedido · 1-6 forma de pagamento
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      // Ctrl+Enter: com a forma escolhida, registra o pagamento de todo o restante na hora (sem passar por valor/NSU)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && c && aba === 'pagamento' && aberta && !c.funcionario_id && restante > 0.005 && !(esc || pessoasEd || editPerfis || descAberto || aprov || escMesa || arForm || fiscalFim || agrupando)) {
+        e.preventDefault(); void pagar(true); return
+      }
       if (!c || e.ctrlKey || e.metaKey || e.altKey) return
       if (esc || pessoasEd || editPerfis || descAberto || aprov || escMesa || arForm || fiscalFim) return
       const alvo = e.target as HTMLElement
@@ -588,7 +592,7 @@ export function Comanda() {
                   </label>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <button className={(restante > 0.005 ? btnCls : btnSecCls) + ' flex-1 !min-h-[56px]'} onClick={() => pagar()}>Registrar pagamento</button>
+                  <button className={(restante > 0.005 ? btnCls : btnSecCls) + ' flex-1 !min-h-[56px]'} onClick={() => pagar()}>Registrar pagamento <Tecla t="Ctrl+Enter" /></button>
                   {pode('pdv_caixa') && <button className={(restante <= 0.005 ? btnCls : btnSecCls) + ' flex-1 !min-h-[56px]'} onClick={fechar}>Encerrar conta <Tecla t="F5" /></button>}
                 </div>
                 {pode('pdv_caixa') && (
