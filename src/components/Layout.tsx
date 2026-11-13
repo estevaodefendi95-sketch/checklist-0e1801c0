@@ -52,7 +52,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const admin = profile?.role === 'admin'
 
   // itens sem permissão nem entram na lista
-  const itens: Item[] = [
+  const todosItens: Item[] = [
     ...(pode('pdv_operar')
       ? [
           { to: '/pdv', rotulo: 'Salão e mesas', curto: 'Salão', icone: 'pdv', grupo: 'atendimento' } as Item,
@@ -96,6 +96,10 @@ export function Layout({ children }: { children: ReactNode }) {
       ? [{ to: '/admin/templates', rotulo: 'Áreas e modelos', icone: 'modelos', grupo: 'admin' } as Item]
       : []),
   ]
+  const VER: Record<string, Parameters<typeof pode>[0]> = {
+    '/pdv/relatorios': 'pdv_ver_vendas', '/pdv/crm': 'pdv_ver_crm', '/pdv/reservas': 'pdv_ver_reservas', '/whatsapp': 'pdv_ver_whatsapp', '/pdv/consumo': 'pdv_ver_consumo',
+  }
+  const itens = todosItens.filter((i) => !VER[i.to] || pode(VER[i.to]))
   const temAtend = pode('pdv_operar')
   const [modoSalvo, setModoSalvo] = useState<Modo>(() => ler<Modo>(MODO, 'atendimento'))
   const modo: Modo = temAtend ? modoSalvo : 'gestao'

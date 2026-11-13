@@ -12,6 +12,11 @@ export const PERMISSOES = [
   { key: 'pdv_caixa', label: 'PDV: caixa e pagamentos' },
   { key: 'pdv_gerir', label: 'PDV: configurar (mesas, produtos, impressoras)' },
   { key: 'pdv_fiscal', label: 'PDV: fiscal (NFC-e)' },
+  { key: 'pdv_ver_vendas', label: 'Ver relatório de vendas' },
+  { key: 'pdv_ver_crm', label: 'Ver clientes e CRM' },
+  { key: 'pdv_ver_reservas', label: 'Ver reservas' },
+  { key: 'pdv_ver_whatsapp', label: 'Ver WhatsApp' },
+  { key: 'pdv_ver_consumo', label: 'Ver consumo de funcionários' },
 ] as const
 
 export type Permissao = (typeof PERMISSOES)[number]['key']
@@ -27,6 +32,11 @@ const vazio: Mapa = {
   pdv_caixa: false,
   pdv_gerir: false,
   pdv_fiscal: false,
+  pdv_ver_vendas: false,
+  pdv_ver_crm: false,
+  pdv_ver_reservas: false,
+  pdv_ver_whatsapp: false,
+  pdv_ver_consumo: false,
 }
 
 const Ctx = createContext<{ pode: (p: Permissao) => boolean; master: boolean; carregado: boolean }>({

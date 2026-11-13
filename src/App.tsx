@@ -35,8 +35,18 @@ import { EstoqueAlertas } from './pages/EstoqueAlertas'
 import { WhatsApp } from './pages/pdv/WhatsApp'
 import { CardapioPublico, ReservarPublico } from './pages/pdv/PaginasPublicas'
 import { AvisoAtualizacao } from './components/AvisoAtualizacao'
+import { Permissao, usePermissoes } from './context/PermissoesContext'
 import { AvisoOffline } from './components/AvisoOffline'
 import { AprovacoesAdmin } from './components/AprovacoesAdmin'
+
+function SemAcesso() {
+  return <div className="p-8 text-center text-ink-soft">Você não tem acesso a esta tela. Peça ao administrador.</div>
+}
+function Gate({ p, children }: { p: Permissao; children: React.ReactNode }) {
+  const { pode, carregado } = usePermissoes()
+  if (!carregado) return null
+  return pode(p) ? <>{children}</> : <SemAcesso />
+}
 
 function Protected({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
   return (
@@ -71,13 +81,13 @@ const router = createBrowserRouter([
   { path: '/pdv', element: <Protected><PdvSalao /></Protected> },
   { path: '/pdv/comanda/:id', element: <Protected><Comanda /></Protected> },
   { path: '/pdv/comandas', element: <Protected><Comandas /></Protected> },
-  { path: '/pdv/crm', element: <Protected><Crm /></Protected> },
-  { path: '/pdv/consumo', element: <Protected><ConsumoFuncionarios /></Protected> },
+  { path: '/pdv/crm', element: <Protected><Gate p="pdv_ver_crm"><Crm /></Gate></Protected> },
+  { path: '/pdv/consumo', element: <Protected><Gate p="pdv_ver_consumo"><ConsumoFuncionarios /></Gate></Protected> },
   { path: '/estoque/alertas', element: <Protected><EstoqueAlertas /></Protected> },
-  { path: '/pdv/reservas', element: <Protected><Reservas /></Protected> },
-  { path: '/whatsapp', element: <Protected><WhatsApp /></Protected> },
+  { path: '/pdv/reservas', element: <Protected><Gate p="pdv_ver_reservas"><Reservas /></Gate></Protected> },
+  { path: '/whatsapp', element: <Protected><Gate p="pdv_ver_whatsapp"><WhatsApp /></Gate></Protected> },
   { path: '/pdv/caixa', element: <Protected><PdvCaixa /></Protected> },
-  { path: '/pdv/relatorios', element: <Protected><PdvRelatorios /></Protected> },
+  { path: '/pdv/relatorios', element: <Protected><Gate p="pdv_ver_vendas"><PdvRelatorios /></Gate></Protected> },
   { path: '/compras', element: <Protected><Compras /></Protected> },
   { path: '/pdv/eventos', element: <Protected><Eventos /></Protected> },
   { path: '/pdv/config', element: <Protected><PdvConfig /></Protected> },
