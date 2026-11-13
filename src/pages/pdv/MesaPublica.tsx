@@ -38,6 +38,14 @@ export function MesaPublica() {
   useEffect(() => { const f = () => setLateral(window.innerWidth >= 768); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f) }, [])
   const [msg, setMsg] = useState('')
   const [env, setEnv] = useState(false)
+  // depois de adicionar um item: "continuar pedindo" ou "enviar pedido" (abre a câmera na hora)
+  const [add, setAdd] = useState<{ nome: string; n: number } | null>(null)
+  useEffect(() => {
+    if (!add) return
+    const t = setTimeout(() => setAdd(null), 12000)
+    return () => clearTimeout(t)
+  }, [add])
+  const avisarAdd = (nome: string) => setAdd((a) => ({ nome, n: (a?.n ?? 0) + 1 }))
 
   // Ao "instalar" o app a partir desta página, o ícone abre ESTA mesa em tela cheia (e não o painel de gestão)
   useEffect(() => {
@@ -73,6 +81,7 @@ export function MesaPublica() {
   function mais(p: Prod) {
     if (p.grupos?.length) return setDet(p)
     setCar((c) => { const i = c.findIndex((l) => l.p.id === p.id && !l.opcoes.length && !l.obs); return i >= 0 ? c.map((l, k) => (k === i ? { ...l, qtd: l.qtd + 1 } : l)) : [...c, { key: crypto.randomUUID(), p, qtd: 1, opcoes: [], obs: '' }] })
+    avisarAdd(p.nome)
   }
   function menos(id: string) { setCar((c) => { const i = [...c].reverse().findIndex((l) => l.p.id === id); if (i < 0) return c; const k = c.length - 1 - i; return c.map((l, j) => (j === k ? { ...l, qtd: l.qtd - 1 } : l)).filter((l) => l.qtd > 0) }) }
   function adicionarDet(qtd: number, opcoes: string[], obs: string) {
@@ -83,6 +92,7 @@ export function MesaPublica() {
       return i >= 0 ? c.map((l, k) => (k === i ? { ...l, qtd: l.qtd + qtd } : l)) : [...c, { key: crypto.randomUUID(), p, qtd, opcoes, obs }]
     })
     setDet(null); setMsg('')
+    avisarAdd(p.nome)
   }
 
   // o QR Code lido é o do cartão da comanda do cliente
@@ -167,11 +177,26 @@ export function MesaPublica() {
   if (!e.qr_ativo) return <p className="p-6 text-center">Pedidos pelo QR Code indisponíveis. Chame o garçom.</p>
   return (
     <div className="mx-auto h-[100dvh] w-full">
+      {add && !det && !carrinho && !leitor && qtd > 0 && (
+        <div className="fixed inset-x-0 bottom-[84px] z-30 flex justify-center px-4" style={vars}>
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-4 text-[#222] shadow-2xl ring-1 ring-black/10">
+            <p className="mb-3 text-base"><b>✓ {add.nome}</b> adicionado ao carrinho. <span className="opacity-70">({qtd} {qtd === 1 ? 'item' : 'itens'} · {brl(total)})</span></p>
+            <div className="grid grid-cols-2 gap-3">
+              <button className="min-h-[56px] rounded-xl border-2 border-[var(--p)] px-4 text-base font-semibold text-[var(--p)]" onClick={() => setAdd(null)}>Continuar pedindo</button>
+              <button className={btn + ' min-h-[56px]'} disabled={env} onClick={() => { setAdd(null); setMsg(''); setLeitor('pedido') }}>Enviar pedido · {brl(total)}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {msg && !det && !carrinho && <p className="fixed inset-x-3 top-3 z-40 mx-auto max-w-xl rounded-xl bg-white p-3 text-sm shadow-lg" onClick={() => setMsg('')}>{msg}</p>}
       <CardapioCliente
         tema={tema} banners={e.banners} onTopoSegurar={() => setAcesso('trocar')} onLogoSegurar={() => setAcesso('sair')} mesa={e.mesa ?? ''} boasVindas={e.boas_vindas} categorias={e.categorias ?? []} produtos={prodsCard} lateral={lateral}
         qtdDe={qtdProd} onAdd={(p) => mais(p as Prod)} onMenos={menos} onAbrir={(p) => setDet(e.produtos?.find((x) => x.id === p.id) ?? null)}
         acoes={<>
+          <button className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-sm font-semibold text-[var(--p)] shadow" onClick={() => { setAdd(null); setCarrinho(true) }} aria-label="Abrir o carrinho">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h8.8a1 1 0 0 0 1-.8L20 7H6" /></svg>
+            Carrinho{qtd > 0 ? ` · ${qtd} · ${brl(total)}` : ''}
+          </button>
           {e.pode_chamar && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => simples('garcom', 'Garçom chamado.')}>Chamar garçom</button>}
           <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => { setMsg(''); setLeitor('minha') }}>Minha conta</button>
           {e.pode_conta && <button className="rounded-full border border-white/60 px-3 py-1.5 text-xs" onClick={() => { setMsg(''); setLeitor('conta') }}>Pedir a conta</button>}
