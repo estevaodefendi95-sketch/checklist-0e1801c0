@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { db } from '../../lib/supabase'
 import { idOperador } from '../../context/OperadorContext'
 import { Cabecalho } from '../../components/Cabecalho'
-import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
+import { Alerta, Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, inputCls } from '../../components/Estado'
 import { reais, lerNumero } from '../../lib/formato'
 import {
   Categoria, Comanda as TComanda, FORMAS, Item, Mesa, Produto, Sessao, Totais, enfileirar, hora, num, rotuloForma, useAoVivo,
@@ -414,10 +414,8 @@ export function Comanda() {
         subtitulo={`${func ? `Consumo de ${func.nome}` : c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
       />
       {c.status === 'pedindo_conta' && (
-        <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800">
-          <span>CONTA FECHADA · fazer o recebimento · novos pedidos bloqueados</span>
-          <button className="rounded-lg bg-white px-3 py-1.5 text-red-800 ring-1 ring-red-300" onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>
-        </div>
+        <Alerta className="mb-3" tipo="aviso" titulo="Conta fechada · aguardando recebimento" texto="Novos pedidos estão bloqueados. Faça o recebimento ou reabra a comanda."
+          acao={<button className={btnSecCls} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>} />
       )}
       {aberta && (
         <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 flex gap-2 px-3 lg:hidden">
@@ -447,7 +445,7 @@ export function Comanda() {
           {fila.flatMap((p) => p.linhas).map((l) => `${l.qtd}× ${l.nome}`).join(', ')}
         </div>
       )}
-      {msg && <p className="mb-3 rounded-xl bg-brand-soft px-4 py-2 text-sm text-brand" onClick={() => setMsg('')}>{msg}</p>}
+      {msg && <Alerta className="mb-3" tipo="ok" texto={msg} onClick={() => setMsg('')} />}
 
       <div className="mb-4 flex gap-2">
         <button className={aba === 'pedido' ? btnCls : btnSecCls} onClick={() => setAba('pedido')}>Pedido</button>

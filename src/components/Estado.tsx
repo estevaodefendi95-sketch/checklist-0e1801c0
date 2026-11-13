@@ -8,12 +8,26 @@ export function Carregando() {
 export function Vazio({ texto }: { texto: string }) {
   return <p className="rounded-xl bg-surface py-10 text-center text-sm text-ink-soft shadow-card">{texto}</p>
 }
-export function Erro({ texto }: { texto: string }) {
+export type TipoAlerta = 'erro' | 'aviso' | 'ok' | 'info'
+export const ALERTA_ESTILO: Record<TipoAlerta, { caixa: string; badge: string; simbolo: string }> = {
+  erro: { caixa: 'border-alert/40 bg-alert-soft text-ink', badge: 'bg-alert text-white', simbolo: '!' },
+  aviso: { caixa: 'border-warn/40 bg-warn-soft text-ink', badge: 'bg-warn text-paper', simbolo: '!' },
+  ok: { caixa: 'border-ok/40 bg-ok-soft text-ink', badge: 'bg-ok text-paper', simbolo: '✓' },
+  info: { caixa: 'border-line bg-brand-soft text-ink', badge: 'bg-brand text-brand-ink', simbolo: 'i' },
+}
+/** Alerta padrão: ícone na cor do tipo, texto legível (claro e escuro) e ação opcional à direita. */
+export function Alerta({ tipo = 'info', titulo, texto, acao, onClick, className = '' }: { tipo?: TipoAlerta; titulo?: string; texto?: string; acao?: React.ReactNode; onClick?: () => void; className?: string }) {
+  const e = ALERTA_ESTILO[tipo]
   return (
-    <p className="rounded-xl border border-alert/30 bg-alert-soft px-4 py-3 text-sm text-alert" role="alert">
-      {texto}
-    </p>
+    <div role={tipo === 'erro' ? 'alert' : 'status'} onClick={onClick} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${e.caixa} ${onClick ? 'cursor-pointer' : ''} ${className}`}>
+      <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-bold ${e.badge}`}>{e.simbolo}</span>
+      <span className="min-w-0 flex-1 leading-snug">{titulo && <b className="block">{titulo}</b>}{texto && <span className={titulo ? 'text-ink-soft' : ''}>{texto}</span>}</span>
+      {acao && <span className="shrink-0">{acao}</span>}
+    </div>
   )
+}
+export function Erro({ texto }: { texto: string }) {
+  return <Alerta tipo="erro" texto={texto} />
 }
 export const inputCls =
   'min-h-[44px] w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-brand md:min-h-[48px]'

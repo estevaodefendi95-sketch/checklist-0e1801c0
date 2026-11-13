@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom'
 import { db, supabase } from '../lib/supabase'
 import { usePermissoes } from '../context/PermissoesContext'
 import { Icone } from './Icone'
+import { ALERTA_ESTILO, type TipoAlerta } from './Estado'
 
 export interface Aviso {
   id: string; tipo: string; nivel: 'info' | 'aviso' | 'erro'; titulo: string; mensagem: string | null
   lida: boolean; criado_em: string
 }
-const COR = { info: 'border-brand/30', aviso: 'border-amber-400', erro: 'border-alert' } as const
+const COR = { info: 'border-brand/30', aviso: 'border-warn', erro: 'border-alert' } as const
+const TIPO: Record<Aviso['nivel'], { t: TipoAlerta; rotulo: string }> = { info: { t: 'info', rotulo: 'Informação' }, aviso: { t: 'aviso', rotulo: 'Atenção' }, erro: { t: 'erro', rotulo: 'Erro' } }
 
 /** Avisos do PDV (cancelamentos, erros de impressão/fiscal, estornos) em tempo real. */
 export function useAvisos(ativo: boolean) {
@@ -51,14 +53,20 @@ export const Quando = ({ v }: { v: string }) => {
 }
 
 export function ItemAviso({ a, marcar }: { a: Aviso; marcar: (ids: string[]) => void }) {
+  const k = TIPO[a.nivel] ?? TIPO.info
+  const e = ALERTA_ESTILO[k.t]
   return (
-    <li className={`border-l-4 px-3 py-2 text-sm ${COR[a.nivel]} ${a.lida ? 'opacity-60' : 'bg-brand-soft/40'}`}>
-      <div className="flex items-start justify-between gap-2">
-        <b className="leading-tight">{a.titulo}</b>
-        <span className="shrink-0 text-xs text-ink-soft"><Quando v={a.criado_em} /></span>
+    <li className={`flex gap-3 px-4 py-3.5 ${a.lida ? 'opacity-55' : ''}`}>
+      <span aria-hidden className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold ${e.badge}`}>{e.simbolo}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-ink-soft">
+          <span className="font-semibold">{k.rotulo}</span><span>·</span><span><Quando v={a.criado_em} /></span>
+          {!a.lida && <span className="ml-auto h-2 w-2 rounded-full bg-alert" aria-label="não lido" />}
+        </div>
+        <p className="mt-0.5 text-[15px] font-semibold leading-snug text-ink">{a.titulo}</p>
+        {a.mensagem && <p className="mt-1 whitespace-pre-line rounded-lg bg-paper-dim px-3 py-2 text-sm leading-relaxed text-ink-soft">{a.mensagem}</p>}
+        {!a.lida && <button className="mt-2 text-xs font-medium text-brand underline" onClick={() => marcar([a.id])}>marcar como lido</button>}
       </div>
-      {a.mensagem && <p className="mt-0.5 text-xs text-ink-soft">{a.mensagem}</p>}
-      {!a.lida && <button className="mt-1 text-xs text-brand underline" onClick={() => marcar([a.id])}>marcar como lido</button>}
     </li>
   )
 }
@@ -78,8 +86,8 @@ export function Sino({ className = '', rotulo }: { className?: string; rotulo?: 
         {n > 0 && <span className="absolute left-6 top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-alert px-1 text-[11px] font-bold text-white">{n > 99 ? '99+' : n}</span>}
       </button>
       {av.novo && !aberto && (
-        <button onClick={() => { av.fecharNovo(); setAberto(true) }} className={`fixed right-4 top-4 z-50 max-w-sm rounded-xl border-l-4 bg-surface p-3 text-left text-sm shadow-xl ${COR[av.novo.nivel]}`}>
-          <b>{av.novo.titulo}</b><span className="block text-xs text-ink-soft">{av.novo.mensagem}</span>
+        <button onClick={() => { av.fecharNovo(); setAberto(true) }} className={`fixed right-4 top-4 z-50 max-w-sm rounded-2xl border-l-4 bg-surface p-4 text-left text-sm shadow-2xl ring-1 ring-line ${COR[av.novo.nivel]}`}>
+          <b className="block text-[15px]">{av.novo.titulo}</b><span className="mt-0.5 block text-xs leading-relaxed text-ink-soft">{av.novo.mensagem}</span>
         </button>
       )}
       {aberto && (
