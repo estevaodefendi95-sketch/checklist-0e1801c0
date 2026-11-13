@@ -39,6 +39,24 @@ export function MesaPublica() {
   const [msg, setMsg] = useState('')
   const [env, setEnv] = useState(false)
 
+  // Ao "instalar" o app a partir desta página, o ícone abre ESTA mesa em tela cheia (e não o painel de gestão)
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')
+    if (!link || !token) return
+    const original = link.href
+    let url = ''
+    fetch('/manifest.webmanifest').then((r) => r.json()).then((m) => {
+      const abs = (u: string) => new URL(u, window.location.origin).href
+      const novo = {
+        ...m, name: 'Paggio · Cardápio da mesa', short_name: 'Cardápio', id: `/mesa/${token}`, start_url: `/mesa/${token}`, scope: '/mesa/', display: 'fullscreen',
+        icons: (m.icons ?? []).map((i: { src: string }) => ({ ...i, src: abs(i.src) })), shortcuts: undefined,
+      }
+      url = URL.createObjectURL(new Blob([JSON.stringify(novo)], { type: 'application/manifest+json' }))
+      link.href = url
+    }).catch(() => { /* sem manifesto próprio: segue o padrão */ })
+    return () => { link.href = original; if (url) URL.revokeObjectURL(url) }
+  }, [token])
+
   const chamar = useCallback(async (acao: string, extra: Record<string, unknown> = {}) => {
     const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao, ...extra } })
     if (error) return { erro: 'Sem conexão. Chame o garçom.' } as Estado
