@@ -280,6 +280,12 @@ export function Comanda() {
         titulo={`${mesa ? `Mesa ${mesa.numero}` : 'Balcão'} · #${c.numero}`}
         subtitulo={`${func ? `Consumo de ${func.nome}` : c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
       />
+      {aba === 'pedido' && aberta && qtdCarrinho > 0 && (
+        <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 flex gap-2 px-3 lg:hidden">
+          <button className={btnSecCls + ' !bg-surface shadow-lg'} onClick={() => document.getElementById('resumo-comanda')?.scrollIntoView({ behavior: 'smooth' })}>Revisar</button>
+          <button className={btnCls + ' flex-1 shadow-lg'} onClick={enviar}>Enviar {qtdCarrinho} {qtdCarrinho === 1 ? 'item' : 'itens'} · {reais(totCarrinho)}</button>
+        </div>
+      )}
       {erro && <Erro texto={erro} />}
       {msg && <p className="mb-3 rounded-xl bg-brand-soft px-4 py-2 text-sm text-brand" onClick={() => setMsg('')}>{msg}</p>}
 
@@ -291,20 +297,23 @@ export function Comanda() {
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         {aba === 'pedido' && aberta ? (
           <section>
-            <input className={`${inputCls} mb-3`} placeholder="Buscar produto…" value={busca} onChange={(e) => setBusca(e.target.value)} />
-            <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+            <div className="sticky top-0 z-10 -mx-4 mb-3 bg-paper px-4 pb-1 pt-1 md:-mx-6 md:px-6 lg:static lg:mx-0 lg:p-0">
+            <input className={`${inputCls} mb-2`} placeholder="Buscar produto…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <div className="flex gap-2 overflow-x-auto pb-1">
               <button className={cat === 'todas' ? btnCls : btnSecCls} onClick={() => setCat('todas')}>Todas</button>
               {cats.map((k) => (
-                <button key={k.id} className={cat === k.id ? btnCls : btnSecCls} onClick={() => setCat(k.id)}>{k.nome}</button>
+                <button key={k.id} className={(cat === k.id ? btnCls : btnSecCls) + ' shrink-0 whitespace-nowrap'} onClick={() => setCat(k.id)}>{k.nome}</button>
               ))}
+            </div>
             </div>
             {!lista.length ? (
               <Vazio texto="Nenhum produto. Cadastre em PDV · Configurações › Produtos." />
             ) : (
               <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                 {lista.map((p) => (
-                  <button key={p.id} onClick={() => add(p)} className={`${cartaoCls} min-h-[84px] p-3 text-left active:scale-[0.98]`}>
-                    <div className="text-sm font-semibold leading-tight">{p.nome}</div>
+                  <button key={p.id} onClick={() => add(p)} className={`${cartaoCls} relative min-h-[88px] p-3 text-left active:scale-[0.98] ${carrinho.some((x) => x.p.id === p.id) ? 'ring-2 ring-brand' : ''}`}>
+                    {carrinho.some((x) => x.p.id === p.id) && <span className="absolute right-2 top-2 grid h-6 min-w-6 place-items-center rounded-full bg-brand px-1.5 text-xs font-bold text-brand-ink">{carrinho.filter((x) => x.p.id === p.id).reduce((a, x) => a + x.qtd, 0)}</span>}
+                    <div className="pr-6 text-sm font-semibold leading-tight">{p.nome}</div>
                     <div className="mt-1 text-sm text-brand">{reais(p.preco)}</div>
                     <div className="text-[11px] uppercase text-ink-soft">{p.destino}{gruposDe(p).length ? ' · opções' : ''}</div>
                   </button>
@@ -379,7 +388,7 @@ export function Comanda() {
           <Vazio texto="Comanda encerrada." />
         )}
 
-        <aside className={`${cartaoCls} h-fit space-y-3 p-4`}>
+        <aside id="resumo-comanda" className={`${cartaoCls} h-fit space-y-3 p-4`}>
           {carrinho.length > 0 && (
             <div className="space-y-2 rounded-xl bg-brand-soft p-3">
               <b className="text-sm">A enviar ({qtdCarrinho})</b>

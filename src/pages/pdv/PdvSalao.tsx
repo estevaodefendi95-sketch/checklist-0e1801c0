@@ -26,6 +26,8 @@ export function PdvSalao() {
   const [pronto, setPronto] = useState(false)
   const [novaMesa, setNovaMesa] = useState<Mesa | null>(null)
   const [busca, setBusca] = useState('')
+  const [visao, setVisao] = useState<'lista' | 'mapa'>(() => { try { return (localStorage.getItem('salao_visao') as 'lista' | 'mapa') || (window.innerWidth < 768 ? 'lista' : 'mapa') } catch { return 'mapa' } })
+  const trocarVisao = (v: 'lista' | 'mapa') => { setVisao(v); try { localStorage.setItem('salao_visao', v) } catch { /* sem armazenamento */ } }
   const [editando, setEditando] = useState(false)
   const [selId, setSelId] = useState<string | null>(null)
   const drag = useRef<{ id: string; dx: number; dy: number; moveu: boolean } | null>(null)
@@ -121,15 +123,15 @@ export function PdvSalao() {
         subtitulo={`${abertas} comanda(s) aberta(s) · ${reais(aberto)} em consumo`}
         acoes={
           <>
-            <button className={editando ? btnCls : btnSecCls} onClick={() => { setEditando((v) => !v); setSelId(null) }}>{editando ? 'Concluir edição' : 'Editar mesas'}</button>
+            <button className={(editando ? btnCls : btnSecCls) + (editando ? '' : ' hidden md:inline-flex')} onClick={() => { setEditando((v) => !v); setSelId(null); trocarVisao('mapa') }}>{editando ? 'Concluir edição' : 'Editar mesas'}</button>
             {editando && <button className={btnSecCls} onClick={() => espacar(1.2)}>Espaçar</button>}
             {editando && <button className={btnSecCls} onClick={() => espacar(1 / 1.2)}>Aproximar</button>}
-            {!editando && <button className={btnCls} onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)}>Check-in rápido</button>}
-            {!editando && <button className={btnSecCls} onClick={() => nav('/pdv/comandas')}>Todas as comandas</button>}
+            {!editando && <button className={btnCls + ' hidden md:inline-flex'} onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)}>Check-in rápido</button>}
+            {!editando && <button className={btnSecCls + ' hidden md:inline-flex'} onClick={() => nav('/pdv/comandas')}>Todas as comandas</button>}
           </>
         }
       />
-      <form className="mb-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); nav(`/pdv/comandas?q=${encodeURIComponent(busca)}`) }}>
+      <form className="mb-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); nav(`/pdv/comandas?q=${encodeURIComponent(busca)}`) }}>
         <input className={inputCls} placeholder="Buscar comanda por nº, nome, telefone ou mesa…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <button className={btnSecCls}>Buscar</button>
       </form>
@@ -139,6 +141,48 @@ export function PdvSalao() {
           {salas.map((s) => (
             <button key={s.id} onClick={() => setSalaId(s.id)} className={s.id === sala ? btnCls : btnSecCls}>{s.nome}</button>
           ))}
+        </div>
+      )}
+      {!editando && (
+        <div className="mb-3 inline-flex gap-1 rounded-xl border border-line bg-surface p-1 md:hidden" role="tablist">
+          {(['lista', 'mapa'] as const).map((v) => <button key={v} role="tab" aria-selected={visao === v} onClick={() => trocarVisao(v)} className={`min-h-[40px] rounded-lg px-5 text-sm ${visao === v ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft'}`}>{v === 'lista' ? 'Comandas' : 'Mapa'}</button>)}
+        </div>
+      )}
+      {!editando && visao === 'lista' && (
+        <div className="md:hidden">
+          {(() => {
+            const ord = [...comandas].sort((a, b) => Number(b.status === 'pedindo_conta') - Number(a.status === 'pedindo_conta') || a.aberta_em.localeCompare(b.aberta_em))
+            const livres = mesasSala.filter((m) => !porMesa.has(m.id))
+            return (
+              <>
+                {!ord.length ? <p className="mb-4 rounded-xl border border-dashed border-line p-4 text-center text-sm text-ink-soft">Nenhuma comanda aberta. Toque em uma mesa livre ou em "+ Check-in".</p> : (
+                  <ul className="mb-4 space-y-2">
+                    {ord.map((c) => {
+                      const m = mesas.find((x) => x.id === c.mesa_id)
+                      const conta = c.status === 'pedindo_conta'
+                      return (
+                        <li key={c.id}>
+                          <button onClick={() => nav(`/pdv/comanda/${c.id}`)} className={`flex w-full items-center gap-3 rounded-2xl border-2 p-3 text-left active:scale-[0.99] ${conta ? 'border-red-500 bg-red-100 text-red-900' : 'border-emerald-500 bg-emerald-50 text-emerald-950'}`}>
+                            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-white/70 text-center leading-none"><small className="text-[10px] uppercase opacity-70">{m ? 'mesa' : 'balcão'}</small><b className="text-xl">{m?.numero ?? '·'}</b></span>
+                            <span className="min-w-0 flex-1"><b className="block truncate">#{c.numero} · {c.nome_cliente ?? 'Sem nome'}</b><span className="text-xs opacity-80">{c.pessoas} pess. · {minutosDesde(c.aberta_em)} min{conta ? ' · CONTA PEDIDA' : ''}</span></span>
+                            <b className="shrink-0">{reais(num(totais[c.id]?.total))}</b>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                {livres.length > 0 && (
+                  <>
+                    <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Mesas livres</h2>
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {livres.map((m) => <button key={m.id} onClick={() => setNovaMesa(m)} className="min-h-[48px] min-w-[56px] rounded-xl border border-line bg-surface px-3 text-base font-semibold">{m.numero}</button>)}
+                    </div>
+                  </>
+                )}
+              </>
+            )
+          })()}
         </div>
       )}
       {editando && (
@@ -170,7 +214,7 @@ export function PdvSalao() {
       {!mesas.length ? (
         <Vazio texto={pode('pdv_gerir') ? 'Nenhuma mesa cadastrada. Monte o mapa em PDV · Configurações › Salão.' : 'Nenhuma mesa cadastrada.'} />
       ) : (
-        <div ref={caixa} className={`${cartaoCls} relative overflow-auto p-3`}>
+        <div ref={caixa} className={`${cartaoCls} relative overflow-auto p-3 ${!editando && visao === 'lista' ? 'hidden md:block' : ''}`}>
           <div style={{ width: editando ? undefined : Math.max(0, conteudoW * escala), height: editando ? undefined : alturaMapa * escala }}>
           <div ref={area} className="relative touch-none select-none" onPointerMove={editando ? mover : undefined} onPointerUp={editando ? soltar : undefined} style={{ minWidth: editando ? 640 : undefined, width: editando ? undefined : conteudoW, height: alturaMapa, transform: escala < 1 ? `scale(${escala})` : undefined, transformOrigin: 'top left' }}>
             {mesasSala.map((m) => {
@@ -204,7 +248,7 @@ export function PdvSalao() {
         <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-red-700">▣ conta fechada (aguardando pagamento)</span>
       </div>
       {semMesa.length > 0 && (
-        <section className="mt-6">
+        <section className={`mt-6 ${visao === 'lista' ? 'hidden md:block' : ''}`}>
           <h2 className="mb-2 text-sm font-semibold">Comandas sem mesa</h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {semMesa.map((c) => (
@@ -215,6 +259,9 @@ export function PdvSalao() {
             ))}
           </div>
         </section>
+      )}
+      {!editando && (
+        <button onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)} className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-4 z-20 flex min-h-[52px] items-center gap-2 rounded-full bg-brand px-5 text-base font-semibold text-brand-ink shadow-xl md:hidden">+ Check-in</button>
       )}
       {novaMesa && (
         <CheckinModal mesas={mesas} mesaInicial={novaMesa.id ? novaMesa : null} onClose={() => setNovaMesa(null)} onAberta={(id) => nav(`/pdv/comanda/${id}`)} />
