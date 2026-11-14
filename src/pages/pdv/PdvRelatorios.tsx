@@ -7,6 +7,7 @@ import { Comanda, Item, Mesa, FORMAS, idsConsumoInterno, num, rotuloForma, hora 
 import { Link } from 'react-router-dom'
 import { numero } from '../../lib/formato'
 import { chipCls } from '../../components/Estado'
+import { usePermissoes } from '../../context/PermissoesContext'
 
 interface Pag { comanda_id: string; forma: string; valor: number; troco: number; tef_provedor: string | null; user_id: string | null; baixa_de?: string | null }
 interface Aprov { acao: string; comanda_id: string | null; item_id: string | null; detalhe: string | null; motivo: string | null; solicitado_por: string | null; aprovado_por: string | null; criado_em: string }
@@ -17,6 +18,9 @@ const hojeISO = () => new Date().toLocaleDateString('sv-SE')
 const soma = (d: string, n: number) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('sv-SE') }
 
 export function PdvRelatorios() {
+  const { pode } = usePermissoes()
+  const verCusto = pode('ver_custos')
+  const [fichaDe, setFichaDe] = useState<Record<string, string | null>>({})
   const [de, setDe] = useState(hojeISO())
   const [ate, setAte] = useState(hojeISO())
   const [aba, setAba] = useState<'vendas' | 'estoque'>('vendas')
@@ -72,6 +76,7 @@ export function PdvRelatorios() {
     setPags((p.data ?? []) as Pag[])
     setMesas(Object.fromEntries(((m.data ?? []) as Mesa[]).map((x) => [x.id, x])))
     const nomeCat = Object.fromEntries(((ct.data ?? []) as { id: string; nome: string }[]).map((x) => [x.id, x.nome]))
+    setFichaDe(Object.fromEntries(((pr.data ?? []) as { id: string; ficha_id: string | null }[]).map((x) => [x.id, x.ficha_id])))
     setSemFicha(new Set(((pr.data ?? []) as { id: string; ficha_id: string | null }[]).filter((x) => !x.ficha_id).map((x) => x.id)))
     setCatDe(Object.fromEntries(((pr.data ?? []) as { id: string; categoria_id: string | null }[]).map((x) => [x.id, x.categoria_id ? nomeCat[x.categoria_id] ?? '—' : 'Sem categoria'])))
     setErro('')
@@ -186,11 +191,37 @@ export function PdvRelatorios() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `pdv_${de}_${ate}.csv`; a.click()
   }
 
+  async function csvItens() {
+    const custo: Record<string, number | null> = {}
+    if (verCusto) {
+      const f = await db.from('v_fichas_custo').select('id,custo_unitario')
+      ;((f.data ?? []) as { id: string; custo_unitario: number | null }[]).forEach((x) => { custo[x.id] = x.custo_unitario })
+    }
+    const cab = ['data', 'comanda', 'mesa', 'produto', 'categoria', 'qtd', 'preco_unit', 'total', 'status', 'ficha_tecnica']
+    if (verCusto) cab.push('custo_unit', 'custo_total', 'margem', 'margem_pct')
+    const linhas = [cab]
+    const ptv = (n: number) => n.toFixed(2).replace('.', ',')
+    itF.forEach((i) => {
+      const c = cF.find((x) => x.id === i.comanda_id)
+      if (!c) return
+      const fid = i.produto_id ? fichaDe[i.produto_id] : null
+      const total = i.qtd * i.preco_unit
+      const l = [i.criado_em.slice(0, 16).replace('T', ' '), String(c.numero), c.mesa_id ? String(mesas[c.mesa_id]?.numero ?? '') : 'balcao', '"' + i.nome.replace(/"/g, '""') + '"', (i.produto_id && catDe[i.produto_id]) || 'Sem categoria', String(i.qtd), ptv(i.preco_unit), ptv(total), i.status, fid ? 'sim' : 'nao']
+      if (verCusto) {
+        const cu = fid ? custo[fid] : null
+        if (cu != null) { const ct = cu * i.qtd; l.push(ptv(cu), ptv(ct), ptv(total - ct), total > 0 ? ptv(((total - ct) / total) * 100) : '') } else l.push('', '', '', '')
+      }
+      linhas.push(l)
+    })
+    const blob = new Blob(['\ufeff' + linhas.map((l) => l.join(';')).join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `pdv_itens_${de}_${ate}.csv`; a.click()
+  }
+
   const topProd = Object.entries(r.prod).sort((a, b) => b[1].valor - a[1].valor).slice(0, 15)
   return (
     <div>
       <Cabecalho titulo="Relatório de vendas" subtitulo={`${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}`}
-        acoes={<button className={btnSecCls} onClick={csv}>Exportar CSV</button>} />
+        acoes={<><button className={btnSecCls} onClick={csv}>CSV comandas</button><button className={btnSecCls} onClick={csvItens}>CSV itens{verCusto ? ' + custo' : ''}</button></>} />
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <button className={btnSecCls} onClick={() => { setDe(hojeISO()); setAte(hojeISO()) }}>Hoje</button>
         <button className={btnSecCls} onClick={() => { setDe(soma(hojeISO(), -1)); setAte(soma(hojeISO(), -1)) }}>Ontem</button>
