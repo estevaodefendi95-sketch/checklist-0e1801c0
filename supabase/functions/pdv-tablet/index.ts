@@ -26,10 +26,17 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
   return h.some((f) => { const a = m(f.inicio), b = m(f.fim); return a <= b ? f.dia === dow && min >= a && min < b : (f.dia === dow && min >= a) || (f.dia === ontem && min < b); });
 }
 
+// distância em metros entre dois pontos (haversine)
+function distM(a: number, b: number, c: number, d: number) {
+  const r = Math.PI / 180;
+  const h = Math.sin(((c - a) * r) / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(((d - b) * r) / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token, aparelho, nivel, carregando, hora, vincular_mesa } = await req.json();
+    const { token, acao, itens, nome, pessoas, telefone, nascimento, pin, reserva_id, comanda_token, aparelho, nivel, carregando, hora, vincular_mesa, lat, lng, precisao } = await req.json();
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const db = sb.schema("checklist");
     const uuidOk = (x: unknown) => /^[0-9a-f-]{36}$/i.test(String(x ?? ""));
@@ -133,7 +140,7 @@ Deno.serve(async (req) => {
       const categorias = [...catOk.values()].filter((c: any) => produtos.some((p: any) => p.categoria_id === c.id)).map((c: any) => ({ id: c.id, nome: c.nome }));
       return json({
         mesa: mesa.numero, qr_ativo: true, tema: cfg.tablet_tema, boas_vindas: cfg.tablet_mensagem_boas_vindas, exige_checkin: cfg.tablet_exige_checkin,
-        pode_chamar: cfg.tablet_pode_chamar_garcom, pode_conta: cfg.tablet_pode_pedir_conta, inatividade_min: cfg.tablet_tempo_inatividade_min,
+        geo_tablet: !!(cfg.geo_tablet_ativo && cfg.local_lat != null && cfg.local_lng != null), pode_chamar: cfg.tablet_pode_chamar_garcom, pode_conta: cfg.tablet_pode_pedir_conta, inatividade_min: cfg.tablet_tempo_inatividade_min,
         categorias, produtos, banners, reserva: reserva ?? reservaManual,
       });
     }
@@ -156,6 +163,12 @@ Deno.serve(async (req) => {
       if ("erro" in rc) return json({ erro: rc.erro });
       const com = rc.com;
       if (com.status !== "aberta") return json({ erro: "Essa conta já foi pedida. Chame o atendente." });
+      // só aceita pedido de quem está perto do restaurante (quando ativado em Configurações › Localização)
+      if (cfg.geo_tablet_ativo && cfg.local_lat != null && cfg.local_lng != null) {
+        const la = Number(lat), lo = Number(lng), pr = Math.min(Math.max(Number(precisao) || 0, 0), 100);
+        if (!Number.isFinite(la) || !Number.isFinite(lo) || lat === null || lat === undefined) return json({ erro: "Permita a localização do aparelho para enviar o pedido. Se não der certo, chame o atendente.", sem_localizacao: true });
+        if (distM(la, lo, cfg.local_lat, cfg.local_lng) - pr > (cfg.raio_tablet_m ?? 500)) return json({ erro: "Pedidos só podem ser enviados de dentro do restaurante.", fora_do_raio: true });
+      }
       if (!Array.isArray(itens) || !itens.length || itens.length > 40) return json({ erro: "Pedido vazio." });
       // comanda sem mesa: pede para cadastrar a mesa deste tablet antes de enviar
       if (!com.mesa_id) {

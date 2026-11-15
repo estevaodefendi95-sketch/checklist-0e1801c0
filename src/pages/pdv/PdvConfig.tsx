@@ -9,6 +9,7 @@ import { Categoria, DESTINOS, Destino, Impressora, Mesa, Produto, Sala, TAM_FORM
 import { usePermissoes } from '../../context/PermissoesContext'
 import { Modal } from './PdvCaixa'
 import { Checkin } from './ConfigCheckin'
+import { ConfigLocal } from './ConfigLocal'
 import { Fiscal, Tef } from './ConfigFiscal'
 import { ReimprimirCupons } from './FiscalRapido'
 import { ConfigDescontos } from './ConfigDescontos'
@@ -16,9 +17,10 @@ import { PreviaImpressao } from './PreviaImpressao'
 import { ConfigPins } from './ConfigPins'
 import { GruposDoProduto, HorarioCampos, Opcoes, Pilula, RelogioHorario, rotuloHorario } from './ConfigCardapio'
 
-type Aba = 'salao' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'previa' | 'pins' | 'fiscal' | 'pagamentos' | 'descontos'
+type Aba = 'salao' | 'local' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'previa' | 'pins' | 'fiscal' | 'pagamentos' | 'descontos'
 const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
   { v: 'salao', r: 'Salão e mesas', perm: 'pdv_gerir' },
+  { v: 'local', r: 'Localização (GPS)', perm: 'pdv_gerir' },
   { v: 'checkin', r: 'Check-in: couvert e rodízio', perm: 'pdv_gerir' },
   { v: 'produtos', r: 'Cardápio e preços', perm: 'pdv_gerir' },
   { v: 'opcoes', r: 'Opções e combos', perm: 'pdv_gerir' },
@@ -41,6 +43,7 @@ export function PdvConfig() {
         {abas.map((a) => <button key={a.v} className={aba === a.v ? btnCls : btnSecCls} onClick={() => setAba(a.v)}>{a.r}</button>)}
       </div>
       {aba === 'salao' && <Salao />}
+      {aba === 'local' && <ConfigLocal />}
       {aba === 'checkin' && <Checkin />}
       {aba === 'produtos' && <Produtos />}
       {aba === 'opcoes' && <Opcoes />}

@@ -10,6 +10,7 @@ import { Carregando, Erro, Vazio, btnCls, btnPerigoCls, btnSecCls, cartaoCls, ch
 type Perms = Record<Permissao, boolean>
 const SEM_PERMS: Perms = {
   ver_custos: false,
+  pdv_so_no_local: false,
   editar_fichas: false,
   editar_precos: false,
   lancar_vendas: false,

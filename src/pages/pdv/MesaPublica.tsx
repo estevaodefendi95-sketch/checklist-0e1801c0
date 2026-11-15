@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lerPosicao } from '../../lib/localizacao'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../integrations/supabase/client'
 import { CardapioCliente } from '../../components/CardapioCliente'
@@ -18,7 +19,7 @@ interface It { nome: string; qtd: number; preco_unit: number; status: string; op
 interface Estado {
   erro?: string; mesa?: string; boas_vindas?: string; qr_ativo?: boolean
   banners?: CardBanner[]; reserva?: { id: string; nome: string; telefone: string; pessoas: number; hora: string; liberada: boolean; manual?: boolean } | null
-  itens?: It[]; tema?: { primaria?: string; fundo?: string; texto?: string; destaque?: string; titulo?: string; subtitulo?: string; colunas?: number; mostrar_fotos?: boolean }; categorias?: Cat[]; produtos?: Prod[]; pode_chamar?: boolean; pode_conta?: boolean; inatividade_min?: number
+  itens?: It[]; tema?: { primaria?: string; fundo?: string; texto?: string; destaque?: string; titulo?: string; subtitulo?: string; colunas?: number; mostrar_fotos?: boolean }; categorias?: Cat[]; produtos?: Prod[]; pode_chamar?: boolean; geo_tablet?: boolean; pode_conta?: boolean; inatividade_min?: number
 }
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -96,11 +97,15 @@ export function MesaPublica() {
   }, [token])
 
   const chamar = useCallback(async (acao: string, extra: Record<string, unknown> = {}) => {
+    // pedidos levam a posição do aparelho (o servidor confere o raio quando a restrição está ativa)
+    if (acao === 'pedir') {
+      try { const p = await lerPosicao(false); extra = { ...extra, lat: p.lat, lng: p.lng, precisao: p.precisao } } catch { /* sem posição: o servidor decide */ }
+    }
     const { data, error } = await supabase.functions.invoke('pdv-tablet', { body: { token, acao, ...extra } })
     if (error) return { erro: 'Sem conexão. Chame o garçom.' } as Estado
     return data as Estado
   }, [token])
-  const carregar = useCallback(async () => { const d = await chamar('menu'); setE(d) }, [chamar])
+  const carregar = useCallback(async () => { const d = await chamar('menu'); setE(d); if (d?.geo_tablet) lerPosicao(false).catch(() => {}) /* já pede a permissão de localização */ }, [chamar])
   // Bateria: o tablet avisa o nível a cada minuto (Chrome/Android). A gestão vê todos em Configurações › Tablet.
   useEffect(() => {
     if (!token) return

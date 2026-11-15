@@ -22,6 +22,7 @@ export const PERMISSOES = [
   { key: 'pdv_ver_whatsapp', grupo: 'telas', label: 'WhatsApp', desc: '' },
   { key: 'pdv_ver_consumo', grupo: 'telas', label: 'Consumo de funcionários', desc: '' },
   { key: 'pdv_ver_gestao', grupo: 'telas', label: 'Modo Gestão no celular', desc: 'Checklists, estoque, fichas…' },
+  { key: 'pdv_so_no_local', grupo: 'local', label: 'Só opera dentro do restaurante (GPS)', desc: 'Fora do raio definido em PDV › Localização, não consegue abrir comanda, lançar pedido nem receber.' },
 ] as const
 
 /** Blocos da tela de usuários, na ordem em que aparecem. */
@@ -31,6 +32,7 @@ export const GRUPOS_PERMISSOES = [
   { id: 'config', titulo: 'Configuração e fiscal' },
   { id: 'cozinha', titulo: 'Cozinha, estoque e fichas' },
   { id: 'telas', titulo: 'Telas que a pessoa enxerga' },
+  { id: 'local', titulo: 'Local de trabalho' },
 ] as const
 
 export type Permissao = (typeof PERMISSOES)[number]['key']
@@ -56,6 +58,7 @@ const vazio: Mapa = {
   pdv_ver_whatsapp: false,
   pdv_ver_consumo: false,
   pdv_ver_gestao: false,
+  pdv_so_no_local: false,
 }
 
 const Ctx = createContext<{ pode: (p: Permissao) => boolean; master: boolean; carregado: boolean }>({
@@ -82,7 +85,7 @@ export function PermissoesProvider({ children }: { children: ReactNode }) {
     Promise.all([
       Promise.all(
         PERMISSOES.map(async ({ key }) => {
-          const { data } = await (key.startsWith('pdv_') ? db.rpc('pdv_pode', { p: key }) : db.rpc('tem_permissao', { p: key }))
+          const { data } = await (key.startsWith('pdv_') ? db.rpc('pdv_pode_perm', { p: key }) : db.rpc('tem_permissao', { p: key }))
           return [key, data === true] as const
         })
       ),
