@@ -115,7 +115,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const modo: Modo = temAtend ? (verGestao ? modoSalvo : 'atendimento') : 'gestao'
   const podeTrocar = temAtend && verGestao
   const BARRA_MODO: Record<Modo, string[]> = {
-    atendimento: ['/atendimento', '/pdv/comandas', '/pdv/caixa'],
+    atendimento: ['/', '/atendimento', '/pdv/comandas', '/pdv/caixa'],
     gestao: ['/', '/checklists', '/pdv/relatorios', '/estoque/alertas', '/fichas'],
   }
   const NA_BARRA = itens.filter((i) => BARRA_MODO[modo].includes(i.to)).map((i) => i.to)
