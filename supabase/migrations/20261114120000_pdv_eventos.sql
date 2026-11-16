@@ -1,5 +1,5 @@
 -- Eventos da casa: escolhidos no check-in; podem ter valor (lançado na comanda) ou ser só controle interno (valor 0).
-create table if not exists checklist.pdv_eventos (
+create table if not exists checklist.pdv_eventos_casa (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
   data date,                                   -- null = vale em qualquer dia
@@ -9,12 +9,12 @@ create table if not exists checklist.pdv_eventos (
   observacao text,
   criado_em timestamptz not null default now()
 );
-alter table checklist.pdv_eventos enable row level security;
-create policy pdv_eventos_ler on checklist.pdv_eventos for select using (checklist.pdv_pode('pdv_operar'));
-create policy pdv_eventos_escrever on checklist.pdv_eventos for all using (checklist.pdv_pode('pdv_gerir')) with check (checklist.pdv_pode('pdv_gerir'));
+alter table checklist.pdv_eventos_casa enable row level security;
+create policy pdv_eventos_casa_ler on checklist.pdv_eventos_casa for select using (checklist.pdv_pode('pdv_operar'));
+create policy pdv_eventos_casa_escrever on checklist.pdv_eventos_casa for all using (checklist.pdv_pode('pdv_gerir')) with check (checklist.pdv_pode('pdv_gerir'));
 
-alter table checklist.pdv_comandas add column if not exists evento_id uuid references checklist.pdv_eventos(id) on delete set null;
-alter table checklist.pdv_pedido_itens add column if not exists evento_id uuid references checklist.pdv_eventos(id) on delete set null;
+alter table checklist.pdv_comandas add column if not exists evento_id uuid references checklist.pdv_eventos_casa(id) on delete set null;
+alter table checklist.pdv_pedido_itens add column if not exists evento_id uuid references checklist.pdv_eventos_casa(id) on delete set null;
 create index if not exists idx_pdv_comandas_evento on checklist.pdv_comandas(evento_id);
 create index if not exists idx_pdv_pedido_itens_evento on checklist.pdv_pedido_itens(evento_id);
 
@@ -30,7 +30,7 @@ begin
   delete from checklist.pdv_pedido_itens where comanda_id = p_comanda and evento_id is not null;
   update checklist.pdv_comandas set evento_id = p_evento where id = p_comanda;
   if p_evento is null then return; end if;
-  select * into e from checklist.pdv_eventos where id = p_evento;
+  select * into e from checklist.pdv_eventos_casa where id = p_evento;
   if not found then raise exception 'evento não encontrado'; end if;
   if e.valor > 0 then
     select pessoas into pessoas_c from checklist.pdv_comandas where id = p_comanda;
