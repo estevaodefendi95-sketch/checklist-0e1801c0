@@ -232,11 +232,23 @@ export function MesaPublica() {
       </div>
     </div>
   )
+  /** Força a versão mais nova: limpa o cache do app/navegador e recarrega a página. */
+  async function atualizarApp() {
+    const kiosk = (window as unknown as { PaggioKiosk?: { atualizar?: () => void } }).PaggioKiosk
+    if (kiosk?.atualizar) return kiosk.atualizar()
+    try {
+      const regs = await navigator.serviceWorker?.getRegistrations?.()
+      await Promise.all((regs ?? []).map((r) => r.unregister()))
+      if ('caches' in window) await Promise.all((await caches.keys()).map((k) => caches.delete(k)))
+    } catch { /* sem cache para limpar */ }
+    window.location.reload()
+  }
   const dialogoEquipe = menuEquipe && !acesso && (
     <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 p-4" onClick={() => setMenuEquipe(false)}>
       <div className="w-full max-w-sm space-y-2 rounded-3xl bg-white p-5 text-[#222] shadow-2xl" onClick={(x) => x.stopPropagation()}>
         <h2 className="text-lg font-semibold">Área da equipe</h2>
-        <p className="pb-1 text-sm opacity-60">Toda opção pede o PIN de supervisor.</p>
+        <p className="pb-1 text-sm opacity-60">Atualizar não pede PIN. As demais opções pedem o PIN de supervisor.</p>
+        <button className="block w-full rounded-2xl border border-black/10 px-4 py-4 text-left text-base font-medium active:bg-black/5" onClick={() => { setMenuEquipe(false); void atualizarApp() }}>Atualizar o cardápio</button>
         {[['reservar', 'Marcar mesa como reservada'], ['trocar', 'Trocar a mesa deste tablet'], ['sair', 'Sair do cardápio']].map(([k, t]) => (
           <button key={k} className="block w-full rounded-2xl border border-black/10 px-4 py-4 text-left text-base font-medium active:bg-black/5" onClick={() => { setMenuEquipe(false); setAcesso(k as 'trocar' | 'sair' | 'reservar') }}>{t}</button>
         ))}

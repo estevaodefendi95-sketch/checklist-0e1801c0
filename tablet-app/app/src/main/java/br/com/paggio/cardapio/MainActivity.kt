@@ -106,7 +106,16 @@ class MainActivity : Activity() {
                 startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
         }
+        /** Força atualização: limpa o cache do WebView e recarrega o cardápio. */
         @JavascriptInterface
-        fun versao() = "1.0.0"
+        fun atualizar() {
+            runOnUiThread {
+                web.clearCache(true)
+                web.clearHistory()
+                web.loadUrl(URL_CARDAPIO)
+            }
+        }
+        @JavascriptInterface
+        fun versao() = "1.1.0"
     }
 }
