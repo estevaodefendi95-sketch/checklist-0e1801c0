@@ -7,6 +7,7 @@ import { LeitorQr } from '../../components/LeitorQr'
 import { BateriaTablets } from './BateriaTablets'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 
+const URL_APP_TABLET = 'https://github.com/estevaodefendi95-sketch/checklist-0e1801c0/releases/latest/download/paggio-cardapio.apk'
 interface Cfg { taxa_servico_pct: number; couvert: number; tablet_qr_ativo: boolean; tablet_exige_checkin: boolean; tablet_url_base: string | null; tablet_mensagem_boas_vindas: string | null; tablet_tempo_inatividade_min: number; tablet_pode_chamar_garcom: boolean; tablet_pode_pedir_conta: boolean }
 interface Disp { id: string; nome: string; tipo: string; token: string; ativo: boolean; ultimo_ping: string | null }
 
@@ -156,13 +157,19 @@ export function Tablet() {
       </section>
 
       {qrGrande && <QrTela titulo={qrGrande.titulo} url={qrGrande.url} onFechar={() => setQrGrande(null)} />}
-      <section className={`${cartaoCls} space-y-2 p-5`}>
-        <h3 className="text-sm font-semibold">Travar o tablet no cardápio (faça uma vez em cada tablet)</h3>
+      <section className={`${cartaoCls} space-y-3 p-5`}>
+        <h3 className="text-sm font-semibold">App do tablet (travado no cardápio)</h3>
+        <p className="text-sm text-ink-soft">Instale este app em cada tablet. Ele abre só o cardápio, trava o aparelho e só sai com o PIN da equipe (segure o logo).</p>
+        <div className="flex flex-wrap gap-2">
+          <button className={btnCls} onClick={() => setQrGrande({ titulo: 'Baixar o app do tablet', url: URL_APP_TABLET })}>Mostrar QR Code do app</button>
+          <button className={btnSecCls} onClick={() => copiar('app', URL_APP_TABLET)}>{copiado === 'app' ? '✓ Copiado' : 'Copiar link'}</button>
+        </div>
         <ol className="list-decimal space-y-1.5 pl-5 text-sm text-ink-soft">
-          <li>Abra o QR Code acima com a câmera do tablet. Ele abre o cardápio no Chrome.</li>
-          <li>No Chrome, toque nos <b>⋮</b> › <b>Instalar app</b> (ou "Adicionar à tela inicial"). Abra o ícone <b>Cardápio</b> criado: ele abre em tela cheia, sem barra do Chrome. Feche a aba do Chrome.</li>
-          <li>Com o cardápio aberto, trave o Android: ative <b>Configurações › Segurança › Fixar janela</b> (com "pedir PIN ao desafixar"), depois toque no ícone do app na tela de recentes › <b>Fixar este app</b>. Sem o PIN do tablet, ninguém sai dele nem vai para o Chrome, a tela inicial ou outros apps.</li>
-          <li>Para sair: o <b>PIN da equipe</b> segurando o logo do cardápio. Para desafixar o Android, segure Voltar + Recentes e use o PIN do tablet.</li>
+          <li>No tablet, abra a câmera e aponte para o QR Code do app. Baixe o arquivo e toque para instalar (permita "instalar apps desta fonte" se pedir).</li>
+          <li>Abra o app <b>Cardápio Paggio</b>, aceite câmera e localização, e confirme o aviso de <b>fixar aplicativo</b>.</li>
+          <li>Escolha o app como <b>Início padrão</b> quando o Android perguntar. Assim ele volta sozinho ao reiniciar o tablet.</li>
+          <li>Na primeira vez, o app pede o PIN da equipe e a mesa. Depois, o QR Code de "Endereço do tablet" não é mais necessário.</li>
+          <li>Para sair: segure o logo do cardápio e digite o PIN da equipe. O tablet é liberado e abre as Configurações.</li>
         </ol>
       </section>
 
