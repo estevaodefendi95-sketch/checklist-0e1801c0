@@ -1,3 +1,4 @@
+import { FotoPrato } from './FotoPrato'
 import { useState, type CSSProperties } from 'react'
 
 // Detalhe do produto no cardápio do cliente: foto grande, descrição completa e adicionais.
@@ -37,7 +38,7 @@ export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa
           {fotos && (p.video_url
             ? <video src={p.video_url} poster={p.foto_url ?? undefined} className="max-h-[42vh] min-h-[200px] w-full bg-black object-cover" autoPlay muted loop playsInline controls />
             : p.foto_url
-            ? <img src={p.foto_url} alt={p.nome} className="max-h-[42vh] min-h-[200px] w-full object-cover" />
+            ? <FotoPrato src={p.foto_url} alt={p.nome} altura="max-h-[40vh]" eager />
             : <div className="grid h-44 w-full place-items-center text-6xl font-semibold" style={{ background: 'color-mix(in srgb, var(--p) 10%, white)', color: 'var(--p)' }}>{p.nome.slice(0, 1)}</div>)}
           <button onClick={onFechar} aria-label="Fechar" className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-full bg-white/95 text-xl shadow">✕</button>
         </div>

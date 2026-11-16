@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { db } from '../../lib/supabase'
 import { Carregando, Erro, Vazio, cartaoCls, chipCls, inputCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
@@ -27,7 +27,7 @@ function Cartao({ rotulo, valor, sub, destaque }: { rotulo: string; valor: strin
 }
 
 /** Visão rápida do dia: faturado, em aberto, para fechar e a lista de comandas (somente leitura). */
-export function ResumoDia() {
+export function ResumoDia({ mapa }: { mapa?: ReactNode }) {
   const [comandas, setComandas] = useState<Comanda[]>([])
   const [mesas, setMesas] = useState<Record<string, string>>({})
   const [totais, setTotais] = useState<Record<string, Totais>>({})
@@ -112,6 +112,9 @@ export function ResumoDia() {
         <Cartao rotulo="Total da casa" valor={reais(totalCasa)} sub={fechadas.length ? `Ticket médio ${reais(ticket)}` : `${validas.length} comanda(s)`} />
       </div>
 
+      {mapa}
+
+      <h2 className="subtitulo !mb-0">Pedidos de cada cliente</h2>
       <div className="flex flex-wrap gap-2">
         {([['todas', 'Todas', doPeriodo.length], ['abertas', 'Em aberto', emAberto.length], ['fechar', 'Para fechar', paraFechar.length], ['fechadas', 'Fechadas', fechadas.length]] as const).map(([v, t, n]) => (
           <button key={v} className={chipCls(filtro === v)} onClick={() => setFiltro(v)}>{t} · {n}</button>

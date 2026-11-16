@@ -1,3 +1,4 @@
+import { FotoPrato } from '../components/FotoPrato'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { db } from '../lib/supabase'
@@ -67,11 +68,7 @@ export function FichaDetalhe() {
           voltar={{ para: '/fichas', rotulo: 'fichas técnicas' }}
           topo={
             ficha.foto_url ? (
-              <img
-                src={ficha.foto_url}
-                alt={ficha.nome}
-                className="aspect-[4/3] w-full rounded-[14px] bg-paper-dim object-cover shadow-card md:max-h-[420px]"
-              />
+              <FotoPrato src={ficha.foto_url} alt={ficha.nome} altura="max-h-[360px] md:max-h-[420px]" className="rounded-[14px] shadow-card" eager />
             ) : (
               <div className="flex min-h-[112px] items-center justify-center rounded-[14px] bg-paper-dim px-4 py-6 text-center">
                 <span className="display text-2xl text-ink-soft md:text-3xl">{ficha.nome}</span>

@@ -1,3 +1,4 @@
+import { FotoPrato } from '../components/FotoPrato'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Ingredientes, Passos, SeletorPorcoes } from '../components/FichaPartes'
@@ -66,11 +67,7 @@ export function FichaCozinha() {
         {dados && ficha && ficha.foto_url && (
           <div className="space-y-10 [&_.divide-line>*]:border-[#3A312C]">
             <div className="relative overflow-hidden rounded-2xl bg-[#2A2320]">
-              <img
-                src={ficha.foto_url}
-                alt=""
-                className="aspect-[4/3] w-full object-cover min-[900px]:aspect-auto min-[900px]:h-[46vh]"
-              />
+              <FotoPrato src={ficha.foto_url} altura="max-h-[52vh]" eager />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-5 pb-5 pt-20 sm:px-8 sm:pb-7">
                 <h1 className="font-display text-4xl font-semibold leading-tight text-white sm:text-5xl">{ficha.nome}</h1>
               </div>
