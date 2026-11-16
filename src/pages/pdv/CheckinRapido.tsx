@@ -4,6 +4,7 @@ import { idOperador } from '../../context/OperadorContext'
 import { btnCls, btnSecCls, cartaoCls, chipCls, inputCls } from '../../components/Estado'
 import type { Mesa, Sala } from '../../lib/pdv'
 import { PerfisCheckin, usePerfisCobrancas } from './PerfisCheckin'
+import type { EventoCasa } from './ConfigEventosCasa'
 
 export const soDigitos = (s: string) => s.replace(/\D/g, '')
 export function mascaraTel(s: string) {
@@ -35,9 +36,15 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
   const [ocupadas, setOcupadas] = useState<Set<string>>(new Set())
   const [reservas, setReservas] = useState<ResHoje[]>([])
   const [reservaId, setReservaId] = useState('')
+  const [eventos, setEventos] = useState<EventoCasa[]>([])
+  const [eventoId, setEventoId] = useState('')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
 
+  useEffect(() => {
+    const hoje = new Date().toLocaleDateString('sv-SE')
+    db.from('pdv_eventos_casa').select('*').eq('ativo', true).or(`data.is.null,data.eq.${hoje}`).order('nome').then(({ data }: { data: EventoCasa[] | null }) => setEventos(data ?? []))
+  }, [])
   useEffect(() => { db.from('pdv_salas').select('*').eq('ativo', true).order('ordem').then(({ data }: { data: Sala[] | null }) => setSalas(data ?? [])) }, [])
   useEffect(() => {
     db.from('pdv_comandas').select('mesa_id').in('status', ['aberta', 'pedindo_conta']).not('mesa_id', 'is', null).then(({ data }: { data: { mesa_id: string }[] | null }) => setOcupadas(new Set((data ?? []).map((x) => x.mesa_id))))
@@ -90,6 +97,10 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
       const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: data.id, p_perfis: Object.entries(qtds).map(([perfil_id, qtd]) => ({ perfil_id, qtd })), p_cobrancas: selCob })
       if (r.error) setErro('Comanda aberta, mas não consegui lançar couvert/rodízio: ' + r.error.message)
     }
+    if (eventoId) {
+      const ev = await db.rpc('pdv_definir_evento', { p_comanda: data.id, p_evento: eventoId })
+      if (ev.error) setErro('Comanda aberta, mas não consegui lançar o evento: ' + ev.error.message)
+    }
     if (reservaId) await db.from('reservas').update({ status: 'sentada', comanda_id: data.id, mesa_id: mesaId || null, atualizado_em: new Date().toISOString() }).eq('id', reservaId)
     onAberta(data.id)
   }
@@ -131,6 +142,15 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
                 </p>
               )}
             </section>
+            {eventos.length > 0 && (
+              <section className={secao}>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Evento</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  <button type="button" className={chipCls(!eventoId)} onClick={() => setEventoId('')}>Nenhum</button>
+                  {eventos.map((e) => <button type="button" key={e.id} className={chipCls(eventoId === e.id)} onClick={() => setEventoId(e.id)}>{e.nome}{Number(e.valor) > 0 ? ` · R$ ${Number(e.valor).toFixed(2).replace('.', ',')}` : ''}</button>)}
+                </div>
+              </section>
+            )}
             <section className={secao}><PerfisCheckin perfis={perfis} cobrancas={cobrancas} qtds={qtds} onChange={setQtds} sel={selCob} onSel={setSelCob} /></section>
           </div>
           <section className={secao}>

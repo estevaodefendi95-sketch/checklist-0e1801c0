@@ -10,6 +10,7 @@ import { usePermissoes } from '../../context/PermissoesContext'
 import { Modal } from './PdvCaixa'
 import { Checkin } from './ConfigCheckin'
 import { ConfigLocal } from './ConfigLocal'
+import { ConfigEventosCasa } from './ConfigEventosCasa'
 import { Fiscal, Tef } from './ConfigFiscal'
 import { ReimprimirCupons } from './FiscalRapido'
 import { ConfigDescontos } from './ConfigDescontos'
@@ -17,12 +18,13 @@ import { PreviaImpressao } from './PreviaImpressao'
 import { ConfigPins } from './ConfigPins'
 import { GruposDoProduto, HorarioCampos, Opcoes, Pilula, RelogioHorario, rotuloHorario } from './ConfigCardapio'
 
-type Aba = 'salao' | 'local' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'previa' | 'pins' | 'fiscal' | 'pagamentos' | 'descontos'
+type Aba = 'salao' | 'eventos' | 'local' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'previa' | 'pins' | 'fiscal' | 'pagamentos' | 'descontos'
 type Item = { v: Aba; r: string; d: string; i: string; perm: 'pdv_gerir' | 'pdv_fiscal' }
 const GRUPOS: { t: string; itens: Item[] }[] = [
   { t: 'Operação do salão', itens: [
     { v: 'salao', r: 'Salão e mesas', d: 'Salas, mesas, lugares e layout', i: '🪑', perm: 'pdv_gerir' },
     { v: 'checkin', r: 'Check-in', d: 'Couvert artístico e rodízio', i: '🎟️', perm: 'pdv_gerir' },
+    { v: 'eventos', r: 'Eventos da casa', d: 'Eventos escolhidos no check-in (com ou sem valor)', i: '🎉', perm: 'pdv_gerir' },
     { v: 'local', r: 'Localização (GPS)', d: 'Raio de trabalho de usuários e tablets', i: '📍', perm: 'pdv_gerir' },
   ] },
   { t: 'Cardápio e vendas', itens: [
@@ -91,6 +93,7 @@ export function PdvConfig() {
       </div>
       {aba === 'salao' && <Salao />}
       {aba === 'local' && <ConfigLocal />}
+      {aba === 'eventos' && <ConfigEventosCasa />}
       {aba === 'checkin' && <Checkin />}
       {aba === 'produtos' && <Produtos />}
       {aba === 'opcoes' && <Opcoes />}

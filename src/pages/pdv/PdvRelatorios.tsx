@@ -33,6 +33,7 @@ export function PdvRelatorios() {
   const [itens, setItens] = useState<Item[]>([])
   const [pags, setPags] = useState<Pag[]>([])
   const [mesas, setMesas] = useState<Record<string, Mesa>>({})
+  const [eventosNome, setEventosNome] = useState<Record<string, string>>({})
   const [catDe, setCatDe] = useState<Record<string, string>>({})
   const [erro, setErro] = useState('')
   const [pronto, setPronto] = useState(false)
@@ -74,6 +75,7 @@ export function PdvRelatorios() {
     setOperadores(Object.fromEntries(((pf.data ?? []) as { id: string; nome: string }[]).map((x) => [x.id, x.nome])))
     setItens((i.data ?? []) as Item[])
     setPags((p.data ?? []) as Pag[])
+    db.from('pdv_eventos_casa').select('id,nome').then(({ data }: { data: { id: string; nome: string }[] | null }) => setEventosNome(Object.fromEntries((data ?? []).map((e) => [e.id, e.nome]))))
     setMesas(Object.fromEntries(((m.data ?? []) as Mesa[]).map((x) => [x.id, x])))
     const nomeCat = Object.fromEntries(((ct.data ?? []) as { id: string; nome: string }[]).map((x) => [x.id, x.nome]))
     setFichaDe(Object.fromEntries(((pr.data ?? []) as { id: string; ficha_id: string | null }[]).map((x) => [x.id, x.ficha_id])))
@@ -185,8 +187,8 @@ export function PdvRelatorios() {
   }, [cF, itF, pgF, catDe, operadores, semFicha])
 
   function csv() {
-    const linhas = [['comanda', 'mesa', 'abertura', 'fechamento', 'status', 'pessoas', 'subtotal', 'servico_pct', 'desconto']]
-    cF.forEach((c) => linhas.push([String(c.numero), c.mesa_id ? mesas[c.mesa_id]?.numero ?? '' : 'balcao', c.aberta_em, c.fechada_em ?? '', c.status, String(c.pessoas), r.bruto(c.id).toFixed(2), String(c.taxa_servico_pct), String(c.desconto)]))
+    const linhas = [['comanda', 'mesa', 'abertura', 'fechamento', 'status', 'pessoas', 'subtotal', 'servico_pct', 'desconto', 'evento']]
+    cF.forEach((c) => linhas.push([String(c.numero), c.mesa_id ? mesas[c.mesa_id]?.numero ?? '' : 'balcao', c.aberta_em, c.fechada_em ?? '', c.status, String(c.pessoas), r.bruto(c.id).toFixed(2), String(c.taxa_servico_pct), String(c.desconto), eventosNome[(c as { evento_id?: string | null }).evento_id ?? ''] ?? '']))
     const blob = new Blob(['﻿' + linhas.map((l) => l.join(';')).join('\n')], { type: 'text/csv' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `pdv_${de}_${ate}.csv`; a.click()
   }

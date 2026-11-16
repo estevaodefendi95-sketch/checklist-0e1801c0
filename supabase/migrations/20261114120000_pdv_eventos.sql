@@ -10,8 +10,9 @@ create table if not exists checklist.pdv_eventos_casa (
   criado_em timestamptz not null default now()
 );
 alter table checklist.pdv_eventos_casa enable row level security;
-create policy pdv_eventos_casa_ler on checklist.pdv_eventos_casa for select using (checklist.pdv_pode('pdv_operar'));
-create policy pdv_eventos_casa_escrever on checklist.pdv_eventos_casa for all using (checklist.pdv_pode('pdv_gerir')) with check (checklist.pdv_pode('pdv_gerir'));
+create policy pdv_eventos_casa_ler on checklist.pdv_eventos_casa for select to authenticated using (checklist.pdv_pode('pdv_operar') or checklist.pdv_pode('pdv_gerir'));
+revoke all on checklist.pdv_eventos_casa from anon;
+create policy pdv_eventos_casa_escrever on checklist.pdv_eventos_casa for all to authenticated using (checklist.pdv_pode('pdv_gerir')) with check (checklist.pdv_pode('pdv_gerir'));
 
 alter table checklist.pdv_comandas add column if not exists evento_id uuid references checklist.pdv_eventos_casa(id) on delete set null;
 alter table checklist.pdv_pedido_itens add column if not exists evento_id uuid references checklist.pdv_eventos_casa(id) on delete set null;
