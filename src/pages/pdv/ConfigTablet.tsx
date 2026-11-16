@@ -156,6 +156,16 @@ export function Tablet() {
       </section>
 
       {qrGrande && <QrTela titulo={qrGrande.titulo} url={qrGrande.url} onFechar={() => setQrGrande(null)} />}
+      <section className={`${cartaoCls} space-y-2 p-5`}>
+        <h3 className="text-sm font-semibold">Travar o tablet no cardápio (faça uma vez em cada tablet)</h3>
+        <ol className="list-decimal space-y-1.5 pl-5 text-sm text-ink-soft">
+          <li>Abra o QR Code acima com a câmera do tablet. Ele abre o cardápio no Chrome.</li>
+          <li>No Chrome, toque nos <b>⋮</b> › <b>Instalar app</b> (ou "Adicionar à tela inicial"). Abra o ícone <b>Cardápio</b> criado: ele abre em tela cheia, sem barra do Chrome. Feche a aba do Chrome.</li>
+          <li>Com o cardápio aberto, trave o Android: ative <b>Configurações › Segurança › Fixar janela</b> (com "pedir PIN ao desafixar"), depois toque no ícone do app na tela de recentes › <b>Fixar este app</b>. Sem o PIN do tablet, ninguém sai dele nem vai para o Chrome, a tela inicial ou outros apps.</li>
+          <li>Para sair: o <b>PIN da equipe</b> segurando o logo do cardápio. Para desafixar o Android, segure Voltar + Recentes e use o PIN do tablet.</li>
+        </ol>
+      </section>
+
       <BateriaTablets />
 
       <section className={`${cartaoCls} space-y-3 p-5`}>

@@ -41,6 +41,14 @@ export function MesaPublica() {
   const [msg, setMsg] = useState('')
   const [env, setEnv] = useState(false)
   const [pendMesa, setPendMesa] = useState<null | { ct: string; mesa: string; comanda: number }>(null)
+  // Nesta tela o app instalável é o do cardápio (tela cheia, sem barra do Chrome), não o sistema inteiro.
+  useEffect(() => {
+    const l = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')
+    if (!l) return
+    const antes = l.getAttribute('href') ?? '/manifest.webmanifest'
+    l.setAttribute('href', '/tablet.webmanifest')
+    return () => l.setAttribute('href', antes)
+  }, [])
   // Totem: no navegador, o primeiro toque na tela liga a tela cheia (esconde abas e barra de endereço). Instalado como app, já abre em tela cheia.
   useEffect(() => {
     const instalado = window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches
@@ -180,7 +188,7 @@ export function MesaPublica() {
       setEnv(false)
       if (r.precisa_mesa) return setPendMesa({ ct, mesa: String(r.mesa ?? e?.mesa ?? ''), comanda: r.comanda ?? 0 })
       if (r.erro) return setMsg(r.erro)
-      setCar([]); setMsg(`Pedido enviado para a comanda ${r.comanda}! Já está sendo preparado e será levado até você.`)
+      setCar([]); setMsg(`Pedido enviado${r.comanda ? ` para a comanda ${r.comanda}` : ''}! Já está sendo preparado e será levado até você.`)
     } else if (modo === 'conta') {
       const r = await chamar('conta', { comanda_token: ct })
       setEnv(false)
@@ -243,7 +251,7 @@ export function MesaPublica() {
     const r = await chamar('pedir', { itens, comanda_token: p.ct, vincular_mesa: true }) as Estado & { comanda?: number }
     setEnv(false)
     if (r.erro) return setMsg(r.erro)
-    setCar([]); setMsg(`Pedido enviado para a comanda ${r.comanda}! Já está sendo preparado e será levado até você.`)
+    setCar([]); setMsg(`Pedido enviado${r.comanda ? ` para a comanda ${r.comanda}` : ''}! Já está sendo preparado e será levado até você.`)
   }
   const dialogoMesa = pendMesa && (
     <div className="fixed inset-0 z-[58] flex items-center justify-center bg-black/60 p-4" onClick={() => setPendMesa(null)}>
