@@ -218,8 +218,10 @@ export function Comanda() {
     if (!reimprimir && carrinho.length && !window.confirm('Há itens no carrinho que ainda não foram enviados. Fechar a comanda e descartar esses itens?')) return
     if (!reimprimir) setCarrinho([])
     const ativos = itens.filter((i) => i.status !== 'cancelado')
+    const { data: fc } = await db.from('pdv_fiscal_config').select('nome_fantasia,razao_social,cnpj,logradouro,numero,bairro,municipio,uf').maybeSingle()
+    const cabecalho = fc ? [fc.nome_fantasia, fc.razao_social, [fc.logradouro, fc.numero].filter(Boolean).join(' '), [fc.bairro, fc.municipio, fc.uf].filter(Boolean).join(' - '), fc.cnpj ? 'CNPJ: ' + fc.cnpj : ''].filter(Boolean) : []
     const r = await enfileirar(db, 'caixa', 'conta', {
-      mesa: mesa?.numero ?? 'Balcão', comanda: c.numero, cliente: c.nome_cliente, pessoas: c.pessoas,
+      cabecalho, mesa: mesa?.numero ?? 'Balcão', comanda: c.numero, cliente: c.nome_cliente, pessoas: c.pessoas,
       itens: ativos.map((i) => ({ nome: i.nome, qtd: i.qtd, preco: i.preco_unit })),
       subtotal: tot.subtotal, servico: tot.servico, desconto: c.desconto, total: tot.total,
       taxa_servico_pct: c.taxa_servico_pct, por_pessoa: c.pessoas > 1 ? Math.round((num(tot.total) / c.pessoas) * 100) / 100 : null,

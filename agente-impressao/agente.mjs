@@ -48,12 +48,24 @@ function monta(job) {
     if (c.obs) k.txt('OBS: ' + c.obs)
     k.linha()
   } else if (job.tipo === 'conta') {
-    k.centro(true).negrito(true).txt('PRE-CONTA (sem valor fiscal)').negrito(false).txt(`Mesa ${c.mesa}  Comanda #${c.comanda}`).centro(false).linha()
-    for (const i of c.itens ?? []) k.par(`${i.qtd}x ${i.nome}`, brl(i.qtd * i.preco))
-    k.linha().par('Subtotal', brl(c.subtotal)).par(`Servico ${c.taxa_servico_pct}%`, brl(c.servico))
+    // Pré-conta no modelo do cupom do sistema anterior: cabeçalho da empresa, itens em colunas, totais e dados da venda
+    const cab = c.cabecalho ?? []
+    k.centro(true)
+    cab.forEach((l, i) => k.negrito(i === 0).txt(l).negrito(false))
+    k.txt('CONFERENCIA DE CONTA').txt('Nao e documento fiscal').centro(false).linha()
+    k.par('Descricao', 'Qtd x Vl.Un   Vl.Tot')
+    for (const i of c.itens ?? []) {
+      k.txt(String(i.nome))
+      k.par('', `${i.qtd} x ${Number(i.preco).toFixed(2).replace('.', ',')}   ${Number(i.qtd * i.preco).toFixed(2).replace('.', ',')}`)
+    }
+    k.linha().par('Total bruto dos itens', brl(c.subtotal))
+    if (c.servico > 0) k.par(`Servico ${c.taxa_servico_pct}%`, brl(c.servico))
     if (c.desconto > 0) k.par('Desconto', '-' + brl(c.desconto))
-    k.negrito(true).grande(true).par('TOTAL', brl(c.total)).grande(false).negrito(false)
+    k.negrito(true).grande(true).par('TOTAL', brl(c.total)).grande(false).negrito(false).linha()
+    k.negrito(true).txt(`Mesa ${c.mesa} - Comanda #${c.comanda}`).negrito(false)
+    if (c.cliente) k.txt('Nome: ' + c.cliente)
     if (c.por_pessoa) k.txt(`${c.pessoas} pessoas: ${brl(c.por_pessoa)} cada`)
+    k.linha().centro(true).txt(new Date().toLocaleString('pt-BR')).txt('Confira os itens antes de pagar.').centro(false)
   } else if (job.tipo === 'fechamento_caixa') {
     k.centro(true).negrito(true).txt('FECHAMENTO DE CAIXA').negrito(false).centro(false).txt(c.caixa).linha()
     k.par('Fundo', brl(c.fundo)).par('Suprimentos', brl(c.suprimentos)).par('Sangrias', brl(c.sangrias)).linha()
