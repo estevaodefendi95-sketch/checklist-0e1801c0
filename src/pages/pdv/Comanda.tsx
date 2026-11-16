@@ -427,10 +427,6 @@ export function Comanda() {
         titulo={`${mesa ? `Mesa ${mesa.numero}` : 'Balcão'} · #${c.numero}`}
         subtitulo={`${func ? `Consumo de ${func.nome}` : c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
       />
-      {c.status === 'pedindo_conta' && (
-        <Alerta className="mb-3" tipo="aviso" titulo="Conta fechada · aguardando recebimento" texto="Novos pedidos estão bloqueados. Faça o recebimento ou reabra a comanda."
-          acao={<button className={btnSecCls} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>} />
-      )}
       {aberta && (
         <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 flex gap-2 px-3 lg:hidden">
           {qtdCarrinho === 0 && aba === 'pedido' && (
@@ -534,9 +530,9 @@ export function Comanda() {
           <section className={`${cartaoCls} space-y-3 p-6 text-center`}>
             <h2 className="text-lg font-semibold text-alert">Conta fechada · aguardando recebimento</h2>
             <p className="text-sm text-ink-soft">Novos pedidos estão bloqueados. Para lançar mais um produto, reabra a comanda.</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              <button className={btnCls} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>
-              <button className={btnSecCls} onClick={() => setAba('pagamento')}>Ir para o recebimento <Tecla t="F3" /></button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button className={btnCls + ' w-full'} onClick={() => setAba('pagamento')}>Ir para o recebimento <Tecla t="F3" /></button>
+              <button className={btnSecCls + ' w-full'} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>
             </div>
           </section>
         ) : aba === 'pagamento' && c.funcionario_id ? (
@@ -682,16 +678,15 @@ export function Comanda() {
           {!aberta && c.status === 'fechada' && (pode('pdv_caixa') || pode('pdv_fiscal')) && <button className={btnSecCls + ' w-full'} onClick={() => setAba('pagamento')}>Cupom fiscal desta comanda</button>}
           {erro && <p className="rounded-xl bg-alert-soft px-3 py-2 text-sm text-alert">{erro}</p>}
           {aberta && (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 [&>button]:min-h-[52px] [&>button]:w-full">
+              {pode('pdv_caixa')
+                ? <button className={btnCls + ' col-span-2'} onClick={fechar}>Encerrar conta <Tecla t="F5" /></button>
+                : lancavel && <button className={btnCls + ' col-span-2'} onClick={() => pedirConta()}>Fechar comanda <Tecla t="F4" /></button>}
+              {lancavel && pode('pdv_caixa') && <button className={btnSecCls} onClick={() => pedirConta()}>Fechar comanda <Tecla t="F4" /></button>}
+              {!lancavel && <button className={btnSecCls} onClick={() => pedirConta(true)}>Reimprimir pré-conta</button>}
               <button className={btnSecCls} onClick={abrirPerfis}>Pessoas e perfis</button>
-              {lancavel
-                ? <button className={btnSecCls} onClick={() => pedirConta()}>Fechar comanda <Tecla t="F4" /></button>
-                : <>
-                    <button className={btnSecCls} onClick={() => pedirConta(true)}>Reimprimir pré-conta</button>
-                    <button className={btnSecCls} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>
-                  </>}
-              {pode('pdv_caixa') && <button className={btnCls} onClick={fechar}>Encerrar conta <Tecla t="F5" /></button>}
-              {pode('pdv_caixa') && <button className={btnPerigoCls} onClick={cancelarComanda}>Cancelar</button>}
+              {!lancavel && aba === 'pagamento' && <button className={btnSecCls + ' col-span-2'} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>}
+              {pode('pdv_caixa') && <button className={btnPerigoCls + ' col-span-2 !min-h-[44px]'} onClick={cancelarComanda}>Cancelar comanda</button>}
             </div>
           )}
         </aside>

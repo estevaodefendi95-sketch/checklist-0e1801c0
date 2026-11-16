@@ -151,7 +151,7 @@ export function AtendimentoRapido() {
         </div>
       )}
 
-      <button onClick={() => setNovo({ id: '', numero: 'Balcão' } as Mesa)} className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] right-[84px] z-20 flex min-h-[56px] items-center gap-2 rounded-full bg-brand px-5 text-base font-semibold text-brand-ink shadow-xl">+ Nova comanda</button>
+      <button onClick={() => setNovo({ id: '', numero: 'Balcão' } as Mesa)} className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap lg:left-auto lg:right-24 lg:translate-x-0 flex min-h-[56px] items-center gap-2 rounded-full bg-brand px-5 text-base font-semibold text-brand-ink shadow-xl">+ Nova comanda</button>
       {novo && <CheckinModal mesas={mesas} mesaInicial={novo.id ? novo : null} onClose={() => setNovo(null)} onAberta={(id) => nav(`/pdv/comanda/${id}`)} />}
     </div>
   )

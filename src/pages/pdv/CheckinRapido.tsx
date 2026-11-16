@@ -105,7 +105,7 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
     onAberta(data.id)
   }
 
-  const campo = 'block text-xs font-medium text-ink-soft'
+  const campo = 'block text-xs font-medium text-ink-soft [&>input]:mt-1.5 [&>select]:mt-1.5'
   const secao = 'space-y-2.5 rounded-2xl border border-line p-3.5'
   const mesaSel = mesas.find((m) => m.id === mesaId)
   const pessoasTot = Object.values(qtds).reduce((a, n) => a + n, 0)

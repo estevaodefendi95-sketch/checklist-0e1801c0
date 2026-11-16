@@ -149,7 +149,7 @@ export function Assistente() {
 
   return (
     <>
-      <button onClick={() => setAberto(true)} aria-label="Abrir assistente" title="Assistente" className={`fixed ${naComanda ? 'bottom-[calc(148px+env(safe-area-inset-bottom))]' : 'bottom-[calc(78px+env(safe-area-inset-bottom))]'} right-3 z-40 grid h-11 w-11 place-items-center rounded-full bg-brand text-brand-ink opacity-90 shadow-lg lg:bottom-6 lg:right-6 lg:h-14 lg:w-14 lg:opacity-100`}>
+      <button onClick={() => setAberto(true)} aria-label="Abrir assistente" title="Assistente" className={`fixed ${naComanda ? 'max-lg:hidden' : ''} bottom-[calc(78px+env(safe-area-inset-bottom))] right-3 z-40 grid h-11 w-11 place-items-center rounded-full bg-brand text-brand-ink opacity-90 shadow-lg lg:bottom-6 lg:right-6 lg:h-14 lg:w-14 lg:opacity-100`}>
         <Icone nome="chat" tamanho={26} />
       </button>
       {aberto && (
