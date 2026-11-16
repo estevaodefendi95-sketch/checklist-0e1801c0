@@ -103,6 +103,13 @@ export function PdvSalao() {
     setMesas((ms) => ms.map((m) => novas.find((n) => n.id === m.id) ? { ...m, ...novas.find((n) => n.id === m.id)! } : m))
     await Promise.all(novas.map((n) => db.from('pdv_mesas').update({ pos_x: n.pos_x, pos_y: n.pos_y }).eq('id', n.id)))
   }
+  /** Encaixa as mesas da sala numa grade regular (colunas e linhas de 140 px), para ficarem alinhadas. */
+  async function alinhar() {
+    const lista = mesas.filter((m) => m.sala_id === sala)
+    const novas = lista.map((m) => ({ id: m.id, pos_x: 30 + 140 * Math.max(0, Math.round((m.pos_x - 30) / 140)), pos_y: 30 + 140 * Math.max(0, Math.round((m.pos_y - 30) / 140)) }))
+    setMesas((ms) => ms.map((m) => { const n = novas.find((k) => k.id === m.id); return n ? { ...m, ...n } : m }))
+    await Promise.all(novas.map((n) => db.from('pdv_mesas').update({ pos_x: n.pos_x, pos_y: n.pos_y }).eq('id', n.id)))
+  }
   async function removerMesa(m: Mesa) {
     if (porMesa.has(m.id)) return setErro('Esta mesa tem comanda aberta.')
     if (!window.confirm(`Remover a mesa ${m.numero}? Se ela tiver histórico, será apenas desativada.`)) return
@@ -141,6 +148,7 @@ export function PdvSalao() {
         acoes={
           <>
             <button className={(editando ? btnCls : btnSecCls) + (editando ? '' : ' hidden md:inline-flex')} onClick={() => { setEditando((v) => !v); setSelId(null); trocarVisao('mapa') }}>{editando ? 'Concluir edição' : 'Editar mesas'}</button>
+            {editando && <button className={btnSecCls} onClick={() => alinhar()}>Alinhar em grade</button>}
             {editando && <button className={btnSecCls} onClick={() => espacar(1.2)}>Espaçar</button>}
             {editando && <button className={btnSecCls} onClick={() => espacar(1 / 1.2)}>Aproximar</button>}
             {!editando && <button className={btnCls + ' hidden md:inline-flex'} onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)}>Check-in rápido</button>}
