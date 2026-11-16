@@ -8,7 +8,7 @@ import { BateriaTablets } from './BateriaTablets'
 import { Avisos, Campo, useSalvarMsg } from './PdvConfig'
 
 const URL_APP_TABLET = 'https://github.com/estevaodefendi95-sketch/checklist-0e1801c0/releases/latest/download/paggio-cardapio.apk'
-interface Cfg { taxa_servico_pct: number; couvert: number; tablet_qr_ativo: boolean; tablet_exige_checkin: boolean; tablet_url_base: string | null; tablet_mensagem_boas_vindas: string | null; tablet_tempo_inatividade_min: number; tablet_pode_chamar_garcom: boolean; tablet_pode_pedir_conta: boolean }
+interface Cfg { taxa_servico_pct: number; couvert: number; tablet_qr_ativo: boolean; tablet_exige_checkin: boolean; tablet_url_base: string | null; tablet_mensagem_boas_vindas: string | null; tablet_tempo_inatividade_min: number; tablet_pode_chamar_garcom: boolean; tablet_pode_pedir_conta: boolean; agrupar_pedidos_min?: number }
 interface Disp { id: string; nome: string; tipo: string; token: string; ativo: boolean; ultimo_ping: string | null }
 
 export function Tablet() {
@@ -99,6 +99,7 @@ export function Tablet() {
           <Campo r="Endereço público do sistema (usado nos links)"><input className={inputCls} placeholder={window.location.origin} value={cfg.tablet_url_base ?? ''} onChange={(e) => set({ tablet_url_base: e.target.value })} /></Campo>
           <Campo r="Mensagem de boas-vindas"><input className={inputCls} value={cfg.tablet_mensagem_boas_vindas ?? ''} onChange={(e) => set({ tablet_mensagem_boas_vindas: e.target.value })} /></Campo>
           <Campo r="Serviço (%)"><input className={inputCls} defaultValue={cfg.taxa_servico_pct} onChange={(e) => set({ taxa_servico_pct: lerNumero(e.target.value) ?? 0 })} /></Campo>
+          <Campo r="Agrupar pedidos da mesma mesa na cozinha (minutos, 0 = desligado)"><input className={inputCls} inputMode="numeric" defaultValue={cfg.agrupar_pedidos_min ?? 10} onChange={(e) => set({ agrupar_pedidos_min: Math.max(0, Math.round(lerNumero(e.target.value) ?? 0)) })} /></Campo>
           <Campo r="Couvert (R$)"><input className={inputCls} defaultValue={cfg.couvert} onChange={(e) => set({ couvert: lerNumero(e.target.value) ?? 0 })} /></Campo>
         </div>
         <div className="flex justify-end"><button className={btnCls} onClick={salvar}>Salvar configurações</button></div>

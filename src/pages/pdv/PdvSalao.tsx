@@ -8,6 +8,7 @@ import { cacheGravar, cacheLer, erroDeRede } from '../../lib/offline'
 import { Comanda, Mesa, Sala, TAM_FORMA, Totais, dimMesa, minutosDesde, num, useAoVivo } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
 import { CheckinModal } from './CheckinRapido'
+import { ResumoDia } from './ResumoDia'
 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
@@ -30,6 +31,8 @@ export function PdvSalao() {
   const [visao, setVisao] = useState<'lista' | 'mapa'>(() => { try { return (localStorage.getItem('salao_visao') as 'lista' | 'mapa') || (window.innerWidth < 768 ? 'lista' : 'mapa') } catch { return 'mapa' } })
   const trocarVisao = (v: 'lista' | 'mapa') => { setVisao(v); try { localStorage.setItem('salao_visao', v) } catch { /* sem armazenamento */ } }
   const [editando, setEditando] = useState(false)
+  const [aba, setAba] = useState<'salao' | 'resumo'>(() => { try { return (sessionStorage.getItem('salao_aba') as 'salao' | 'resumo') || 'salao' } catch { return 'salao' } })
+  const trocarAba = (v: 'salao' | 'resumo') => { setAba(v); try { sessionStorage.setItem('salao_aba', v) } catch { /* sem armazenamento */ } }
   const [selId, setSelId] = useState<string | null>(null)
   const drag = useRef<{ id: string; dx: number; dy: number; moveu: boolean } | null>(null)
   const area = useRef<HTMLDivElement>(null)
@@ -129,6 +132,21 @@ export function PdvSalao() {
   }
 
   if (!pronto) return <Carregando />
+  const abas = !editando && (
+    <div className="mb-3 inline-flex gap-1 rounded-xl border border-line bg-surface p-1" role="tablist">
+      <button role="tab" aria-selected={aba === 'salao'} className={aba === 'salao' ? btnCls : btnSecCls} onClick={() => trocarAba('salao')}>Salão</button>
+      <button role="tab" aria-selected={aba === 'resumo'} className={aba === 'resumo' ? btnCls : btnSecCls} onClick={() => trocarAba('resumo')}>Resumo do dia</button>
+    </div>
+  )
+  if (aba === 'resumo' && !editando) {
+    return (
+      <div>
+        <Cabecalho titulo="Salão" subtitulo="Faturamento e comandas do dia, só para acompanhar" />
+        {abas}
+        <ResumoDia />
+      </div>
+    )
+  }
   return (
     <div>
       <Cabecalho
@@ -144,6 +162,7 @@ export function PdvSalao() {
           </>
         }
       />
+      {abas}
       <form className="mb-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); nav(`/pdv/comandas?q=${encodeURIComponent(busca)}`) }}>
         <input className={inputCls} placeholder="Buscar comanda por nº, nome, telefone ou mesa…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <button className={btnSecCls}>Buscar</button>
