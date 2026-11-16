@@ -5,7 +5,7 @@ set PDV_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 set PDV_TOKEN_AGENTE=COLE_O_TOKEN_AQUI
 cd /d "%~dp0"
 where node >nul 2>nul || (echo Node.js nao encontrado. Instale a versao LTS em nodejs.org e abra este arquivo de novo. & pause & exit /b)
-if "%PDV_TOKEN_AGENTE%"=="COLE_O_TOKEN_AQUI" (echo Falta colar o TOKEN neste arquivo. Clique com o botao direito em Editar e troque COLE_O_TOKEN_AQUI. & pause & exit /b)
+echo %PDV_TOKEN_AGENTE%| findstr /c:"COLE_O_" >nul && (echo Falta colar o TOKEN neste arquivo. Clique com o botao direito em Editar, apague COLE_O_TOKEN_AQUI e cole o token no lugar. & pause & exit /b)
 :loop
 node agente.mjs
 echo Agente parou. Reiniciando em 5 segundos...
