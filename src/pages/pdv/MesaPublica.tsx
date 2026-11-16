@@ -295,16 +295,16 @@ export function MesaPublica() {
   if (e.qr_ativo && e.reserva && !e.reserva.liberada) {
     const rv = e.reserva
     return (
-      <div className="relative flex h-[100dvh] cursor-pointer select-none flex-col justify-end overflow-hidden p-8 text-white" style={{ ...vars, background: 'radial-gradient(120% 90% at 20% 0%, color-mix(in srgb, var(--p) 38%, #0b0b0d) 0%, #09090b 70%)' }} onClick={liberarReserva}>
+      <div className="relative flex h-[100dvh] cursor-pointer select-none flex-col items-center justify-center overflow-hidden p-8 text-center text-white" style={{ ...vars, background: 'radial-gradient(120% 90% at 20% 0%, color-mix(in srgb, var(--p) 38%, #0b0b0d) 0%, #09090b 70%)' }} onClick={liberarReserva}>
         <div className="absolute left-5 top-5 z-10 flex items-center gap-4 rounded-3xl bg-white/[0.07] py-3 pl-4 pr-5 ring-1 ring-white/10" {...segLogoRes} onClick={(x) => x.stopPropagation()}>
           <img draggable={false} src="/logo-paggio.png" alt="Paggio Gastrobar" className="h-12 w-auto object-contain" />
           <span className="h-9 w-px bg-white/25" />
           <span className="text-left leading-none"><span className="block text-[11px] uppercase tracking-[0.25em] opacity-70">Mesa</span><b className="text-4xl">{e.mesa}</b></span>
         </div>
-        <div className="relative z-10 space-y-3 pb-16">
-          <span className="inline-block rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.3em] text-black" style={{ background: 'var(--d)' }}>Reservada</span>
-          <p className="text-6xl font-semibold leading-tight">{rv.nome}</p>
-          <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-2xl opacity-80">
+        <div className="relative z-10 space-y-5">
+          <p className="text-7xl font-semibold uppercase leading-none tracking-[0.2em] sm:text-8xl" style={{ color: 'var(--d)' }}>Reservado</p>
+          <p className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-2xl opacity-80">
+            <span>{rv.nome}</span>
             {rv.hora && <span>às {rv.hora}</span>}
             {!rv.manual && rv.pessoas > 0 && <span>{rv.pessoas} {rv.pessoas === 1 ? 'pessoa' : 'pessoas'}</span>}
           </p>
