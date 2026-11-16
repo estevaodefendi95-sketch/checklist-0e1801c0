@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { db, supabase } from '../../lib/supabase'
 import { reduzir } from '../../lib/imagem'
 import { Cabecalho } from '../../components/Cabecalho'
@@ -18,29 +18,76 @@ import { ConfigPins } from './ConfigPins'
 import { GruposDoProduto, HorarioCampos, Opcoes, Pilula, RelogioHorario, rotuloHorario } from './ConfigCardapio'
 
 type Aba = 'salao' | 'local' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'previa' | 'pins' | 'fiscal' | 'pagamentos' | 'descontos'
-const ABAS: { v: Aba; r: string; perm: 'pdv_gerir' | 'pdv_fiscal' }[] = [
-  { v: 'salao', r: 'Salão e mesas', perm: 'pdv_gerir' },
-  { v: 'local', r: 'Localização (GPS)', perm: 'pdv_gerir' },
-  { v: 'checkin', r: 'Check-in: couvert e rodízio', perm: 'pdv_gerir' },
-  { v: 'produtos', r: 'Cardápio e preços', perm: 'pdv_gerir' },
-  { v: 'opcoes', r: 'Opções e combos', perm: 'pdv_gerir' },
-  { v: 'impressoras', r: 'Impressoras', perm: 'pdv_gerir' },
-  { v: 'previa', r: 'Modelo de impressão', perm: 'pdv_gerir' },
-  { v: 'pins', r: 'Senhas (PIN)', perm: 'pdv_gerir' },
-  { v: 'fiscal', r: 'Fiscal (NFC-e)', perm: 'pdv_fiscal' },
-  { v: 'descontos', r: 'Descontos', perm: 'pdv_gerir' },
-  { v: 'pagamentos', r: 'Pagamentos / TEF', perm: 'pdv_gerir' },
+type Item = { v: Aba; r: string; d: string; i: string; perm: 'pdv_gerir' | 'pdv_fiscal' }
+const GRUPOS: { t: string; itens: Item[] }[] = [
+  { t: 'Operação do salão', itens: [
+    { v: 'salao', r: 'Salão e mesas', d: 'Salas, mesas, lugares e layout', i: '🪑', perm: 'pdv_gerir' },
+    { v: 'checkin', r: 'Check-in', d: 'Couvert artístico e rodízio', i: '🎟️', perm: 'pdv_gerir' },
+    { v: 'local', r: 'Localização (GPS)', d: 'Raio de trabalho de usuários e tablets', i: '📍', perm: 'pdv_gerir' },
+  ] },
+  { t: 'Cardápio e vendas', itens: [
+    { v: 'produtos', r: 'Cardápio e preços', d: 'Produtos, categorias, fotos e horários', i: '🍽️', perm: 'pdv_gerir' },
+    { v: 'opcoes', r: 'Opções e combos', d: 'Acompanhamentos, adicionais e ponto', i: '🧩', perm: 'pdv_gerir' },
+    { v: 'descontos', r: 'Descontos', d: 'Regras e limites de desconto', i: '🏷️', perm: 'pdv_gerir' },
+  ] },
+  { t: 'Impressão', itens: [
+    { v: 'impressoras', r: 'Impressoras', d: 'Cozinha, bar e caixa', i: '🖨️', perm: 'pdv_gerir' },
+    { v: 'previa', r: 'Modelo de impressão', d: 'Prévia dos cupons e pedidos', i: '🧾', perm: 'pdv_gerir' },
+  ] },
+  { t: 'Fiscal e pagamentos', itens: [
+    { v: 'fiscal', r: 'Fiscal (NFC-e)', d: 'Emissão de notas e certificado', i: '📄', perm: 'pdv_fiscal' },
+    { v: 'pagamentos', r: 'Pagamentos / TEF', d: 'Maquininhas e formas de pagamento', i: '💳', perm: 'pdv_gerir' },
+  ] },
+  { t: 'Acesso', itens: [
+    { v: 'pins', r: 'Senhas (PIN)', d: 'PIN dos operadores e supervisores', i: '🔑', perm: 'pdv_gerir' },
+  ] },
 ]
 
 export function PdvConfig() {
   const { pode } = usePermissoes()
-  const abas = ABAS.filter((a) => pode(a.perm))
-  const [aba, setAba] = useState<Aba>(abas[0]?.v ?? 'salao')
+  const [sp, setSp] = useSearchParams()
+  const grupos = GRUPOS.map((g) => ({ ...g, itens: g.itens.filter((x) => pode(x.perm)) })).filter((g) => g.itens.length)
+  const todos = grupos.flatMap((g) => g.itens)
+  const atual = todos.find((x) => x.v === sp.get('aba'))
+  const abrir = (v: Aba | null) => setSp(v ? { aba: v } : {}, { replace: false })
+  const aba = atual?.v
+
+  if (!atual) {
+    return (
+      <div>
+        <Cabecalho titulo="Configurações do PDV" subtitulo="Escolha a área que deseja ajustar" />
+        <div className="space-y-6">
+          {grupos.map((g) => (
+            <section key={g.t}>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{g.t}</h2>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {g.itens.map((x) => (
+                  <button key={x.v} onClick={() => abrir(x.v)}
+                    className="flex min-h-[76px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-400 hover:shadow active:scale-[0.99]">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-2xl">{x.i}</span>
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-slate-900">{x.r}</span>
+                      <span className="block text-sm text-slate-500">{x.d}</span>
+                    </span>
+                    <span className="ml-auto text-slate-300">›</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
-      <Cabecalho titulo="Configurações do PDV" subtitulo="Salão, produtos, impressoras, fiscal e pagamentos" />
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        {abas.map((a) => <button key={a.v} className={aba === a.v ? btnCls : btnSecCls} onClick={() => setAba(a.v)}>{a.r}</button>)}
+      <Cabecalho titulo={atual.r} subtitulo={atual.d} />
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button className={btnSecCls} onClick={() => abrir(null)}>← Todas as configurações</button>
+        <select className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-3 text-sm" value={atual.v} onChange={(e) => abrir(e.target.value as Aba)} aria-label="Ir para outra área">
+          {grupos.map((g) => <optgroup key={g.t} label={g.t}>{g.itens.map((x) => <option key={x.v} value={x.v}>{x.r}</option>)}</optgroup>)}
+        </select>
       </div>
       {aba === 'salao' && <Salao />}
       {aba === 'local' && <ConfigLocal />}

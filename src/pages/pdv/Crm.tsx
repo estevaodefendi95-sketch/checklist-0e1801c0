@@ -179,7 +179,7 @@ function Lista({ clis, abrir }: { clis: Cli[]; abrir: (c: Cli) => void }) {
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-ink-soft">{vis.length} cliente(s)</span>
         <select className={inputCls + ' !w-auto'} value={ord} onChange={(e) => setOrd(e.target.value)}><option value="gasto">Maior gasto</option><option value="visitas">Mais visitas</option><option value="ticket">Maior ticket</option><option value="recente">Visita mais recente</option><option value="nome">Nome</option></select>
-        <button className={btnSecCls + ' ml-auto'} onClick={() => csv(vis)}>Exportar CSV</button>
+        <button className={btnSecCls + ' ml-auto'} onClick={() => { void db.rpc('pdv_log_exportacao', { p_tipo: 'clientes CSV', p_qtd: vis.length }); csv(vis) }}>Exportar CSV</button>
       </div>
       {!vis.length ? <Vazio texto="Nenhum cliente com esses filtros." /> : (
         <div className={`${cartaoCls} divide-y divide-line`}>
