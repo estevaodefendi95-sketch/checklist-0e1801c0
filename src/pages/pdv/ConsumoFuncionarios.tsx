@@ -81,7 +81,7 @@ export function ConsumoFuncionarios() {
     <div>
       <Cabecalho titulo="Consumo de funcionários" subtitulo="Consumação da equipe: baixa o estoque, não entra no caixa nem na nota fiscal" />
       {erro && <Erro texto={erro} />}
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <button className={chipCls(aba === 'lancar')} onClick={() => setAba('lancar')}>Lançar consumo</button>
         <button className={chipCls(aba === 'relatorio')} onClick={() => setAba('relatorio')}>Relatório do mês</button>
         {gerir && <button className={chipCls(aba === 'cadastro')} onClick={() => setAba('cadastro')}>Funcionários e regra</button>}

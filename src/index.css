@@ -110,3 +110,9 @@ h1, h2, h3, .display {
   outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
+
+/* Celular/tablet retrato: itens de grid e flex podem encolher, evitando rolagem horizontal da página */
+@media (max-width: 1023px) {
+  main .grid > *, main .flex > .flex-1 { min-width: 0; }
+  main { overflow-x: clip; }
+}

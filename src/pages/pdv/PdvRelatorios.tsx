@@ -229,22 +229,22 @@ export function PdvRelatorios() {
         <button className={btnSecCls} onClick={() => { setDe(soma(hojeISO(), -1)); setAte(soma(hojeISO(), -1)) }}>Ontem</button>
         <button className={btnSecCls} onClick={() => { setDe(soma(hojeISO(), -6)); setAte(hojeISO()) }}>7 dias</button>
         <button className={btnSecCls} onClick={() => { setDe(soma(hojeISO(), -29)); setAte(hojeISO()) }}>30 dias</button>
-        <input type="date" className={inputCls + ' !w-auto'} value={de} onChange={(e) => setDe(e.target.value)} />
-        <input type="date" className={inputCls + ' !w-auto'} value={ate} onChange={(e) => setAte(e.target.value)} />
+        <input type="date" className={inputCls + ' !w-[calc(50%-4px)] sm:!w-auto'} value={de} onChange={(e) => setDe(e.target.value)} />
+        <input type="date" className={inputCls + ' !w-[calc(50%-4px)] sm:!w-auto'} value={ate} onChange={(e) => setAte(e.target.value)} />
       </div>
-      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+      <div className="mb-4 grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
         <div className="relative">
           <input className={inputCls + ' !pr-10'} type="search" placeholder="Buscar cliente (nome, telefone ou nº da comanda)" value={fCliente} onChange={(e) => setFCliente(e.target.value)} />
           {fCliente && <button aria-label="Limpar" className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center text-xl text-ink-soft" onClick={() => setFCliente('')}>×</button>}
         </div>
-        <div className="flex gap-2">
-          <select className={inputCls + ' !w-auto'} value={fPapel} onChange={(e) => setFPapel(e.target.value as typeof fPapel)} aria-label="Operação">
+        <div className="flex flex-wrap gap-2">
+          <select className={inputCls + ' !w-auto min-w-0 max-w-full flex-1'} value={fPapel} onChange={(e) => setFPapel(e.target.value as typeof fPapel)} aria-label="Operação">
             <option value="qualquer">Qualquer operação</option>
             <option value="abriu">Abriu a comanda (check-in)</option>
             <option value="lancou">Lançou produto</option>
             <option value="fechou">Fechou a conta</option>
           </select>
-          <select className={inputCls + ' !w-auto'} value={fUser} onChange={(e) => setFUser(e.target.value)} aria-label="Usuário">
+          <select className={inputCls + ' !w-auto min-w-0 max-w-full flex-1'} value={fUser} onChange={(e) => setFUser(e.target.value)} aria-label="Usuário">
             <option value="">Todos os usuários</option>
             {usuariosNoPeriodo.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
           </select>
@@ -253,7 +253,7 @@ export function PdvRelatorios() {
       </div>
       {(fCliente || fUser || soCancel) && <p className="mb-3 text-sm text-ink-soft">Filtrado: {cF.length} de {comandas.length} comanda(s) no período.</p>}
       {erro && <Erro texto={erro} />}
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <button className={chipCls(aba === 'vendas')} onClick={() => setAba('vendas')}>Vendas</button>
         <button className={chipCls(aba === 'estoque')} onClick={() => setAba('estoque')}>Estoque (baixa automática)</button>
         <Link to="/pdv/consumo" className={chipCls(false)}>Consumo de funcionários</Link>

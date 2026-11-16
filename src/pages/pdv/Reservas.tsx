@@ -70,12 +70,12 @@ export function Reservas() {
     <div>
       <Cabecalho titulo="Reservas" subtitulo="Calendário, confirmações e check-in a partir da reserva"
         acoes={<button className={btnCls} onClick={() => setEd({ data: dia, hora: '20:00', pessoas: 2, status: 'confirmada' })}>Nova reserva</button>} />
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <button className={chipCls(aba === 'agenda')} onClick={() => setAba('agenda')}>Agenda</button>
         {pode('pdv_gerir') && <button className={chipCls(aba === 'config')} onClick={() => setAba('config')}>Configurações</button>}
       </div>
       {aba === 'config' && pode('pdv_gerir') ? <Config cfg={cfg} bloq={bloq} recarregar={carregar} /> : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,420px)_1fr]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,420px)_1fr]">
           <section className={`${cartaoCls} p-3`}>
             <div className="mb-2 flex items-center justify-between">
               <button className={btnSecCls + ' !min-h-[36px] !px-3'} onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))}>‹</button>
