@@ -19,29 +19,29 @@ import { ConfigPins } from './ConfigPins'
 import { GruposDoProduto, HorarioCampos, Opcoes, Pilula, RelogioHorario, rotuloHorario } from './ConfigCardapio'
 
 type Aba = 'salao' | 'eventos' | 'local' | 'checkin' | 'produtos' | 'opcoes' | 'impressoras' | 'previa' | 'pins' | 'fiscal' | 'pagamentos' | 'descontos'
-type Item = { v: Aba; r: string; d: string; i: string; perm: 'pdv_gerir' | 'pdv_fiscal' }
+type Item = { v: Aba; r: string; d: string; perm: 'pdv_gerir' | 'pdv_fiscal' }
 const GRUPOS: { t: string; itens: Item[] }[] = [
   { t: 'Operação do salão', itens: [
-    { v: 'salao', r: 'Salão e mesas', d: 'Salas, mesas, lugares e layout', i: '🪑', perm: 'pdv_gerir' },
-    { v: 'checkin', r: 'Check-in', d: 'Couvert artístico e rodízio', i: '🎟️', perm: 'pdv_gerir' },
-    { v: 'eventos', r: 'Eventos da casa', d: 'Eventos escolhidos no check-in (com ou sem valor)', i: '🎉', perm: 'pdv_gerir' },
-    { v: 'local', r: 'Localização (GPS)', d: 'Raio de trabalho de usuários e tablets', i: '📍', perm: 'pdv_gerir' },
+    { v: 'salao', r: 'Salão e mesas', d: 'Salas, mesas e lugares', perm: 'pdv_gerir' },
+    { v: 'checkin', r: 'Check-in', d: 'Couvert e rodízio', perm: 'pdv_gerir' },
+    { v: 'eventos', r: 'Eventos da casa', d: 'Eventos do check-in', perm: 'pdv_gerir' },
+    { v: 'local', r: 'Localização (GPS)', d: 'Raio de trabalho por GPS', perm: 'pdv_gerir' },
   ] },
   { t: 'Cardápio e vendas', itens: [
-    { v: 'produtos', r: 'Cardápio e preços', d: 'Produtos, categorias, fotos e horários', i: '🍽️', perm: 'pdv_gerir' },
-    { v: 'opcoes', r: 'Opções e combos', d: 'Acompanhamentos, adicionais e ponto', i: '🧩', perm: 'pdv_gerir' },
-    { v: 'descontos', r: 'Descontos', d: 'Regras e limites de desconto', i: '🏷️', perm: 'pdv_gerir' },
+    { v: 'produtos', r: 'Cardápio e preços', d: 'Produtos, preços e horários', perm: 'pdv_gerir' },
+    { v: 'opcoes', r: 'Opções e combos', d: 'Adicionais e combos', perm: 'pdv_gerir' },
+    { v: 'descontos', r: 'Descontos', d: 'Regras de desconto', perm: 'pdv_gerir' },
   ] },
   { t: 'Impressão', itens: [
-    { v: 'impressoras', r: 'Impressoras', d: 'Cozinha, bar e caixa', i: '🖨️', perm: 'pdv_gerir' },
-    { v: 'previa', r: 'Modelo de impressão', d: 'Prévia dos cupons e pedidos', i: '🧾', perm: 'pdv_gerir' },
+    { v: 'impressoras', r: 'Impressoras', d: 'Cozinha, bar e caixa', perm: 'pdv_gerir' },
+    { v: 'previa', r: 'Modelo de impressão', d: 'Layout dos cupons', perm: 'pdv_gerir' },
   ] },
   { t: 'Fiscal e pagamentos', itens: [
-    { v: 'fiscal', r: 'Fiscal (NFC-e)', d: 'Emissão de notas e certificado', i: '📄', perm: 'pdv_fiscal' },
-    { v: 'pagamentos', r: 'Pagamentos / TEF', d: 'Maquininhas e formas de pagamento', i: '💳', perm: 'pdv_gerir' },
+    { v: 'fiscal', r: 'Fiscal (NFC-e)', d: 'NFC-e e certificado', perm: 'pdv_fiscal' },
+    { v: 'pagamentos', r: 'Pagamentos / TEF', d: 'Maquininhas e formas', perm: 'pdv_gerir' },
   ] },
   { t: 'Acesso', itens: [
-    { v: 'pins', r: 'Senhas (PIN)', d: 'PIN dos operadores e supervisores', i: '🔑', perm: 'pdv_gerir' },
+    { v: 'pins', r: 'Senhas (PIN)', d: 'PIN dos operadores', perm: 'pdv_gerir' },
   ] },
 ]
 
@@ -57,24 +57,24 @@ export function PdvConfig() {
   if (!atual) {
     return (
       <div>
-        <Cabecalho titulo="Configurações do PDV" subtitulo="Escolha a área que deseja ajustar" />
-        <div className="space-y-6">
+        <Cabecalho titulo="Configurações do PDV" subtitulo="Escolha a área para ajustar" />
+        <div className="grid gap-x-6 gap-y-5 lg:grid-cols-2">
           {grupos.map((g) => (
             <section key={g.t}>
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{g.t}</h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <h2 className="mb-1.5 px-1 text-[11px] uppercase tracking-[0.08em] text-ink-soft">{g.t}</h2>
+              <ul className={`${cartaoCls} divide-y divide-line overflow-hidden`}>
                 {g.itens.map((x) => (
-                  <button key={x.v} onClick={() => abrir(x.v)}
-                    className="flex min-h-[76px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-400 hover:shadow active:scale-[0.99]">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-2xl">{x.i}</span>
-                    <span className="min-w-0">
-                      <span className="block font-semibold text-slate-900">{x.r}</span>
-                      <span className="block text-sm text-slate-500">{x.d}</span>
-                    </span>
-                    <span className="ml-auto text-slate-300">›</span>
-                  </button>
+                  <li key={x.v}>
+                    <button onClick={() => abrir(x.v)} className="flex min-h-[56px] w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-paper-dim active:bg-paper-dim">
+                      <span className="min-w-0">
+                        <span className="block font-medium text-ink">{x.r}</span>
+                        <span className="block truncate text-sm text-ink-soft">{x.d}</span>
+                      </span>
+                      <span aria-hidden className="text-ink-soft">›</span>
+                    </button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </section>
           ))}
         </div>
@@ -87,7 +87,7 @@ export function PdvConfig() {
       <Cabecalho titulo={atual.r} subtitulo={atual.d} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button className={btnSecCls} onClick={() => abrir(null)}>← Todas as configurações</button>
-        <select className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-3 text-sm" value={atual.v} onChange={(e) => abrir(e.target.value as Aba)} aria-label="Ir para outra área">
+        <select className={inputCls + ' !w-auto !min-h-[40px]'} value={atual.v} onChange={(e) => abrir(e.target.value as Aba)} aria-label="Ir para outra área">
           {grupos.map((g) => <optgroup key={g.t} label={g.t}>{g.itens.map((x) => <option key={x.v} value={x.v}>{x.r}</option>)}</optgroup>)}
         </select>
       </div>
