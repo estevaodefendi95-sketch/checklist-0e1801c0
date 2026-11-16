@@ -20,6 +20,7 @@ export function Tablet() {
   const [nd, setNd] = useState({ nome: '', tipo: 'tablet' })
   const [qrs, setQrs] = useState<Record<number, string>>({})
   const [copiado, setCopiado] = useState<string | null>(null)
+  const [qrGrande, setQrGrande] = useState<{ titulo: string; url: string } | null>(null)
   const s = useSalvarMsg()
   const carregar = useCallback(async () => {
     const [a, b, c, k] = await Promise.all([db.from('pdv_config').select('*').single(), db.from('pdv_mesas').select('*').eq('ativo', true).order('numero'), db.from('pdv_dispositivos').select('*').order('criado_em'), db.from('pdv_cartoes').select('numero,token').order('numero')])
@@ -131,23 +132,30 @@ export function Tablet() {
 
       <section className={`${cartaoCls} space-y-3 p-5`}>
         <Titulo n={3} t="Endereço do tablet" d="Use o endereço único em todos os tablets: na primeira vez o tablet pede o PIN de supervisor e a mesa, e depois abre sempre nela. Trocar de mesa depois: segure o topo da tela e digite o PIN. Dois tablets podem ficar na mesma mesa." />
-        <button className={`flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border p-4 text-left transition ${copiado === 'unico' ? 'border-green-500 bg-green-50' : 'border-brand/40 bg-brand-soft hover:border-brand'}`} onClick={() => copiar('unico', `${base}/mesa`)} title="Copiar endereço único">
-          <span><span className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">Endereço único (recomendado)</span><span className="block break-all text-base font-bold">{base}/mesa</span></span>
-          <span className="text-sm font-medium text-brand">{copiado === 'unico' ? '✓ Link copiado' : 'Copiar'}</span>
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/40 bg-brand-soft p-4">
+          <span className="min-w-0"><span className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">Endereço único (recomendado)</span><span className="block break-all text-base font-bold">{base}/mesa</span></span>
+          <span className="flex gap-2">
+            <button className={btnCls} onClick={() => setQrGrande({ titulo: 'Conectar tablet', url: `${base}/mesa` })}>Mostrar QR Code</button>
+            <button className={btnSecCls} onClick={() => copiar('unico', `${base}/mesa`)}>{copiado === 'unico' ? '✓ Copiado' : 'Copiar link'}</button>
+          </span>
+        </div>
         <p className="pt-1 text-xs text-ink-soft">O PIN é cadastrado em PDV · Configurações › Senhas (PIN), marcando "pode autorizar". Ou use o link de uma mesa específica abaixo.</p>
         {!mesas.length ? <Vazio texto="Cadastre mesas primeiro." /> : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {mesas.map((m) => (
-              <button key={m.id} className={`rounded-xl border p-3 text-left transition ${copiado === 'm' + m.id ? 'border-green-500 bg-green-50' : 'border-line hover:border-brand'}`} onClick={() => copiar('m' + m.id, urlMesa(m))} title="Copiar endereço do tablet">
+              <div key={m.id} className="rounded-xl border border-line p-3">
                 <span className="block text-lg font-bold">Mesa {m.numero}</span>
-                <span className="text-xs text-ink-soft">{copiado === 'm' + m.id ? '✓ Link copiado' : 'Toque para copiar o link'}</span>
-              </button>
+                <span className="mt-1 flex gap-3 text-xs font-medium">
+                  <button className="text-brand" onClick={() => setQrGrande({ titulo: `Tablet da mesa ${m.numero}`, url: urlMesa(m) })}>QR Code</button>
+                  <button className="text-brand" onClick={() => copiar('m' + m.id, urlMesa(m))}>{copiado === 'm' + m.id ? '✓ copiado' : 'copiar link'}</button>
+                </span>
+              </div>
             ))}
           </div>
         )}
       </section>
 
+      {qrGrande && <QrTela titulo={qrGrande.titulo} url={qrGrande.url} onFechar={() => setQrGrande(null)} />}
       <BateriaTablets />
 
       <section className={`${cartaoCls} space-y-3 p-5`}>
@@ -177,6 +185,21 @@ export function Tablet() {
           </ul>
         )}
       </section>
+    </div>
+  )
+}
+
+/** QR Code em tela cheia: aponte a câmera do tablet para o celular e o tablet abre o cardápio. */
+function QrTela({ titulo, url, onFechar }: { titulo: string; url: string; onFechar: () => void }) {
+  const [img, setImg] = useState('')
+  useEffect(() => { import('qrcode').then((Q) => Q.toDataURL(url, { width: 900, margin: 2 })).then(setImg) }, [url])
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-white p-5" onClick={onFechar}>
+      <h2 className="text-xl font-bold text-ink">{titulo}</h2>
+      {img ? <img src={img} alt="QR Code" className="w-[min(88vw,60vh)] max-w-[520px]" /> : <Carregando />}
+      <p className="max-w-full break-all text-center text-sm text-ink-soft">Aponte a câmera do tablet para este código</p>
+      <p className="max-w-full break-all text-center text-xs text-ink-soft">{url}</p>
+      <button className={btnSecCls} onClick={onFechar}>Fechar</button>
     </div>
   )
 }
