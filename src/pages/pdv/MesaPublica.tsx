@@ -267,7 +267,9 @@ export function MesaPublica() {
   const dialogoAcesso = acesso && (
     <AutorizarTablet token={token} modo={acesso} mesaAtual={e.mesa}
       onCancelar={() => setAcesso(null)} onSair={() => {
-        if (acesso === 'sair') { saindo.current = true; if (document.fullscreenElement) document.exitFullscreen().catch(() => { /* já saiu */ }); setAcesso(null); nav('/') }
+        const kiosk = (window as unknown as { PaggioKiosk?: { sair: () => void } }).PaggioKiosk
+        if (acesso === 'sair' && kiosk) { setAcesso(null); kiosk.sair() } // app do tablet: libera o aparelho
+        else if (acesso === 'sair') { saindo.current = true; if (document.fullscreenElement) document.exitFullscreen().catch(() => { /* já saiu */ }); setAcesso(null); nav('/') }
         else { setAcesso(null); carregar() }
       }}
       onTrocar={(tk) => { setAcesso(null); setCar([]); setMsg(''); setE(null); nav(`/mesa/${tk}`) }} />
