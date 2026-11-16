@@ -53,6 +53,8 @@ export function Comanda() {
   const [pessoasEd, setPessoasEd] = useState<string | null>(null)
   const [fiscalFim, setFiscalFim] = useState(false)
   const [aba, setAba] = useState<'pedido' | 'pagamento'>('pedido')
+  const [verConta, setVerConta] = useState(false)
+  const [maisAberto, setMaisAberto] = useState(false)
   const [forma, setForma] = useState<string>('credito')
   const [valor, setValor] = useState('')
   const [nsu, setNsu] = useState('')
@@ -415,6 +417,11 @@ export function Comanda() {
     return () => window.removeEventListener('keydown', h)
   })
 
+  // celular: depois de fechar a conta o caminho é só um — receber (sem aba intermediária)
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (c?.status === 'pedindo_conta' && window.matchMedia('(max-width: 1023px)').matches) setAba('pagamento')
+  }, [c?.status])
   if (!fim) return erro ? <Erro texto={erro} /> : <Carregando />
   if (!c) return <Vazio texto="Comanda não encontrada." />
   const qtdCarrinho = carrinho.reduce((s, x) => s + x.qtd, 0)
@@ -426,20 +433,24 @@ export function Comanda() {
         voltar={{ para: inicioAtendimento(), rotulo: inicioAtendimento() === '/atendimento' ? 'Mesas' : 'Salão' }}
         titulo={`${mesa ? `Mesa ${mesa.numero}` : 'Balcão'} · #${c.numero}`}
         subtitulo={`${func ? `Consumo de ${func.nome}` : c.nome_cliente ?? 'Sem nome'} · ${c.pessoas} pessoa(s)${c.pessoas > 0 && num(tot?.total) > 0 ? ` (${reais(num(tot?.total) / c.pessoas)} por pessoa)` : ''} · aberta às ${hora(c.aberta_em)}${c.status === 'pedindo_conta' ? ' · PEDIU A CONTA' : ''}${!aberta ? ` · ${c.status.toUpperCase()}` : ''}`}
+        acoes={aberta ? <button className={btnSecCls + ' lg:hidden'} aria-label="Mais ações" onClick={() => setMaisAberto(true)}>⋯</button> : undefined}
       />
       {aberta && (
         <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 flex gap-2 px-3 lg:hidden">
-          {qtdCarrinho === 0 && aba === 'pedido' && (
-            <button className={btnSecCls + ' flex-1 !bg-surface shadow-lg'} onClick={() => setAba('pagamento')}>Conta · {reais(num(tot?.total))}{restante < num(tot?.total) - 0.005 ? ` (resta ${reais(restante)})` : ''}</button>
-          )}
-          {aba === 'pagamento' && (
-            <button className={btnSecCls + ' flex-1 !bg-surface shadow-lg'} onClick={() => setAba('pedido')}>‹ Voltar ao pedido</button>
-          )}
-          {qtdCarrinho > 0 && aba === 'pedido' && (
+          {aba === 'pedido' && qtdCarrinho === 0 && lancavel && (
             <>
-              <button className={btnSecCls + ' !bg-surface shadow-lg'} onClick={() => document.getElementById('resumo-comanda')?.scrollIntoView({ behavior: 'smooth' })}>Revisar</button>
+              <button className={btnSecCls + ' !bg-surface shadow-lg'} onClick={() => setVerConta((v) => !v)}>{verConta ? 'Ocultar conta' : 'Ver conta'}</button>
+              <button className={btnCls + ' flex-1 shadow-lg'} onClick={() => pedirConta()}>Fechar conta · {reais(num(tot?.total))}</button>
+            </>
+          )}
+          {aba === 'pedido' && qtdCarrinho > 0 && (
+            <>
+              <button className={btnSecCls + ' !bg-surface shadow-lg'} onClick={() => { setVerConta(true); setTimeout(() => document.getElementById('resumo-comanda')?.scrollIntoView({ behavior: 'smooth' }), 50) }}>Revisar</button>
               <button className={btnCls + ' flex-1 shadow-lg'} onClick={enviar}>Enviar {qtdCarrinho} {qtdCarrinho === 1 ? 'item' : 'itens'} · {reais(totCarrinho)}</button>
             </>
+          )}
+          {aba === 'pagamento' && lancavel && (
+            <button className={btnSecCls + ' flex-1 !bg-surface shadow-lg'} onClick={() => setAba('pedido')}>‹ Voltar ao pedido</button>
           )}
         </div>
       )}
@@ -457,7 +468,7 @@ export function Comanda() {
       )}
       {msg && <Alerta className="mb-3" tipo="ok" texto={msg} onClick={() => setMsg('')} />}
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 hidden gap-2 lg:flex">
         <button className={aba === 'pedido' ? btnCls : btnSecCls} onClick={() => setAba('pedido')}>Pedido</button>
         <button className={aba === 'pagamento' ? btnCls : btnSecCls} onClick={() => setAba('pagamento')}>Conta e pagamento</button>
       </div>
@@ -527,7 +538,7 @@ export function Comanda() {
             )}
           </section>
         ) : aba === 'pedido' && c.status === 'pedindo_conta' ? (
-          <section className={`${cartaoCls} space-y-3 p-6 text-center`}>
+          <section className={`${cartaoCls} space-y-3 p-6 text-center max-lg:hidden`}>
             <h2 className="text-lg font-semibold text-alert">Conta fechada · aguardando recebimento</h2>
             <p className="text-sm text-ink-soft">Novos pedidos estão bloqueados. Para lançar mais um produto, reabra a comanda.</p>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -626,7 +637,7 @@ export function Comanda() {
         )}
 
         {agrupando && <AgruparComandas principalId={c.id} principalNumero={c.numero} onFechar={() => setAgrupando(false)} onOk={(n) => { setAgrupando(false); setMsg(`${n} comanda(s) agrupada(s) nesta conta.`); carregar() }} />}
-        <aside id="resumo-comanda" className={`${cartaoCls} h-fit space-y-3 p-4`}>
+        <aside id="resumo-comanda" className={`${cartaoCls} h-fit space-y-3 p-4 ${aba === 'pedido' && !verConta ? 'max-lg:hidden' : ''}`}>
           {carrinho.length > 0 && (
             <div className="space-y-2 rounded-xl bg-brand-soft p-3">
               <b className="text-sm">A enviar ({qtdCarrinho})</b>
@@ -678,19 +689,30 @@ export function Comanda() {
           {!aberta && c.status === 'fechada' && (pode('pdv_caixa') || pode('pdv_fiscal')) && <button className={btnSecCls + ' w-full'} onClick={() => setAba('pagamento')}>Cupom fiscal desta comanda</button>}
           {erro && <p className="rounded-xl bg-alert-soft px-3 py-2 text-sm text-alert">{erro}</p>}
           {aberta && (
-            <div className="grid grid-cols-2 gap-2 [&>button]:min-h-[52px] [&>button]:w-full">
+            <div className={`grid grid-cols-2 gap-2 [&>button]:min-h-[52px] [&>button]:w-full ${aba === 'pedido' ? 'max-lg:hidden' : ''}`}>
               {pode('pdv_caixa')
                 ? <button className={btnCls + ' col-span-2'} onClick={fechar}>Encerrar conta <Tecla t="F5" /></button>
                 : lancavel && <button className={btnCls + ' col-span-2'} onClick={() => pedirConta()}>Fechar comanda <Tecla t="F4" /></button>}
               {lancavel && pode('pdv_caixa') && <button className={btnSecCls} onClick={() => pedirConta()}>Fechar comanda <Tecla t="F4" /></button>}
-              {!lancavel && <button className={btnSecCls} onClick={() => pedirConta(true)}>Reimprimir pré-conta</button>}
-              <button className={btnSecCls} onClick={abrirPerfis}>Pessoas e perfis</button>
-              {!lancavel && aba === 'pagamento' && <button className={btnSecCls + ' col-span-2'} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>}
-              {pode('pdv_caixa') && <button className={btnPerigoCls + ' col-span-2 !min-h-[44px]'} onClick={cancelarComanda}>Cancelar comanda</button>}
+              {!lancavel && <button className={btnSecCls + ' max-lg:hidden'} onClick={() => pedirConta(true)}>Reimprimir pré-conta</button>}
+              <button className={btnSecCls + ' max-lg:hidden'} onClick={abrirPerfis}>Pessoas e perfis</button>
+              {!lancavel && aba === 'pagamento' && <button className={btnSecCls + ' col-span-2 max-lg:hidden'} onClick={reabrir}>Reabrir comanda <Tecla t="F6" /></button>}
+              {pode('pdv_caixa') && <button className={btnPerigoCls + ' col-span-2 !min-h-[44px] max-lg:hidden'} onClick={cancelarComanda}>Cancelar comanda</button>}
             </div>
           )}
         </aside>
       </div>
+      {maisAberto && aberta && (
+        <Modal titulo="Mais ações" fechar={() => setMaisAberto(false)}>
+          <div className="grid gap-2 [&>button]:min-h-[52px] [&>button]:w-full">
+            <button className={btnSecCls} onClick={() => { setMaisAberto(false); void abrirPerfis() }}>Pessoas e perfis</button>
+            {pode('pdv_operar') && <button className={btnSecCls} onClick={() => { setMaisAberto(false); void abrirMesas() }}>{mesa ? 'Trocar a mesa' : 'Vincular a uma mesa'}</button>}
+            {!lancavel && <button className={btnSecCls} onClick={() => { setMaisAberto(false); void pedirConta(true) }}>Reimprimir pré-conta</button>}
+            {!lancavel && <button className={btnSecCls} onClick={() => { setMaisAberto(false); void reabrir() }}>Reabrir comanda</button>}
+            {pode('pdv_caixa') && <button className={btnPerigoCls} onClick={() => { setMaisAberto(false); void cancelarComanda() }}>Cancelar comanda</button>}
+          </div>
+        </Modal>
+      )}
       {escMesa && (
         <Modal titulo={pedeMesa ? 'Em qual mesa o cliente está?' : mesa ? `Trocar a mesa (agora: ${mesa.numero})` : 'Vincular a uma mesa'} fechar={() => { setEscMesa(null); setPedeMesa(false) }}>
           {escMesa.salas.length > 1 && (

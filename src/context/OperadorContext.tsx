@@ -104,9 +104,9 @@ export function ExigeOperador({ children }: { children: ReactNode }) {
   return (
     <>
       {temPins && operador && (
-        <div className="mb-3 flex items-center justify-between gap-2 rounded-[10px] bg-paper-dim px-3 py-2 text-sm">
-          <span>Operador: <strong>{operador.nome}</strong></span>
-          <button className="rounded-lg px-2 py-1 font-medium text-brand hover:bg-brand-soft" onClick={sair}>Trocar</button>
+        <div className="mb-1 flex items-center justify-end gap-1 text-xs text-ink-soft">
+          <span>Operador: <strong className="text-ink">{operador.nome}</strong></span>
+          <button className="min-h-[32px] rounded-lg px-2 font-medium text-brand hover:bg-brand-soft" onClick={sair}>Trocar</button>
         </div>
       )}
       {children}

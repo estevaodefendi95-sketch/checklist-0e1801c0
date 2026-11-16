@@ -19,7 +19,7 @@ const tempo = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${Str
 /** Atendimento rápido (celular / maquininha): mesas em botões grandes → toca → lança pedido → vê a conta. */
 export function AtendimentoRapido() {
   const nav = useNavigate()
-  const { session, profile } = useAuth()
+  const { session } = useAuth()
   const eu = session?.user.id
   const [salas, setSalas] = useState<Sala[]>([])
   const [mesas, setMesas] = useState<Mesa[]>([])
@@ -92,7 +92,7 @@ export function AtendimentoRapido() {
     <div className="pb-24">
       <div className="mb-2 flex items-center justify-between">
         <h1 className="font-display text-2xl font-semibold">Mesas</h1>
-        <span className="text-sm text-ink-soft">{profile?.nome?.split(' ')[0]} · {comandas.length} aberta(s)</span>
+        <span className="text-sm text-ink-soft">{comandas.length} aberta(s)</span>
       </div>
       {erro && <Erro texto={erro} />}
       {aviso && <p className="mb-2 rounded-xl bg-amber-100 px-3 py-2 text-sm text-amber-900">{aviso}</p>}
@@ -106,11 +106,10 @@ export function AtendimentoRapido() {
         ))}
       </div>
       {salas.length > 1 && (
-        <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1">
-          {[{ id: '', nome: 'Todas as salas' }, ...salas].map((s) => (
-            <button key={s.id} onClick={() => setSalaId(s.id)} className={`min-h-[38px] shrink-0 rounded-lg px-3 text-sm ${salaId === s.id ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft'}`}>{s.nome}</button>
-          ))}
-        </div>
+        <select className={inputCls + ' mb-3 !min-h-[44px]'} aria-label="Sala" value={salaId} onChange={(e) => setSalaId(e.target.value)}>
+          <option value="">Todas as salas</option>
+          {salas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+        </select>
       )}
 
       {semMesaVis.length > 0 && (
