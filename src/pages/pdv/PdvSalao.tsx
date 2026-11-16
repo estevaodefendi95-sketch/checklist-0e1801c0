@@ -9,6 +9,7 @@ import { Comanda, Mesa, Sala, TAM_FORMA, Totais, dimMesa, minutosDesde, num, use
 import { usePermissoes } from '../../context/PermissoesContext'
 import { CheckinModal } from './CheckinRapido'
 import { ResumoDia } from './ResumoDia'
+import { ComandasDaMesa, agruparPorMesa, statusMesa, totalMesa } from './ComandasDaMesa'
 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
@@ -66,7 +67,9 @@ export function PdvSalao() {
   }, [])
   useAoVivo(['pdv_comandas', 'pdv_pedido_itens', 'pdv_mesas'], carregar)
 
-  const porMesa = useMemo(() => new Map(comandas.filter((c) => c.mesa_id).map((c) => [c.mesa_id!, c])), [comandas])
+  const grupos = useMemo(() => agruparPorMesa(comandas), [comandas])
+  const porMesa = useMemo(() => new Map([...grupos].map(([k, l]) => [k, l[0]])), [grupos])
+  const [verMesa, setVerMesa] = useState<Mesa | null>(null)
   const semMesa = comandas.filter((c) => !c.mesa_id)
   const sala = salaId ?? salas[0]?.id ?? null
   // no celular o mapa encolhe para caber na largura da tela (sem rolar para o lado); na edição fica em tamanho real
@@ -125,7 +128,8 @@ export function PdvSalao() {
   }
   function clicar(m: Mesa) {
     const c = porMesa.get(m.id)
-    if (c) nav(`/pdv/comanda/${c.id}`)
+    if ((grupos.get(m.id)?.length ?? 0) > 1) setVerMesa(m)
+    else if (c) nav(`/pdv/comanda/${c.id}`)
     else {
       setNovaMesa(m)
     }
@@ -251,7 +255,8 @@ export function PdvSalao() {
           <div ref={area} className="relative touch-none select-none" onPointerMove={editando ? mover : undefined} onPointerUp={editando ? soltar : undefined} style={{ minWidth: editando ? 640 : undefined, width: editando ? undefined : conteudoW, height: alturaMapa, transform: escala < 1 ? `scale(${escala})` : undefined, transformOrigin: 'top left' }}>
             {mesasSala.map((m) => {
               const c = porMesa.get(m.id)
-              const st = c ? c.status : 'livre'
+              const gl = grupos.get(m.id) ?? []
+              const st = c ? statusMesa(gl) : 'livre'
               return (
                 <button
                   key={m.id}
@@ -263,8 +268,8 @@ export function PdvSalao() {
                   <b className="text-base">{m.numero}</b>
                   {c ? (
                     <>
-                      <span>{reais(num(totais[c.id]?.total))}</span>
-                      <span className="opacity-70">{minutosDesde(c.aberta_em)} min</span>
+                      <span>{reais(totalMesa(gl, totais))}</span>
+                      <span className="opacity-70">{gl.length > 1 ? `${gl.length} comandas` : `${minutosDesde(c.aberta_em)} min`}</span>
                     </>
                   ) : (
                     <span className="opacity-60">{m.capacidade} lug.</span>
@@ -295,6 +300,7 @@ export function PdvSalao() {
       {!editando && (
         <button onClick={() => setNovaMesa({ id: '', numero: 'Balcão' } as Mesa)} className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap lg:left-auto lg:right-24 lg:translate-x-0 flex min-h-[56px] items-center gap-2 rounded-full bg-brand px-5 text-base font-semibold text-brand-ink shadow-xl md:hidden">+ Check-in</button>
       )}
+      {verMesa && <ComandasDaMesa mesa={verMesa} lista={grupos.get(verMesa.id) ?? []} totais={totais} onAbrir={(id) => nav(`/pdv/comanda/${id}`)} onNova={() => { setNovaMesa(verMesa); setVerMesa(null) }} fechar={() => setVerMesa(null)} />}
       {novaMesa && (
         <CheckinModal mesas={mesas} mesaInicial={novaMesa.id ? novaMesa : null} onClose={() => setNovaMesa(null)} onAberta={(id) => nav(`/pdv/comanda/${id}`)} />
       )}

@@ -354,7 +354,7 @@ export function Comanda() {
   async function vincularMesa(m: Mesa | null) {
     if (!c) return
     const { error } = await db.from('pdv_comandas').update({ mesa_id: m?.id ?? null }).eq('id', c.id)
-    if (error) return setErro(error.code === '23505' ? 'Essa mesa já tem outra comanda aberta.' : error.message)
+    if (error) return setErro(error.message)
     setEscMesa(null); setErro(''); setMsg(m ? `Comanda vinculada à mesa ${m.numero}.` : 'Comanda sem mesa (balcão).')
     carregar()
     if (pedeMesa) { balcaoOk.current = true; setPedeMesa(false); setTimeout(() => enviar(), 0) }
@@ -726,12 +726,12 @@ export function Comanda() {
             {escMesa.mesas.filter((m) => !escMesa.sala || m.sala_id === escMesa.sala).map((m) => {
               const ocup = escMesa.ocupadas.has(m.id) && m.id !== c.mesa_id
               return (
-                <button key={m.id} disabled={ocup} onClick={() => vincularMesa(m)}
-                  className={`min-h-[56px] rounded-xl border-2 text-lg font-bold ${m.id === c.mesa_id ? 'border-brand bg-brand-soft text-brand' : ocup ? 'border-line bg-paper-dim text-ink-soft opacity-40' : 'border-line bg-surface'}`}>{m.numero}</button>
+                <button key={m.id} onClick={() => vincularMesa(m)}
+                  className={`min-h-[56px] rounded-xl border-2 text-lg font-bold ${m.id === c.mesa_id ? 'border-brand bg-brand-soft text-brand' : ocup ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-line bg-surface'}`}>{m.numero}</button>
               )
             })}
           </div>
-          <p className="text-xs text-ink-soft">Mesas apagadas já têm comanda aberta. Itens já enviados continuam com o aviso que saiu na cozinha; os próximos saem com a mesa nova.</p>
+          <p className="text-xs text-ink-soft">Mesas em verde já têm outra comanda: a mesa pode ter várias. Itens já enviados continuam com o aviso que saiu na cozinha; os próximos saem com a mesa nova.</p>
           {(mesa || pedeMesa) && <button className={btnSecCls + ' w-full'} onClick={() => vincularMesa(null)}>{pedeMesa ? 'Sem mesa (balcão) · enviar assim mesmo' : 'Tirar da mesa (balcão)'}</button>}
         </Modal>
       )}

@@ -7,6 +7,7 @@ import { cacheGravar, cacheLer, erroDeRede } from '../../lib/offline'
 import { Comanda, Mesa, Sala, Totais, minutosDesde, num, useAoVivo } from '../../lib/pdv'
 import { useAuth } from '../../context/AuthContext'
 import { CheckinModal } from './CheckinRapido'
+import { ComandasDaMesa, agruparPorMesa, statusMesa, totalMesa } from './ComandasDaMesa'
 
 type Filtro = 'todas' | 'livres' | 'ocupadas' | 'conta' | 'minhas'
 const COR: Record<string, string> = {
@@ -58,7 +59,9 @@ export function AtendimentoRapido() {
   }, [])
   useAoVivo(['pdv_comandas', 'pdv_pedido_itens', 'pdv_mesas'], carregar)
 
-  const porMesa = useMemo(() => new Map(comandas.filter((c) => c.mesa_id).map((c) => [c.mesa_id!, c])), [comandas])
+  const grupos = useMemo(() => agruparPorMesa(comandas), [comandas])
+  const porMesa = useMemo(() => new Map([...grupos].map(([k, l]) => [k, l[0]])), [grupos])
+  const [verMesa, setVerMesa] = useState<Mesa | null>(null)
   const semMesa = comandas.filter((c) => !c.mesa_id)
   const minha = (c?: Comanda) => !!c && !!eu && (c as Comanda & { aberta_por?: string }).aberta_por === eu
   const nMinhas = comandas.filter((c) => minha(c)).length
@@ -80,7 +83,8 @@ export function AtendimentoRapido() {
 
   function tocar(m: Mesa) {
     const c = porMesa.get(m.id)
-    if (c) nav(`/pdv/comanda/${c.id}`)
+    if ((grupos.get(m.id)?.length ?? 0) > 1) setVerMesa(m)
+    else if (c) nav(`/pdv/comanda/${c.id}`)
     else setNovo(m)
   }
 
@@ -131,7 +135,8 @@ export function AtendimentoRapido() {
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {visiveis.map((m) => {
             const c = porMesa.get(m.id)
-            const st = c ? c.status : 'livre'
+            const gl = grupos.get(m.id) ?? []
+            const st = c ? statusMesa(gl) : 'livre'
             return (
               <button key={m.id} onClick={() => tocar(m)} className={`flex min-h-[96px] flex-col justify-between rounded-2xl border-2 p-2 text-left active:scale-[0.97] ${COR[st]}`}>
                 <span className="flex items-start justify-between">
@@ -140,8 +145,8 @@ export function AtendimentoRapido() {
                 </span>
                 {c ? (
                   <span>
-                    <span className="block text-base font-bold leading-tight">{reais(num(totais[c.id]?.total))}</span>
-                    <span className="block text-[11px] opacity-80">{c.pessoas} pes. · {tempo(minutosDesde(c.aberta_em))}{st === 'pedindo_conta' ? ' · CONTA' : ''}</span>
+                    <span className="block text-base font-bold leading-tight">{reais(totalMesa(gl, totais))}</span>
+                    <span className="block text-[11px] opacity-80">{gl.length > 1 ? `${gl.length} comandas` : `${c.pessoas} pes.`} · {tempo(minutosDesde(c.aberta_em))}{st === 'pedindo_conta' ? ' · CONTA' : ''}</span>
                   </span>
                 ) : <span className="text-xs text-ink-soft">livre · {m.capacidade} lug.</span>}
               </button>
@@ -151,6 +156,7 @@ export function AtendimentoRapido() {
       )}
 
       <button onClick={() => setNovo({ id: '', numero: 'Balcão' } as Mesa)} className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap lg:left-auto lg:right-24 lg:translate-x-0 flex min-h-[56px] items-center gap-2 rounded-full bg-brand px-5 text-base font-semibold text-brand-ink shadow-xl">+ Nova comanda</button>
+      {verMesa && <ComandasDaMesa mesa={verMesa} lista={grupos.get(verMesa.id) ?? []} totais={totais} onAbrir={(id) => nav(`/pdv/comanda/${id}`)} onNova={() => { setNovo(verMesa); setVerMesa(null) }} fechar={() => setVerMesa(null)} />}
       {novo && <CheckinModal mesas={mesas} mesaInicial={novo.id ? novo : null} onClose={() => setNovo(null)} onAberta={(id) => nav(`/pdv/comanda/${id}`)} />}
     </div>
   )

@@ -92,7 +92,7 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
       aberta_por: await idOperador(),
       taxa_servico_pct: (await db.from('pdv_config').select('taxa_servico_pct').single()).data?.taxa_servico_pct ?? 10,
     }).select('id').single()
-    if (error) { setSalvando(false); return setErro(error.code === '23505' ? (error.message.includes('numero') ? `A comanda nº ${nc} já está em uso. Use outro número.` : 'Essa mesa já tem comanda aberta.') : error.message) }
+    if (error) { setSalvando(false); return setErro(error.code === '23505' ? (error.message.includes('numero') ? `A comanda nº ${nc} já está em uso. Use outro número.` : 'Não foi possível abrir a comanda nessa mesa.') : error.message) }
     if (pessoas > 0) {
       const r = await db.rpc('pdv_aplicar_perfis', { p_comanda: data.id, p_perfis: Object.entries(qtds).map(([perfil_id, qtd]) => ({ perfil_id, qtd })), p_cobrancas: selCob })
       if (r.error) setErro('Comanda aberta, mas não consegui lançar couvert/rodízio: ' + r.error.message)
@@ -156,7 +156,7 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
           <section className={secao}>
             <div className="flex items-center justify-between text-sm font-medium"><span>Mesa</span><span className="text-xs font-normal text-ink-soft">{mesaSel ? `Mesa ${mesaSel.numero} · ${mesaSel.capacidade} lugares${pessoasTot > mesaSel.capacidade ? ' · grupo maior que a mesa' : ''}` : 'sem mesa (balcão / fila)'}</span></div>
             <input className={inputCls + ' !min-h-[42px]'} inputMode="search" placeholder="Buscar mesa pelo número…" value={buscaMesa} onChange={(e) => setBuscaMesa(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && mesasVis.length === 1 && !ocupadas.has(mesasVis[0].id)) { escolherMesa(mesasVis[0]); e.preventDefault() } }} />
+              onKeyDown={(e) => { if (e.key === 'Enter' && mesasVis.length === 1) { escolherMesa(mesasVis[0]); e.preventDefault() } }} />
             {salas.length > 1 && (
               <div className="flex gap-1.5 overflow-x-auto">
                 <button type="button" className={chipCls(!salaF)} onClick={() => setSalaF('')}>Todas</button>
@@ -167,11 +167,11 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
               <button type="button" onClick={() => setMesaId('')} className={`min-h-[56px] rounded-xl border-2 px-1 text-xs font-medium leading-tight ${!mesaId ? 'border-brand bg-brand-soft text-brand' : 'border-line'}`}>Sem mesa</button>
               {mesasVis.map((m) => {
                 const oc = ocupadas.has(m.id); const rv = resPorMesa.get(m.id)
-                const cls = mesaId === m.id ? 'border-brand bg-brand-soft text-brand' : oc ? 'border-alert/60 bg-alert-soft text-alert' : rv ? 'border-amber-400 bg-amber-50 text-amber-900' : 'border-line'
+                const cls = mesaId === m.id ? 'border-brand bg-brand-soft text-brand' : oc ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : rv ? 'border-amber-400 bg-amber-50 text-amber-900' : 'border-line'
                 return (
-                  <button type="button" key={m.id} disabled={oc} onClick={() => escolherMesa(m)} className={`min-h-[56px] rounded-xl border-2 px-1 leading-tight ${cls} ${oc ? 'cursor-not-allowed' : ''}`}>
+                  <button type="button" key={m.id} onClick={() => escolherMesa(m)} className={`min-h-[56px] rounded-xl border-2 px-1 leading-tight ${cls}`}>
                     <b className="block text-base">{m.numero}</b>
-                    <span className="text-[10px]">{oc ? 'ocupada' : rv ? `reserva ${rv.hora.slice(0, 5)}` : `${m.capacidade} lug.`}</span>
+                    <span className="text-[10px]">{oc ? 'com comanda' : rv ? `reserva ${rv.hora.slice(0, 5)}` : `${m.capacidade} lug.`}</span>
                   </button>
                 )
               })}
@@ -180,7 +180,7 @@ export function CheckinModal({ mesas, mesaInicial, nomeInicial, telInicial, onCl
             <div className="flex flex-wrap gap-3 text-[11px] text-ink-soft">
               <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-line align-middle" />livre</span>
               <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-amber-400 bg-amber-50 align-middle" />reservada hoje</span>
-              <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-alert/60 bg-alert-soft align-middle" />ocupada</span>
+              <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-emerald-500 bg-emerald-50 align-middle" />com comanda (pode abrir outra)</span>
             </div>
           </section>
         </div>
