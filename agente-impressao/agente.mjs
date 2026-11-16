@@ -18,7 +18,8 @@ function codifica(txt, codepage) {
   const out = []
   for (const ch of String(txt)) {
     const c = ch.codePointAt(0)
-    if (c < 128) out.push(c)
+    if (c === 0xa0) out.push(32)
+    else if (c < 128) out.push(c)
     else if (codepage === 'CP860' && CP860[ch] !== undefined) out.push(CP860[ch])
     else out.push(...Buffer.from(ch.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x00-\x7f]/g, '?')))
   }
@@ -26,14 +27,14 @@ function codifica(txt, codepage) {
 }
 
 class Cupom {
-  constructor(imp) { this.imp = imp; this.cols = imp.colunas || 48; this.b = [Buffer.from([ESC, 0x40])]; if (imp.codepage === 'CP860') this.b.push(Buffer.from([ESC, 0x74, 3])) }
+  constructor(imp) { this.imp = imp; this.cols = imp.colunas || 42; this.b = [Buffer.from([ESC, 0x40])]; if (imp.codepage === 'CP860') this.b.push(Buffer.from([ESC, 0x74, 3])) }
   raw(...n) { this.b.push(Buffer.from(n)); return this }
   txt(t = '') { this.b.push(codifica(t, this.imp.codepage), Buffer.from([LF])); return this }
   centro(on) { return this.raw(ESC, 0x61, on ? 1 : 0) }
   negrito(on) { return this.raw(ESC, 0x45, on ? 1 : 0) }
-  grande(on) { return this.raw(GS, 0x21, on ? 0x11 : 0) }
+  grande(on) { this.g = on; return this.raw(GS, 0x21, on ? 0x11 : 0) }
   linha(c = '-') { return this.txt(c.repeat(this.cols)) }
-  par(esq, dir) { const e = String(esq), d = String(dir); const esp = Math.max(1, this.cols - e.length - d.length); return this.txt(e.slice(0, this.cols - d.length - 1) + ' '.repeat(esp) + d) }
+  par(esq, dir) { const w = this.g ? Math.floor(this.cols / 2) : this.cols; const e = String(esq), d = String(dir); const esp = Math.max(1, w - e.length - d.length); return this.txt(e.slice(0, Math.max(0, w - d.length - 1)) + ' '.repeat(esp) + d) }
   fim() { for (let i = 0; i < 4; i++) this.b.push(Buffer.from([LF])); if (this.imp.corta_papel) this.b.push(Buffer.from([GS, 0x56, 0x42, 0x00])); return Buffer.concat(this.b) }
 }
 const brl = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
