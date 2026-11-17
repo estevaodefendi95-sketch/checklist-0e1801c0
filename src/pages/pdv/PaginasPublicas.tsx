@@ -34,7 +34,8 @@ const hojeISO = () => new Date().toLocaleDateString('en-CA')
 
 /** /reservar — reserva online: escolhe pessoas, dia e horário livre. */
 export function ReservarPublico() {
-  const [cfg, setCfg] = useState<{ tema: CardTema; ativo_online: boolean; max_pessoas: number; dias_futuro: number; confirmacao_automatica: boolean } | null>(null)
+  const [cfg, setCfg] = useState<{ tema: CardTema; ativo_online: boolean; max_pessoas: number; dias_futuro: number; confirmacao_automatica: boolean; salas?: { id: string; nome: string; lugares: number }[] } | null>(null)
+  const [sala, setSala] = useState('')
   const [pessoas, setPessoas] = useState(2)
   const [data, setData] = useState('')
   const [slots, setSlots] = useState<Slot[] | null>(null)
@@ -46,9 +47,9 @@ export function ReservarPublico() {
   useEffect(() => {
     if (!data) return
     let vivo = true
-    chamar<{ slots: Slot[] }>({ acao: 'slots', data, pessoas }).then((r) => { if (vivo) { setSlots(r.slots ?? []); setHora((h) => (r.slots ?? []).some((s) => s.hora === h && s.livre) ? h : '') } })
+    chamar<{ slots: Slot[] }>({ acao: 'slots', data, pessoas, sala_id: sala || undefined }).then((r) => { if (vivo) { setSlots(r.slots ?? []); setHora((h) => (r.slots ?? []).some((s) => s.hora === h && s.livre) ? h : '') } })
     return () => { vivo = false }
-  }, [data, pessoas])
+  }, [data, pessoas, sala])
   const max = useMemo(() => new Date(Date.now() + (cfg?.dias_futuro ?? 60) * 864e5).toLocaleDateString('en-CA'), [cfg])
   if (!cfg) return <p className="p-6 text-center">Carregando…</p>
   // falha de rede ou erro do servidor: a resposta vem sem o tema
@@ -58,11 +59,13 @@ export function ReservarPublico() {
 
   async function enviar() {
     setErro('')
-    if (!data || !hora) return setErro('Escolha o dia e o horário.')
+    if (cfg?.salas?.length && !sala) return setErro('Escolha o salão.')
+    if (!data) return setErro('Escolha o dia.')
+    if (!hora) return setErro('Escolha o horário da reserva.')
     if (!nome.trim()) return setErro('Informe seu nome.')
     if (tel.replace(/\D/g, '').length < 10) return setErro('Informe seu telefone com DDD.')
     setEnv(true)
-    const r = await chamar<{ ok?: boolean; status: string }>({ acao: 'reservar', nome, telefone: tel, pessoas, data, hora, ocasiao: oc, obs })
+    const r = await chamar<{ ok?: boolean; status: string }>({ acao: 'reservar', nome, telefone: tel, pessoas, data, hora, ocasiao: oc, obs, sala_id: sala || undefined })
     setEnv(false)
     if (r.erro || !r.ok) return setErro(r.erro ?? 'Não foi possível reservar.')
     setOk({ status: r.status })
@@ -94,21 +97,39 @@ export function ReservarPublico() {
               </div>
               <p className="text-center text-xs opacity-60">Para mais de {cfg.max_pessoas} pessoas, fale com a gente.</p>
             </section>
+            {!!cfg.salas?.length && (
+              <section className="space-y-2 rounded-2xl bg-white p-4 shadow">
+                <h2 className="font-semibold">2. Qual salão?</h2>
+                <div className="grid gap-2">
+                  {cfg.salas.map((s) => (
+                    <button key={s.id} type="button" onClick={() => { setSala(s.id); setHora('') }} className={`flex min-h-[52px] items-center justify-between rounded-xl border-2 px-4 text-left ${sala === s.id ? 'text-white' : 'border-black/15'}`} style={sala === s.id ? { background: p, borderColor: p } : undefined}>
+                      <b>{s.nome}</b><span className="text-xs opacity-70">até {s.lugares} lugares</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
             <section className="space-y-2 rounded-2xl bg-white p-4 shadow">
-              <h2 className="font-semibold">2. Qual dia?</h2>
+              <h2 className="font-semibold">{cfg.salas?.length ? '3' : '2'}. Qual dia e horário?</h2>
               <input type="date" className={inp} min={hojeISO()} max={max} value={data} onChange={(e) => setData(e.target.value)} />
+              {!data && <p className="text-sm opacity-60">Escolha o dia para ver os horários.</p>}
+              {data && !slots && <p className="text-sm opacity-60">Buscando horários…</p>}
               {data && slots && (
                 slots.length === 0 ? <p className="text-sm opacity-70">Sem horários neste dia. Escolha outra data.</p> : (
-                  <div className="grid grid-cols-4 gap-2 pt-1">
+                  <div className="space-y-2 pt-1">
+                    <p className="text-sm font-medium">Que horas?{slots.every((s) => !s.livre) && <span className="ml-1 font-normal text-red-700">Lotado{sala ? ' neste salão' : ''} neste dia. Tente outro salão ou data.</span>}</p>
+                    <div className="grid grid-cols-4 gap-2">
                     {slots.map((s) => (
                       <button key={s.hora} disabled={!s.livre} onClick={() => setHora(s.hora)} className={`rounded-xl border-2 py-2.5 text-sm font-semibold ${!s.livre ? 'border-black/10 text-black/30 line-through' : hora === s.hora ? 'text-white' : 'border-black/15'}`} style={hora === s.hora ? { background: p, borderColor: p } : undefined}>{s.hora}</button>
                     ))}
+                    </div>
+                    <p className="text-xs opacity-60">Horários riscados já estão lotados.</p>
                   </div>
                 )
               )}
             </section>
             <section className="space-y-3 rounded-2xl bg-white p-4 shadow">
-              <h2 className="font-semibold">3. Seus dados</h2>
+              <h2 className="font-semibold">{cfg.salas?.length ? '4' : '3'}. Seus dados</h2>
               <input className={inp} placeholder="Nome *" value={nome} onChange={(e) => setNome(e.target.value)} />
               <input className={inp} inputMode="tel" placeholder="Telefone (WhatsApp) *" value={tel} onChange={(e) => setTel(e.target.value)} />
               <select className={inp} value={oc} onChange={(e) => setOc(e.target.value)}>{OCASIOES.map((o) => <option key={o} value={o}>{o || 'Ocasião (opcional)'}</option>)}</select>

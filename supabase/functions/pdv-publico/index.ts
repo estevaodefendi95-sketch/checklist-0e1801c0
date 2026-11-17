@@ -26,7 +26,7 @@ function noHorario(h: { dia: number; inicio: string; fim: string }[] | null) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { acao, data, pessoas, hora, nome, telefone, ocasiao, obs } = await req.json();
+    const { acao, data, pessoas, hora, nome, telefone, ocasiao, obs, sala_id } = await req.json();
     const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!).schema("checklist");
     const { data: cfg } = await db.from("pdv_config").select("tablet_tema,tablet_mensagem_boas_vindas").eq("id", 1).single();
 
@@ -43,12 +43,21 @@ Deno.serve(async (req) => {
     }
 
     const { data: rc } = await db.from("reservas_config").select("ativo_online,max_pessoas,dias_futuro,confirmacao_automatica").eq("id", 1).single();
-    if (acao === "config") return json({ tema: cfg?.tablet_tema ?? {}, ...rc });
+    const uuidOk = (x: unknown) => /^[0-9a-f-]{36}$/i.test(String(x ?? ""));
+    if (acao === "config") {
+      const [sl, ms] = await Promise.all([
+        db.from("pdv_salas").select("id,nome").eq("ativo", true).order("ordem").order("nome"),
+        db.from("pdv_mesas").select("sala_id,capacidade").eq("ativo", true),
+      ]);
+      // só aparecem salões que têm mesas (a lotação do salão é a soma dos lugares das mesas)
+      const salas = (sl.data ?? []).map((s: any) => ({ id: s.id, nome: s.nome, lugares: (ms.data ?? []).filter((m: any) => m.sala_id === s.id).reduce((t: number, m: any) => t + (m.capacidade ?? 0), 0) })).filter((s: any) => s.lugares > 0);
+      return json({ tema: cfg?.tablet_tema ?? {}, ...rc, salas });
+    }
 
     if (acao === "slots") {
       const d = String(data ?? "");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return json({ erro: "Data inválida." });
-      const { data: s, error } = await db.rpc("reservas_slots", { p_data: d, p_pessoas: Math.max(1, Math.floor(Number(pessoas) || 1)) });
+      const { data: s, error } = await db.rpc("reservas_slots", { p_data: d, p_pessoas: Math.max(1, Math.floor(Number(pessoas) || 1)), p_sala: uuidOk(sala_id) ? sala_id : null });
       if (error) return json({ erro: "Não foi possível consultar os horários." });
       return json({ slots: s ?? [] });
     }
@@ -56,7 +65,7 @@ Deno.serve(async (req) => {
     if (acao === "reservar") {
       const { data: r, error } = await db.rpc("reserva_criar", {
         p_nome: String(nome ?? "").slice(0, 80), p_telefone: String(telefone ?? ""), p_pessoas: Math.floor(Number(pessoas) || 0),
-        p_data: String(data ?? ""), p_hora: String(hora ?? ""), p_origem: "site", p_ocasiao: String(ocasiao ?? "").slice(0, 60), p_obs: String(obs ?? "").slice(0, 300),
+        p_data: String(data ?? ""), p_hora: String(hora ?? ""), p_origem: "site", p_ocasiao: String(ocasiao ?? "").slice(0, 60), p_obs: String(obs ?? "").slice(0, 300), p_sala: uuidOk(sala_id) ? sala_id : null,
       });
       if (error) return json({ erro: error.message });
       return json({ ok: true, ...r });
