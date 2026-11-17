@@ -13,7 +13,7 @@ import { ComandasDaMesa, agruparPorMesa, contasPedidas, statusMesa, totalMesa } 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
   aberta: 'border-emerald-500 bg-emerald-100 text-emerald-900',
-  parcial: 'border-orange-500 bg-orange-100 text-orange-900',
+  parcial: 'border-violet-500 bg-violet-100 text-violet-900',
   pedindo_conta: 'border-red-500 bg-red-100 text-red-800',
 }
 
@@ -272,7 +272,7 @@ export function PdvSalao() {
         </div>
       )}
       <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-soft">
-        <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-orange-700">▣ parte já pediu a conta</span><span className="text-red-700">▣ todas pediram a conta (aguardando pagamento)</span>
+        <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-violet-700">▣ parte já pediu a conta</span><span className="text-red-700">▣ todas pediram a conta (aguardando pagamento)</span>
       </div>
       {semMesa.length > 0 && (
         <section className={`mt-6 ${visao === 'lista' ? 'hidden md:block' : ''}`}>

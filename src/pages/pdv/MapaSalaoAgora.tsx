@@ -8,7 +8,7 @@ import { agruparPorMesa, contasPedidas, statusMesa, totalMesa } from './Comandas
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink-soft',
   aberta: 'border-ok/70 bg-ok-soft text-ink',
-  parcial: 'border-orange-500 bg-orange-100 text-orange-900',
+  parcial: 'border-violet-500 bg-violet-100 text-violet-900',
   pedindo_conta: 'border-alert bg-alert-soft text-ink',
 }
 const tempo = (min: number) => (min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`)
@@ -114,7 +114,7 @@ export function MapaSalaoAgora() {
         </section>
       )}
       <div className="flex flex-wrap gap-3 text-xs text-ink-soft">
-        <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-orange-700">▣ parte já pediu a conta</span><span className="text-red-700">▣ todas pediram a conta</span>
+        <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-violet-700">▣ parte já pediu a conta</span><span className="text-red-700">▣ todas pediram a conta</span>
       </div>
     </div>
   )

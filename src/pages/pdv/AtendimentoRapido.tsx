@@ -13,7 +13,7 @@ type Filtro = 'todas' | 'livres' | 'ocupadas' | 'conta' | 'minhas'
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
   aberta: 'border-emerald-500 bg-emerald-100 text-emerald-900',
-  parcial: 'border-orange-500 bg-orange-100 text-orange-900',
+  parcial: 'border-violet-500 bg-violet-100 text-violet-900',
   pedindo_conta: 'border-red-500 bg-red-100 text-red-800',
 }
 const tempo = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`)
