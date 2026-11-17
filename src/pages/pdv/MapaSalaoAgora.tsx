@@ -3,11 +3,12 @@ import { db } from '../../lib/supabase'
 import { Carregando, Erro, cartaoCls } from '../../components/Estado'
 import { reais } from '../../lib/formato'
 import { Comanda, Mesa, Sala, Totais, minutosDesde, num, useAoVivo } from '../../lib/pdv'
-import { agruparPorMesa, statusMesa, totalMesa } from './ComandasDaMesa'
+import { agruparPorMesa, contasPedidas, statusMesa, totalMesa } from './ComandasDaMesa'
 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink-soft',
   aberta: 'border-ok/70 bg-ok-soft text-ink',
+  parcial: 'border-orange-500 bg-orange-100 text-orange-900',
   pedindo_conta: 'border-alert bg-alert-soft text-ink',
 }
 const tempo = (min: number) => (min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`)
@@ -76,7 +77,7 @@ export function MapaSalaoAgora() {
                 const l = porMesa.get(m.id)
                 const st = l ? statusMesa(l) : 'livre'
                 return (
-                  <div key={m.id} className={`rounded-xl border-2 p-2.5 text-center ${COR[st]}`} aria-label={`Mesa ${m.numero}: ${l ? (st === 'pedindo_conta' ? 'pedindo a conta' : 'ocupada') : 'livre'}`}>
+                  <div key={m.id} className={`rounded-xl border-2 p-2.5 text-center ${COR[st]}`} aria-label={`Mesa ${m.numero}: ${l ? (st === 'pedindo_conta' ? 'pedindo a conta' : st === 'parcial' ? 'parte pediu a conta' : 'ocupada') : 'livre'}`}>
                     <p className="text-lg font-bold leading-tight">{m.numero}</p>
                     {l ? (
                       <>
@@ -87,7 +88,8 @@ export function MapaSalaoAgora() {
                           </>
                         ) : <p className="truncate text-xs font-medium">{l[0].nome_cliente || `Comanda ${l[0].numero}`}</p>}
                         <p className="text-[11px] opacity-80">{tempo(minutosDesde(l[0].aberta_em))} · {reais(totalMesa(l, totais))}</p>
-                        {st === 'pedindo_conta' && <p className="text-[11px] font-semibold">pediu a conta</p>}
+                        {st === 'pedindo_conta' && <p className="text-[11px] font-semibold">{l.length > 1 ? 'todas pediram a conta' : 'pediu a conta'}</p>}
+                        {st === 'parcial' && <p className="text-[11px] font-semibold">{contasPedidas(l)} de {l.length} pediram conta</p>}
                       </>
                     ) : <p className="text-[11px]">livre</p>}
                   </div>
@@ -111,6 +113,9 @@ export function MapaSalaoAgora() {
           </div>
         </section>
       )}
+      <div className="flex flex-wrap gap-3 text-xs text-ink-soft">
+        <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-orange-700">▣ parte já pediu a conta</span><span className="text-red-700">▣ todas pediram a conta</span>
+      </div>
     </div>
   )
 }

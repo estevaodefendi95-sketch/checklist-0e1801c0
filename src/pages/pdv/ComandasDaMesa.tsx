@@ -11,7 +11,12 @@ export function agruparPorMesa(comandas: Comanda[]) {
   return g
 }
 export const totalMesa = (l: Comanda[], totais: Record<string, Totais>) => l.reduce((s, c) => s + num(totais[c.id]?.total), 0)
-export const statusMesa = (l: Comanda[]) => (l.length && l.every((c) => c.status === 'pedindo_conta') ? 'pedindo_conta' : 'aberta')
+/** verde = tudo aberto · laranja = parte já pediu a conta · vermelho = todas pediram a conta */
+export const statusMesa = (l: Comanda[]) => {
+  const n = l.filter((c) => c.status === 'pedindo_conta').length
+  return !l.length ? 'aberta' : n === l.length ? 'pedindo_conta' : n > 0 ? 'parcial' : 'aberta'
+}
+export const contasPedidas = (l: Comanda[]) => l.filter((c) => c.status === 'pedindo_conta').length
 
 /** Lista as comandas de uma mesa com o valor de cada uma. */
 export function ComandasDaMesa({ mesa, lista, totais, onAbrir, onNova, fechar }: {

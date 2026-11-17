@@ -8,11 +8,12 @@ import { cacheGravar, cacheLer, erroDeRede } from '../../lib/offline'
 import { Comanda, Mesa, Sala, TAM_FORMA, Totais, dimMesa, minutosDesde, num, useAoVivo } from '../../lib/pdv'
 import { usePermissoes } from '../../context/PermissoesContext'
 import { CheckinModal } from './CheckinRapido'
-import { ComandasDaMesa, agruparPorMesa, statusMesa, totalMesa } from './ComandasDaMesa'
+import { ComandasDaMesa, agruparPorMesa, contasPedidas, statusMesa, totalMesa } from './ComandasDaMesa'
 
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
   aberta: 'border-emerald-500 bg-emerald-100 text-emerald-900',
+  parcial: 'border-orange-500 bg-orange-100 text-orange-900',
   pedindo_conta: 'border-red-500 bg-red-100 text-red-800',
 }
 
@@ -258,7 +259,7 @@ export function PdvSalao() {
                   {c ? (
                     <>
                       <span>{reais(totalMesa(gl, totais))}</span>
-                      <span className="opacity-70">{gl.length > 1 ? `${gl.length} comandas` : `${minutosDesde(c.aberta_em)} min`}</span>
+                      <span className="opacity-70">{gl.length > 1 ? (st === 'parcial' ? `${contasPedidas(gl)}/${gl.length} pediram conta` : `${gl.length} comandas`) : `${minutosDesde(c.aberta_em)} min`}</span>
                     </>
                   ) : (
                     <span className="opacity-60">{m.capacidade} lug.</span>
@@ -271,7 +272,7 @@ export function PdvSalao() {
         </div>
       )}
       <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-soft">
-        <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-red-700">▣ conta fechada (aguardando pagamento)</span>
+        <span>▢ livre</span><span className="text-emerald-700">▣ conta aberta</span><span className="text-orange-700">▣ parte já pediu a conta</span><span className="text-red-700">▣ todas pediram a conta (aguardando pagamento)</span>
       </div>
       {semMesa.length > 0 && (
         <section className={`mt-6 ${visao === 'lista' ? 'hidden md:block' : ''}`}>

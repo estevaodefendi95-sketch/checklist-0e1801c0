@@ -7,12 +7,13 @@ import { cacheGravar, cacheLer, erroDeRede } from '../../lib/offline'
 import { Comanda, Mesa, Sala, Totais, minutosDesde, num, useAoVivo } from '../../lib/pdv'
 import { useAuth } from '../../context/AuthContext'
 import { CheckinModal } from './CheckinRapido'
-import { ComandasDaMesa, agruparPorMesa, statusMesa, totalMesa } from './ComandasDaMesa'
+import { ComandasDaMesa, agruparPorMesa, contasPedidas, statusMesa, totalMesa } from './ComandasDaMesa'
 
 type Filtro = 'todas' | 'livres' | 'ocupadas' | 'conta' | 'minhas'
 const COR: Record<string, string> = {
   livre: 'border-line bg-surface text-ink',
   aberta: 'border-emerald-500 bg-emerald-100 text-emerald-900',
+  parcial: 'border-orange-500 bg-orange-100 text-orange-900',
   pedindo_conta: 'border-red-500 bg-red-100 text-red-800',
 }
 const tempo = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`)
@@ -146,7 +147,7 @@ export function AtendimentoRapido() {
                 {c ? (
                   <span>
                     <span className="block text-base font-bold leading-tight">{reais(totalMesa(gl, totais))}</span>
-                    <span className="block text-[11px] opacity-80">{gl.length > 1 ? `${gl.length} comandas` : `${c.pessoas} pes.`} · {tempo(minutosDesde(c.aberta_em))}{st === 'pedindo_conta' ? ' · CONTA' : ''}</span>
+                    <span className="block text-[11px] opacity-80">{gl.length > 1 ? `${gl.length} comandas` : `${c.pessoas} pes.`} · {tempo(minutosDesde(c.aberta_em))}{st === 'pedindo_conta' ? ' · CONTA' : st === 'parcial' ? ` · ${contasPedidas(gl)}/${gl.length} conta` : ''}</span>
                   </span>
                 ) : <span className="text-xs text-ink-soft">livre · {m.capacidade} lug.</span>}
               </button>
