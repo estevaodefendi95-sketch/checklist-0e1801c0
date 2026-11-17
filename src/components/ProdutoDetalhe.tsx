@@ -1,5 +1,5 @@
 import { FotoPrato } from './FotoPrato'
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 
 // Detalhe do produto no cardápio do cliente: foto grande, descrição completa e adicionais.
 export interface DetOpcao { id: string; nome: string; preco_adicional: number }
@@ -19,15 +19,16 @@ export function resumoOpcoes(grupos: DetGrupo[], ids: string[]) {
 }
 const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa, fotos = true, className = 'fixed inset-0' }: {
-  produto: DetProduto; vars: CSSProperties; onFechar: () => void; previa?: boolean; fotos?: boolean; className?: string
+export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa, somenteLeitura, fotos = true, className = 'fixed inset-0' }: {
+  produto: DetProduto; vars: CSSProperties; onFechar: () => void; previa?: boolean; somenteLeitura?: boolean; fotos?: boolean; className?: string
   onAdicionar?: (qtd: number, opcoes: string[], obs: string) => void
 }) {
   const [sel, setSel] = useState<Record<string, string[]>>({})
   const [obs, setObs] = useState('')
   const [qtd, setQtd] = useState(1)
   const [aviso, setAviso] = useState('')
-  const grupos = p.grupos ?? []
+  const grupos = somenteLeitura ? [] : (p.grupos ?? [])
+  useEffect(() => { const f = (e: KeyboardEvent) => e.key === 'Escape' && onFechar(); window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f) }, [onFechar])
   const adicional = adicionalDe(grupos, Object.values(sel).flat())
 
   function alternar(g: DetGrupo, o: DetOpcao) {
@@ -96,8 +97,13 @@ export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa
               })}
             </fieldset>
           ))}
-          <input className="w-full rounded-xl border-2 border-[#e5e5e5] p-3 text-base" placeholder="Alguma observação? (sem cebola, ponto da carne…)" value={obs} onChange={(e) => setObs(e.target.value)} disabled={previa} />
+          {!somenteLeitura && <input className="w-full rounded-xl border-2 border-[#e5e5e5] p-3 text-base" placeholder="Alguma observação? (sem cebola, ponto da carne…)" value={obs} onChange={(e) => setObs(e.target.value)} disabled={previa} />}
         </div>
+        {somenteLeitura ? (
+          <div className="shrink-0 border-t border-black/10 p-4">
+            <button type="button" className="min-h-[52px] w-full rounded-xl px-4 text-base font-semibold text-white" style={{ background: 'var(--p)' }} onClick={onFechar}>Voltar ao cardápio</button>
+          </div>
+        ) : (
         <div className="shrink-0 space-y-2 border-t border-black/10 p-4">
           {aviso && <p className="text-sm" style={{ color: 'var(--p)' }}>{aviso}</p>}
           <div className="flex items-center gap-3">
@@ -111,6 +117,7 @@ export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   )

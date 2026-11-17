@@ -53,7 +53,7 @@ export function CardapioCliente({ tema, mesa, boasVindas, categorias, produtos, 
     const foto = fotos ? (p.foto_url
       ? <img src={p.foto_url} alt="" loading="lazy" className={vertical ? 'aspect-[4/3] w-full object-cover' : 'h-24 w-24 shrink-0 rounded-xl object-cover'} />
       : <span className={`grid place-items-center text-3xl font-semibold ${vertical ? 'aspect-[4/3] w-full' : 'h-24 w-24 shrink-0 rounded-xl'}`} style={{ background: 'color-mix(in srgb, var(--p) 10%, white)', color: 'var(--p)' }}>{p.nome.slice(0, 1).toUpperCase()}</span>) : null
-    const controle = somenteLeitura ? null : q > 0 ? (
+    const controle = somenteLeitura ? (onAbrir ? <span className="grid h-9 w-9 place-items-center rounded-full text-xl shadow-sm ring-1 ring-black/10" style={{ color: 'var(--p)' }} aria-hidden>›</span> : null) : q > 0 ? (
       <span className="flex items-center gap-2 rounded-full bg-white px-1 py-1 shadow" onClick={(e) => e.stopPropagation()}>
         <button className="grid h-8 w-8 place-items-center rounded-full border text-lg" onClick={() => onMenos(p.id)} aria-label="Remover um">−</button>
         <b className="min-w-4 text-center text-sm">{q}</b>

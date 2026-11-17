@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../integrations/supabase/client'
+import { ProdutoDetalhe } from '../../components/ProdutoDetalhe'
 import { CardapioCliente, type CardCat, type CardProd, type CardTema } from '../../components/CardapioCliente'
 
 async function chamar<T>(corpo: Record<string, unknown>): Promise<T & { erro?: string }> {
@@ -11,6 +12,7 @@ async function chamar<T>(corpo: Record<string, unknown>): Promise<T & { erro?: s
 /** /cardapio — cardápio digital só para consulta (link enviado pelo WhatsApp, Instagram, etc.). */
 export function CardapioPublico() {
   const [d, setD] = useState<{ tema: CardTema; boas_vindas: string | null; categorias: CardCat[]; produtos: CardProd[]; erro?: string } | null>(null)
+  const [det, setDet] = useState<CardProd | null>(null)
   const [lateral, setLateral] = useState(() => window.innerWidth >= 768)
   useEffect(() => { chamar<NonNullable<typeof d>>({ acao: 'menu' }).then(setD) }, [])
   useEffect(() => { const f = () => setLateral(window.innerWidth >= 768); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f) }, [])
@@ -18,8 +20,10 @@ export function CardapioPublico() {
   if (d.erro) return <p className="p-6 text-center">{d.erro}</p>
   return (
     <div className="mx-auto h-[100dvh] max-w-5xl">
-      <CardapioCliente somenteLeitura tema={{ colunas: 2, ...d.tema }} boasVindas={d.boas_vindas} categorias={d.categorias} produtos={d.produtos} lateral={lateral} qtdDe={() => 0} onAdd={() => {}} onMenos={() => {}}
+      <CardapioCliente somenteLeitura tema={{ colunas: 2, ...d.tema }} boasVindas={d.boas_vindas} categorias={d.categorias} produtos={d.produtos} lateral={lateral} qtdDe={() => 0} onAdd={() => {}} onMenos={() => {}} onAbrir={setDet}
         acoes={<a href="/reservar" className="rounded-full border border-white/60 px-3 py-1.5 text-xs">Reservar mesa</a>} />
+      {det && <ProdutoDetalhe somenteLeitura produto={{ id: det.id, nome: det.nome, descricao: det.descricao, preco: Number(det.preco), foto_url: det.foto_url }} fotos={d.tema?.mostrar_fotos !== false}
+        vars={{ ['--p' as string]: d.tema?.primaria ?? '#7a1f2b', ['--f' as string]: d.tema?.fundo ?? '#faf7f2', ['--t' as string]: d.tema?.texto ?? '#222' }} onFechar={() => setDet(null)} />}
     </div>
   )
 }
