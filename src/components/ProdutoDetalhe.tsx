@@ -3,8 +3,20 @@ import { useState, type CSSProperties } from 'react'
 
 // Detalhe do produto no cardápio do cliente: foto grande, descrição completa e adicionais.
 export interface DetOpcao { id: string; nome: string; preco_adicional: number }
-export interface DetGrupo { id: string; nome: string; min_escolhas: number; max_escolhas: number; opcoes: DetOpcao[] }
+export interface DetGrupo { id: string; nome: string; tipo?: string; min_escolhas: number; max_escolhas: number; opcoes: DetOpcao[] }
 export interface DetProduto { id: string; nome: string; descricao: string | null; preco: number; foto_url: string | null; video_url?: string | null; grupos?: DetGrupo[] }
+/** Soma dos adicionais; ids repetidos em `ids` contam uma vez por repetição (grupos de quantidade). */
+export function adicionalDe(grupos: DetGrupo[], ids: string[]) {
+  const m = new Map(grupos.flatMap((g) => g.opcoes).map((o) => [o.id, Number(o.preco_adicional)]))
+  return ids.reduce((s, id) => s + (m.get(id) ?? 0), 0)
+}
+/** Texto das opções escolhidas, juntando repetidas: "3x Prato, Sem gelo". */
+export function resumoOpcoes(grupos: DetGrupo[], ids: string[]) {
+  const nomes = new Map(grupos.flatMap((g) => g.opcoes).map((o) => [o.id, o.nome]))
+  const cont = new Map<string, number>()
+  for (const id of ids) cont.set(id, (cont.get(id) ?? 0) + 1)
+  return [...cont].map(([id, n]) => (n > 1 ? `${n}x ` : '') + (nomes.get(id) ?? '')).join(', ')
+}
 const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa, fotos = true, className = 'fixed inset-0' }: {
@@ -16,7 +28,7 @@ export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa
   const [qtd, setQtd] = useState(1)
   const [aviso, setAviso] = useState('')
   const grupos = p.grupos ?? []
-  const adicional = grupos.flatMap((g) => g.opcoes).filter((o) => Object.values(sel).flat().includes(o.id)).reduce((s, o) => s + Number(o.preco_adicional), 0)
+  const adicional = adicionalDe(grupos, Object.values(sel).flat())
 
   function alternar(g: DetGrupo, o: DetOpcao) {
     const atual = sel[g.id] ?? []
@@ -25,6 +37,12 @@ export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa
     else if (g.max_escolhas === 1) novo = [o.id]
     else novo = atual.length < g.max_escolhas ? [...atual, o.id] : atual
     setSel({ ...sel, [g.id]: novo }); setAviso('')
+  }
+  function mudarQtd(g: DetGrupo, o: DetOpcao, d: number) {
+    const atual = sel[g.id] ?? []
+    if (d > 0) { if (atual.length >= g.max_escolhas) return; setSel({ ...sel, [g.id]: [...atual, o.id] }) }
+    else { const i = atual.lastIndexOf(o.id); if (i < 0) return; setSel({ ...sel, [g.id]: atual.filter((_, k) => k !== i) }) }
+    setAviso('')
   }
   function adicionar() {
     for (const g of grupos) if ((sel[g.id]?.length ?? 0) < g.min_escolhas) return setAviso(`Escolha ${g.min_escolhas > 1 ? `ao menos ${g.min_escolhas} em` : ''} "${g.nome}".`)
@@ -52,8 +70,21 @@ export function ProdutoDetalhe({ produto: p, vars, onFechar, onAdicionar, previa
           </div>
           {grupos.map((g) => (
             <fieldset key={g.id} className="space-y-2">
-              <legend className="mb-1 text-base font-semibold">{g.nome} <span className="text-xs font-normal opacity-60">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
-              {g.opcoes.map((o) => {
+              <legend className="mb-1 text-base font-semibold">{g.nome} <span className="text-xs font-normal opacity-60">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.tipo === 'quantidade' ? ` · até ${g.max_escolhas} no total` : g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
+              {g.tipo === 'quantidade' ? g.opcoes.map((o) => {
+                const n = (sel[g.id] ?? []).filter((i) => i === o.id).length
+                const cheio = (sel[g.id] ?? []).length >= g.max_escolhas
+                return (
+                  <div key={o.id} className="flex min-h-[52px] w-full items-center justify-between rounded-xl border-2 px-4 text-base" style={n ? { borderColor: 'var(--p)', background: 'color-mix(in srgb, var(--p) 8%, white)' } : { borderColor: '#e5e5e5' }}>
+                    <span>{o.nome}{Number(o.preco_adicional) > 0 && <span className="ml-2 text-sm opacity-70">+ {brl(Number(o.preco_adicional))} cada</span>}</span>
+                    <span className="flex items-center gap-2 rounded-full border-2 border-[#e5e5e5] bg-white p-1">
+                      <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-2xl disabled:opacity-30" disabled={n <= 0} onClick={() => mudarQtd(g, o, -1)} aria-label="Menos">−</button>
+                      <b className="w-6 text-center text-lg">{n}</b>
+                      <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-2xl text-white disabled:opacity-30" style={{ background: 'var(--p)' }} disabled={cheio} onClick={() => mudarQtd(g, o, 1)} aria-label="Mais">+</button>
+                    </span>
+                  </div>
+                )
+              }) : g.opcoes.map((o) => {
                 const on = (sel[g.id] ?? []).includes(o.id)
                 return (
                   <button key={o.id} type="button" onClick={() => alternar(g, o)} className="flex min-h-[52px] w-full items-center justify-between rounded-xl border-2 px-4 text-left text-base"

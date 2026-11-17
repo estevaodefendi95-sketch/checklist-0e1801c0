@@ -3,7 +3,7 @@ import { lerPosicao } from '../../lib/localizacao'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../integrations/supabase/client'
 import { CardapioCliente } from '../../components/CardapioCliente'
-import { ProdutoDetalhe } from '../../components/ProdutoDetalhe'
+import { ProdutoDetalhe, adicionalDe, resumoOpcoes } from '../../components/ProdutoDetalhe'
 import { LeitorQr } from '../../components/LeitorQr'
 import { AutorizarTablet, salvarMesa, useSegurar } from '../../components/TabletAcesso'
 import type { CardBanner } from '../../components/CardapioCliente'
@@ -154,7 +154,7 @@ export function MesaPublica() {
   useEffect(() => { carregar(); const t = setInterval(carregar, 10000); return () => clearInterval(t) }, [carregar])
 
   const prodsCard = useMemo(() => (e?.produtos ?? []).map((p) => ({ ...p, personalizavel: !!p.grupos?.length })), [e])
-  const adic = (l: { p: Prod; opcoes: string[] }) => (l.p.grupos ?? []).flatMap((g) => g.opcoes).filter((o) => l.opcoes.includes(o.id)).reduce((s, o) => s + Number(o.preco_adicional), 0)
+  const adic = (l: { p: Prod; opcoes: string[] }) => adicionalDe(l.p.grupos ?? [], l.opcoes)
   const total = car.reduce((s, l) => s + l.qtd * (Number(l.p.preco) + adic(l)), 0)
   const qtd = car.reduce((s, l) => s + l.qtd, 0)
   const qtdProd = (id: string) => car.filter((l) => l.p.id === id).reduce((s, l) => s + l.qtd, 0)
@@ -217,7 +217,7 @@ export function MesaPublica() {
         {car.map((l) => (
           <div key={l.key} className="space-y-1 border-b pb-2">
             <div className="flex items-start justify-between gap-2">
-              <span className="text-lg"><b>{l.qtd}× {l.p.nome}</b>{l.opcoes.length > 0 && <em className="block text-xs opacity-70">{(l.p.grupos ?? []).flatMap((g) => g.opcoes).filter((o) => l.opcoes.includes(o.id)).map((o) => o.nome).join(', ')}</em>}</span>
+              <span className="text-lg"><b>{l.qtd}× {l.p.nome}</b>{l.opcoes.length > 0 && <em className="block text-xs opacity-70">{resumoOpcoes(l.p.grupos ?? [], l.opcoes)}</em>}</span>
               <span className="flex items-center gap-3 text-lg"><b>{brl(l.qtd * (Number(l.p.preco) + adic(l)))}</b>
                 <button className="grid h-11 w-11 place-items-center rounded-full border text-xl" onClick={() => setCar((c) => c.map((k) => (k.key === l.key ? { ...k, qtd: k.qtd - 1 } : k)).filter((k) => k.qtd > 0))}>−</button>
                 <button className="grid h-11 w-11 place-items-center rounded-full border text-xl" onClick={() => setCar((c) => c.map((k) => (k.key === l.key ? { ...k, qtd: k.qtd + 1 } : k)))}>+</button></span>

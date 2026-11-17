@@ -207,7 +207,10 @@ Deno.serve(async (req) => {
         const adic = escolhidas.reduce((s, o) => s + Number(o.preco_adicional), 0);
         linhas.push({
           comanda_id: com.id, produto_id: p.id, nome: p.nome, qtd: q, preco_unit: Number(p.preco) + adic,
-          opcoes: escolhidas.map((o) => ({ id: o.id, nome: o.nome, preco: Number(o.preco_adicional) })),
+          opcoes: [...new Set(escolhidas.map((o) => o.id))].map((oid) => {
+            const o = escolhidas.find((x) => x.id === oid); const n = escolhidas.filter((x) => x.id === oid).length;
+            return { id: o.id, nome: n > 1 ? `${n}x ${o.nome}` : o.nome, preco: Number(o.preco_adicional) * n, qtd: n };
+          }),
           obs: String(i.obs ?? "").slice(0, 120) || null, destino: p.destino, origem: "tablet",
         });
       }

@@ -7,9 +7,9 @@ import { Modal } from './PdvCaixa'
 import type { Faixa } from '../../lib/pdv'
 
 export const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
-export interface Grupo { id: string; nome: string; tipo: 'acompanhamento' | 'combo' | 'informacao'; min_escolhas: number; max_escolhas: number; ativo: boolean; ordem: number }
+export interface Grupo { id: string; nome: string; tipo: 'acompanhamento' | 'combo' | 'informacao' | 'quantidade'; min_escolhas: number; max_escolhas: number; ativo: boolean; ordem: number }
 export interface Opcao { id: string; grupo_id: string; nome: string; preco_adicional: number; ativo: boolean; ordem: number }
-const TIPO: Record<Grupo['tipo'], string> = { acompanhamento: 'Acompanhamento', combo: 'Combo', informacao: 'Informação (ponto, gelo…)' }
+const TIPO: Record<Grupo['tipo'], string> = { acompanhamento: 'Acompanhamento', combo: 'Combo', informacao: 'Informação (ponto, gelo…)', quantidade: 'Quantidade (+/−: copos, pratos…)' }
 
 export const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : '')
 const ORDEM_DIAS = [1, 2, 3, 4, 5, 6, 0]

@@ -80,7 +80,12 @@ export function MapaSalaoAgora() {
                     <p className="text-lg font-bold leading-tight">{m.numero}</p>
                     {l ? (
                       <>
-                        <p className="truncate text-xs font-medium">{l.length > 1 ? `${l.length} comandas` : l[0].nome_cliente || `Comanda ${l[0].numero}`}</p>
+                        {l.length > 1 ? (
+                          <>
+                            <p className="truncate text-xs font-medium">{l.slice(0, 2).map((c) => (c.nome_cliente || `#${c.numero}`).split(' ')[0]).join(' · ')}{l.length > 2 ? ` +${l.length - 2}` : ''}</p>
+                            <p className="text-[10px] font-semibold uppercase opacity-80">{l.length} comandas</p>
+                          </>
+                        ) : <p className="truncate text-xs font-medium">{l[0].nome_cliente || `Comanda ${l[0].numero}`}</p>}
                         <p className="text-[11px] opacity-80">{tempo(minutosDesde(l[0].aberta_em))} · {reais(totalMesa(l, totais))}</p>
                         {st === 'pedindo_conta' && <p className="text-[11px] font-semibold">pediu a conta</p>}
                       </>

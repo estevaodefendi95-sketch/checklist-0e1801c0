@@ -117,7 +117,7 @@ export function TabletLayout() {
               sobrepor={aberto && (
                 <ProdutoDetalhe previa className="absolute inset-0" fotos={tema.mostrar_fotos} onFechar={() => setAberto(null)}
                   vars={{ ['--p' as string]: tema.primaria, ['--d' as string]: tema.destaque }}
-                  produto={{ id: aberto.id, nome: aberto.nome, descricao: aberto.descricao, preco: Number(aberto.preco), foto_url: aberto.foto_url, grupos: gruposDe(aberto).map((g) => ({ id: g.id, nome: g.nome, min_escolhas: g.min_escolhas, max_escolhas: g.max_escolhas, opcoes: g.opcoes.map((o) => ({ id: o.id, nome: o.nome, preco_adicional: Number(o.preco_adicional) })) })) }} />
+                  produto={{ id: aberto.id, nome: aberto.nome, descricao: aberto.descricao, preco: Number(aberto.preco), foto_url: aberto.foto_url, grupos: gruposDe(aberto).map((g) => ({ id: g.id, nome: g.nome, tipo: g.tipo, min_escolhas: g.min_escolhas, max_escolhas: g.max_escolhas, opcoes: g.opcoes.map((o) => ({ id: o.id, nome: o.nome, preco_adicional: Number(o.preco_adicional) })) })) }} />
               )}
             />
           </div>

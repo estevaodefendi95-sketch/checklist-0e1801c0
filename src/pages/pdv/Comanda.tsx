@@ -169,13 +169,27 @@ export function Comanda() {
       return { ...x, sel: { ...x.sel, [g.id]: novo } }
     })
   }
+  function mudarQtdOpc(g: Grupo & { opcoes: Opcao[] }, o: Opcao, d: number) {
+    setEsc((x) => {
+      if (!x) return x
+      const at = x.sel[g.id] ?? []
+      if (d > 0) return at.length >= g.max_escolhas ? x : { ...x, sel: { ...x.sel, [g.id]: [...at, o.id] } }
+      const i = at.lastIndexOf(o.id)
+      return i < 0 ? x : { ...x, sel: { ...x.sel, [g.id]: at.filter((_, k) => k !== i) } }
+    })
+  }
   function confirmarEsc() {
     if (!esc) return
     for (const g of gruposDe(esc.p)) if ((esc.sel[g.id]?.length ?? 0) < g.min_escolhas) return setErro(`Escolha "${g.nome}" (mínimo ${g.min_escolhas}).`)
-    const ops = gruposDe(esc.p).flatMap((g) => g.opcoes.filter((o) => (esc.sel[g.id] ?? []).includes(o.id)))
+    const ops = gruposDe(esc.p).flatMap((g) => (esc.sel[g.id] ?? []).map((id) => g.opcoes.find((o) => o.id === id)).filter((o): o is Opcao => !!o))
     setCarrinho((cs) => [...cs, { p: esc.p, qtd: 1, obs: '', opcoes: ops }])
     setEsc(null); setErro('')
   }
+  /** Junta opções repetidas (grupos de quantidade): "3x Prato" com preço já multiplicado. */
+  const agruparOpcoes = (ops: Opcao[]) => [...new Set(ops.map((o) => o.id))].map((id) => {
+    const o = ops.find((y) => y.id === id) as Opcao; const n = ops.filter((y) => y.id === id).length
+    return { id: o.id, nome: n > 1 ? `${n}x ${o.nome}` : o.nome, preco: Number(o.preco_adicional) * n, qtd: n }
+  })
   const precoLinha = (x: { p: Produto; opcoes: Opcao[] }) => Number(x.p.preco) + x.opcoes.reduce((s, o) => s + Number(o.preco_adicional), 0)
   async function enviar() {
     if (!c || !carrinho.length) return
@@ -186,7 +200,7 @@ export function Comanda() {
     const uid = await idOperador()
     const linhas = carrinho.map((x) => ({
       comanda_id: c.id, produto_id: x.p.id, nome: x.p.nome, qtd: x.qtd, preco_unit: precoLinha(x),
-      opcoes: x.opcoes.map((o) => ({ id: o.id, nome: o.nome, preco: Number(o.preco_adicional) })), obs: x.obs.trim() || null, destino: x.p.destino, origem: 'sistema', criado_por: uid,
+      opcoes: agruparOpcoes(x.opcoes), obs: x.obs.trim() || null, destino: x.p.destino, origem: 'sistema', criado_por: uid,
     }))
     const guardar = () => {
       enfileirarPedido(c.id, linhas)
@@ -646,7 +660,7 @@ export function Comanda() {
               {carrinho.map((x, i) => (
                 <div key={i} className="text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span>{x.qtd}× {x.p.nome}{x.opcoes.length ? <em className="block text-xs text-ink-soft">{x.opcoes.map((o) => o.nome).join(', ')}</em> : null}</span>
+                    <span>{x.qtd}× {x.p.nome}{x.opcoes.length ? <em className="block text-xs text-ink-soft">{agruparOpcoes(x.opcoes).map((o) => o.nome).join(', ')}</em> : null}</span>
                     <span className="flex gap-1">
                       <button className={btnSecCls + ' !min-h-[32px] !px-2'} onClick={() => setCarrinho((cs) => cs.map((k, j) => (j === i ? { ...k, qtd: Math.max(0, k.qtd - 1) } : k)).filter((k) => k.qtd > 0))}>−</button>
                       <button className={btnSecCls + ' !min-h-[32px] !px-2'} onClick={() => setCarrinho((cs) => cs.map((k, j) => (j === i ? { ...k, qtd: k.qtd + 1 } : k)))}>+</button>
@@ -755,9 +769,22 @@ export function Comanda() {
         <Modal titulo={esc.p.nome} fechar={() => setEsc(null)}>
           {gruposDe(esc.p).map((g) => (
             <fieldset key={g.id} className="space-y-1">
-              <legend className="font-medium">{g.nome} <span className="text-xs text-ink-soft">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
+              <legend className="font-medium">{g.nome} <span className="text-xs text-ink-soft">{g.min_escolhas > 0 ? 'obrigatório' : 'opcional'}{g.tipo === 'quantidade' ? ` · até ${g.max_escolhas} no total` : g.max_escolhas > 1 ? ` · até ${g.max_escolhas}` : ''}</span></legend>
               <div className="grid grid-cols-2 gap-2">
-                {g.opcoes.map((o) => {
+                {g.tipo === 'quantidade' ? g.opcoes.map((o) => {
+                  const n = (esc.sel[g.id] ?? []).filter((i) => i === o.id).length
+                  const cheio = (esc.sel[g.id] ?? []).length >= g.max_escolhas
+                  return (
+                    <div key={o.id} className="col-span-2 flex items-center justify-between rounded border border-line px-3 py-2">
+                      <span>{o.nome}{Number(o.preco_adicional) > 0 ? ` +${reais(Number(o.preco_adicional))} cada` : ''}</span>
+                      <span className="flex items-center gap-2">
+                        <button type="button" className={btnSecCls} disabled={n <= 0} onClick={() => mudarQtdOpc(g, o, -1)}>−</button>
+                        <b className="w-6 text-center">{n}</b>
+                        <button type="button" className={btnCls} disabled={cheio} onClick={() => mudarQtdOpc(g, o, 1)}>+</button>
+                      </span>
+                    </div>
+                  )
+                }) : g.opcoes.map((o) => {
                   const on = (esc.sel[g.id] ?? []).includes(o.id)
                   return <button key={o.id} type="button" className={on ? btnCls : btnSecCls} onClick={() => toggleOpc(g, o)}>{o.nome}{Number(o.preco_adicional) > 0 ? ` +${reais(Number(o.preco_adicional))}` : ''}</button>
                 })}
