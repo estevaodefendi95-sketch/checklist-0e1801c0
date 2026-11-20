@@ -2,13 +2,28 @@
 // Lê a fila no Supabase (função pdv-print) e imprime em ESC/POS nas impressoras de rede (porta 9100).
 import net from 'node:net'
 
-const URL_FN = process.env.PDV_FUNCAO_URL // https://<projeto>.supabase.co/functions/v1/pdv-print
-const ANON = process.env.PDV_ANON_KEY // chave pública (anon) do projeto
-const TOKEN = process.env.PDV_TOKEN_AGENTE // token do dispositivo "agente de impressão"
+import fs from 'node:fs'
+import readline from 'node:readline/promises'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+
+const URL_FN = process.env.PDV_FUNCAO_URL ?? 'https://jcqpuqhdfveleusjsxeo.supabase.co/functions/v1/pdv-print'
+const ANON = process.env.PDV_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjcXB1cWhkZnZlbGV1c2pzeGVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDg3ODIsImV4cCI6MjA5NjUyNDc4Mn0.u0hL3IV8Vdzpoh0Tr1fPUetcbAVbL5Cc0RFjBT3YZH0'
 const INTERVALO = Number(process.env.PDV_INTERVALO_MS ?? 2000)
-if (!URL_FN || !ANON || !TOKEN) {
-  console.error('Defina PDV_FUNCAO_URL, PDV_ANON_KEY e PDV_TOKEN_AGENTE (veja o LEIA-ME).')
-  process.exit(1)
+
+// Token do agente: vem do bat (variável), do arquivo token.txt ao lado deste arquivo, ou é perguntado na primeira vez e guardado em token.txt.
+const ARQ_TOKEN = path.join(path.dirname(fileURLToPath(import.meta.url)), 'token.txt')
+let TOKEN = (process.env.PDV_TOKEN_AGENTE ?? '').trim()
+if (!TOKEN || TOKEN.startsWith('COLE_O_')) TOKEN = fs.existsSync(ARQ_TOKEN) ? fs.readFileSync(ARQ_TOKEN, 'utf8').trim() : ''
+if (!TOKEN) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  console.log('\n=== Ativar o agente de impressão ===')
+  console.log('No sistema: PDV > Config > Gestão do Tablet > Dispositivos > cadastrar "Agente de impressão" e copiar o token.')
+  TOKEN = (await rl.question('Cole o token aqui e aperte Enter: ')).trim()
+  rl.close()
+  if (!TOKEN) { console.error('Nenhum token informado.'); process.exit(1) }
+  fs.writeFileSync(ARQ_TOKEN, TOKEN)
+  console.log('Token salvo em token.txt (não precisa colar de novo).\n')
 }
 
 const CP860 = { 'ç': 0x87, 'Ç': 0x80, 'á': 0xa0, 'à': 0x85, 'â': 0x83, 'ã': 0x84, 'é': 0x82, 'ê': 0x88, 'í': 0xa1, 'ó': 0xa2, 'ô': 0x93, 'õ': 0x94, 'ú': 0xa3, 'Á': 0x86, 'À': 0x91, 'Â': 0x8f, 'Ã': 0x8e, 'É': 0x90, 'Ê': 0x89, 'Í': 0x8b, 'Ó': 0x9f, 'Ô': 0x8c, 'Õ': 0x99, 'Ú': 0x96, 'ü': 0x81, 'º': 0xa7, 'ª': 0xa6 }
@@ -116,7 +131,7 @@ function envia(ip, porta, buf) {
 
 async function api(body) {
   const r = await fetch(URL_FN, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${ANON}` }, body: JSON.stringify({ token: TOKEN, ...body }) })
-  if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`)
+  if (!r.ok) { const t = await r.text(); if (r.status === 401 || r.status === 403) console.error('TOKEN RECUSADO: apague o arquivo token.txt, crie um token novo no sistema e rode de novo.'); throw new Error(`HTTP ${r.status} ${t}`) }
   return r.json()
 }
 
