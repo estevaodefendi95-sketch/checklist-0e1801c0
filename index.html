@@ -41,6 +41,20 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Figtree:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Rede de segurança: se o app não montar em 8 s (cache antigo apontando para arquivos que não existem mais),
+      // limpa o cache do PWA e recarrega uma única vez.
+      setTimeout(function () {
+        var root = document.getElementById('root')
+        if (root && root.childElementCount === 0 && !sessionStorage.getItem('paggio_reset')) {
+          sessionStorage.setItem('paggio_reset', '1')
+          Promise.all([
+            navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (r) { return Promise.all(r.map(function (x) { return x.unregister() })) }) : 0,
+            window.caches ? caches.keys().then(function (k) { return Promise.all(k.map(function (x) { return caches.delete(x) })) }) : 0,
+          ]).then(function () { location.reload() }, function () { location.reload() })
+        }
+      }, 8000)
+    </script>
   </head>
   <body>
     <div id="root"></div>
